@@ -1,13 +1,13 @@
 # 🎨 Post My Note - AI-Powered Social Media Content Creator
 
-A complete full-stack application for generating high-quality Instagram carousel posts using Google Gemini AI. Generate post ideas, create complete carousels with slides and captions, and download ready-to-post images.
+A complete full-stack application for generating high-quality Instagram note posts using Google Gemini AI. Generate post ideas, create complete notes with slides and captions, and download ready-to-post images.
 
 ## ✨ Features
 
 ### Backend API
 - 🤖 **AI-Powered Generation** - Uses Google Gemini 2.0 Flash for high-quality content
 - 💡 **Post Ideas Generation** - Generate 10 unique, diverse post ideas
-- 🎨 **Carousel Creation** - Complete carousel posts with:
+- 🎨 **Note Creation** - Complete note posts with:
   - Hook slide (concise, powerful opening)
   - 2-7 middle slides (detailed content)
   - CTA slide (call to action)
@@ -115,7 +115,7 @@ The app will be available at `http://localhost:3000`.
 6. Once signed in, you can:
    - Enter your account description
    - Generate 10 post ideas
-   - Select an idea to generate a complete carousel
+   - Select an idea to generate a complete note
    - Customize font and color themes
    - Download the slide images!
 
@@ -124,7 +124,7 @@ The app will be available at `http://localhost:3000`.
 ```
 post-generation/
 ├── app/
-│   ├── page.tsx            # Main carousel generator page (protected)
+│   ├── page.tsx            # Main note generator page (protected)
 │   ├── layout.tsx          # Root layout with AuthProvider
 │   ├── globals.css         # Global styles
 │   ├── landing/
@@ -218,13 +218,13 @@ Content-Type: application/json
 }
 ```
 
-#### 3. Generate Carousel
+#### 3. Generate Note
 ```http
 POST /api/social
 Content-Type: application/json
 
 {
-  "action": "carousel",
+  "action": "note",
   "ideaTitle": "Why Your Morning Routine Is Sabotaging Your Productivity",
   "accountDescription": "productivity coach for remote workers"
 }
@@ -234,7 +234,7 @@ Content-Type: application/json
 ```json
 {
   "success": true,
-  "action": "carousel",
+  "action": "note",
   "data": {
     "ideaTitle": "Why Your Morning Routine Is Sabotaging Your Productivity",
     "slides": [
@@ -336,7 +336,7 @@ const GEMINI_MODEL = 'gemini-2.0-flash-exp'; // Current model
 
 Typical generation times:
 - **Ideas:** 2-4 seconds
-- **Carousel:** 4-8 seconds
+- **Note:** 4-8 seconds
 - **Image Generation:** Instant (client-side)
 
 ## 🧪 Testing
@@ -351,7 +351,7 @@ This runs an interactive test script that:
 - Checks server health
 - Generates ideas
 - Lets you choose an idea
-- Generates a carousel
+- Generates a note
 - Shows formatted output
 
 ### Test Full Application
@@ -446,12 +446,12 @@ curl -X POST http://localhost:3000/api/social \
   }'
 ```
 
-### Generate Carousel
+### Generate Note
 ```bash
 curl -X POST http://localhost:3000/api/social \
   -H "Content-Type: application/json" \
   -d '{
-    "action": "carousel",
+    "action": "note",
     "ideaTitle": "Why Your Morning Routine Is Sabotaging Your Productivity",
     "accountDescription": "productivity coach"
   }'

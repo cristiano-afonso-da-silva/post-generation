@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { getFontCombination, getColorTheme } from '../config/slideThemes'
 import { useAuth } from '../context/AuthContext'
+import JSZip from 'jszip'
 
 interface Slide {
   title: string
@@ -16,6 +17,8 @@ interface Props {
   underlineWords?: Record<number, { underline: string; highlight: string }>
   fontCombinationId?: string
   colorThemeId?: string
+  accountDescription?: string
+  caption?: string
   onGenerationComplete?: () => void
 }
 
@@ -25,6 +28,8 @@ export default function SlideImageGenerator({
   underlineWords = {},
   fontCombinationId = 'combination-1',
   colorThemeId = 'black',
+  accountDescription = '',
+  caption = '',
   onGenerationComplete
 }: Props) {
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([])
@@ -32,6 +37,7 @@ export default function SlideImageGenerator({
   const [imagesLoaded, setImagesLoaded] = useState(false)
   const { user, refreshCredits } = useAuth()
   const hasDeductedCredit = useRef(false)
+  const hasAutoSaved = useRef(false)
 
   // Get selected font combination and color theme
   const FONT_CONFIG = getFontCombination(fontCombinationId)
@@ -40,12 +46,15 @@ export default function SlideImageGenerator({
   const loadImagesFromStorage = useCallback(async () => {
     try {
       const savedImages = localStorage.getItem('postGeneration_canvasImages')
+      // Use full content hash (includes theme/font) for image matching, fallback to content hash if not available
+      const savedFullContentHash = localStorage.getItem('postGeneration_fullContentHash')
       const savedContentHash = localStorage.getItem('postGeneration_contentHash')
+      const savedHash = savedFullContentHash || savedContentHash
       
-      // Create current content hash
-      const currentContentHash = JSON.stringify({ ideaTitle, slides, underlineWords, fontCombinationId, colorThemeId })
+      // Create current full content hash (includes theme/font for image matching)
+      const currentFullContentHash = JSON.stringify({ ideaTitle, slides, underlineWords, fontCombinationId, colorThemeId })
       
-      if (savedImages && savedContentHash === currentContentHash) {
+      if (savedImages && savedHash && savedHash === currentFullContentHash) {
         const imageDataUrls = JSON.parse(savedImages)
         // Check if we have the same number of slides
         if (imageDataUrls.length === slides.length) {
@@ -92,6 +101,86 @@ export default function SlideImageGenerator({
     return false
   }, [slides, ideaTitle, underlineWords, fontCombinationId, colorThemeId])
 
+  // Auto-save function
+  const saveToDatabase = useCallback(async (imageDataUrls: string[]) => {
+    if (!user?.id) {
+      console.warn('Cannot save: user not authenticated')
+      return
+    }
+
+    if (imageDataUrls.length === 0) {
+      console.warn('Cannot save: no images to save')
+      return
+    }
+
+    try {
+      // Calculate content hash (only ideaTitle + slides, excludes theme/font)
+      const currentContentHash = JSON.stringify({ ideaTitle, slides })
+      
+      // Check localStorage for existing generation_id and content hash
+      const storedGenerationId = localStorage.getItem('postGeneration_generationId')
+      const storedContentHash = localStorage.getItem('postGeneration_contentHash')
+      
+      // Determine if we should update or create new
+      let generationIdToSend: string | undefined = undefined
+      const shouldUpdate = storedGenerationId && storedContentHash === currentContentHash
+      
+      if (shouldUpdate) {
+        generationIdToSend = storedGenerationId
+        console.log('💾 Updating existing generation in database...', {
+          generationId: generationIdToSend,
+          ideaTitle,
+          slidesCount: slides.length,
+          imagesCount: imageDataUrls.length
+        })
+      } else {
+        console.log('💾 Creating new generation in database...', {
+          ideaTitle,
+          slidesCount: slides.length,
+          imagesCount: imageDataUrls.length
+        })
+      }
+
+      const response = await fetch('/api/generations/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          generationId: generationIdToSend,
+          ideaTitle,
+          accountDescription,
+          slides,
+          caption,
+          underlineWords,
+          fontCombinationId,
+          colorThemeId,
+          images: imageDataUrls
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error('❌ Failed to auto-save generation:', errorData.error)
+        throw new Error(errorData.error || 'Failed to save generation')
+      } else {
+        const result = await response.json()
+        const returnedGenerationId = result.generationId
+        
+        // Store generation_id and content hash in localStorage
+        localStorage.setItem('postGeneration_generationId', returnedGenerationId)
+        localStorage.setItem('postGeneration_contentHash', currentContentHash)
+        
+        if (result.isUpdate) {
+          console.log('✅ Generation updated in history:', returnedGenerationId)
+        } else {
+          console.log('✅ Generation auto-saved to history:', returnedGenerationId)
+        }
+      }
+    } catch (error: any) {
+      console.error('❌ Error auto-saving generation:', error.message || error)
+    }
+  }, [ideaTitle, accountDescription, slides, caption, underlineWords, fontCombinationId, colorThemeId, user?.id])
+
   const generateAllSlides = useCallback(async () => {
     setGenerating(true)
     
@@ -106,18 +195,25 @@ export default function SlideImageGenerator({
       }
     }
     
-    // Create a content hash to verify images match current carousel
-    const contentHash = JSON.stringify({ ideaTitle, slides, underlineWords, fontCombinationId, colorThemeId })
+    // Create full content hash (includes theme/font) for image matching
+    const fullContentHash = JSON.stringify({ ideaTitle, slides, underlineWords, fontCombinationId, colorThemeId })
+    // Create content hash (only ideaTitle + slides) for generation update detection
+    const contentHash = JSON.stringify({ ideaTitle, slides })
     
-    // Save all images to localStorage with content hash
+    // Save all images to localStorage with content hashes
     try {
       localStorage.setItem('postGeneration_canvasImages', JSON.stringify(imageDataUrls))
-      localStorage.setItem('postGeneration_contentHash', contentHash)
+      localStorage.setItem('postGeneration_fullContentHash', fullContentHash)
+      // Only update contentHash if generation_id doesn't exist (new generation)
+      // If generation_id exists, keep the existing contentHash to allow updates
+      if (!localStorage.getItem('postGeneration_generationId')) {
+        localStorage.setItem('postGeneration_contentHash', contentHash)
+      }
     } catch (error) {
       console.error('Error saving images to localStorage:', error)
     }
     
-    // Deduct credit when slides are generated (only once per carousel generation)
+    // Deduct credit when slides are generated (only once per note generation)
     if (user?.id && !hasDeductedCredit.current) {
       try {
         const deductResponse = await fetch('/api/credits/deduct', {
@@ -130,20 +226,60 @@ export default function SlideImageGenerator({
           // Refresh credits in context to update UI immediately
           await refreshCredits()
           hasDeductedCredit.current = true
+        } else {
+          // If deduction fails, log the error but don't block generation
+          const errorData = await deductResponse.json().catch(() => ({ error: 'Unknown error' }))
+          console.error('Failed to deduct credit:', errorData.error || 'Unknown error')
+          // Still mark as deducted to prevent retry loops, but generation continues
+          hasDeductedCredit.current = true
         }
       } catch (creditError) {
         console.error('Error deducting credit:', creditError)
+        // Still mark as deducted to prevent retry loops
+        hasDeductedCredit.current = true
       }
     }
     
     setGenerating(false)
     setImagesLoaded(true)
     
+    // Auto-save to database after successful generation
+    // Only save if images are data URLs (newly generated), not URLs (from history)
+    if (user?.id && !hasAutoSaved.current && imageDataUrls.length > 0) {
+      const isNewGeneration = imageDataUrls[0]?.startsWith('data:image/')
+      if (isNewGeneration) {
+        // Check if we should skip auto-save (already saved with matching content)
+        const storedGenerationId = localStorage.getItem('postGeneration_generationId')
+        const storedContentHash = localStorage.getItem('postGeneration_contentHash')
+        const currentContentHash = JSON.stringify({ ideaTitle, slides })
+        
+        // Only skip if generation_id exists AND content hash matches (prevent duplicate on reload)
+        const shouldSkipSave = storedGenerationId && storedContentHash === currentContentHash
+        
+        if (!shouldSkipSave) {
+          hasAutoSaved.current = true
+          // Don't await - let it save in background
+          saveToDatabase(imageDataUrls).catch(err => {
+            console.error('Auto-save failed:', err)
+            // Reset flag so it can try again if needed
+            hasAutoSaved.current = false
+          })
+        } else {
+          // Already saved with matching content, skip auto-save
+          console.log('⏭️ Skipping auto-save: generation already exists with matching content')
+          hasAutoSaved.current = true
+        }
+      } else {
+        // Images are URLs from history, already saved
+        hasAutoSaved.current = true
+      }
+    }
+    
     // Notify parent component that generation is complete
     if (onGenerationComplete) {
       onGenerationComplete()
     }
-  }, [slides, ideaTitle, underlineWords, fontCombinationId, colorThemeId, user?.id, refreshCredits, onGenerationComplete])
+  }, [slides, ideaTitle, underlineWords, fontCombinationId, colorThemeId, user?.id, refreshCredits, onGenerationComplete, saveToDatabase])
 
   // Load images from localStorage or generate new ones
   useEffect(() => {
@@ -166,7 +302,7 @@ export default function SlideImageGenerator({
   // Regenerate if theme, fonts, or underline words change (but only if images were already loaded)
   useEffect(() => {
     if (slides.length > 0 && imagesLoaded) {
-      // Don't deduct credit for theme/font changes - only for new carousel generation
+      // Don't deduct credit for theme/font changes - only for new note generation
       // Temporarily set flag to prevent deduction
       const wasDeducted = hasDeductedCredit.current
       hasDeductedCredit.current = true
@@ -179,7 +315,7 @@ export default function SlideImageGenerator({
     }
   }, [fontCombinationId, colorThemeId, imagesLoaded, slides.length, generateAllSlides])
   
-  // Reset credit deduction flag when slides change (new carousel)
+  // Reset credit deduction flag when slides change (new note)
   useEffect(() => {
     hasDeductedCredit.current = false
   }, [ideaTitle, slides.length])
@@ -240,7 +376,7 @@ export default function SlideImageGenerator({
       await loadFonts()
     }
 
-    // Instagram carousel dimensions (4:5 ratio)
+    // Instagram note dimensions (4:5 ratio)
     const width = 1080
     const height = 1350
     canvas.width = width
@@ -761,10 +897,44 @@ export default function SlideImageGenerator({
     link.click()
   }
 
-  const downloadAllSlides = () => {
-    slides.forEach((_, index) => {
-      setTimeout(() => downloadSlide(index), index * 200)
-    })
+  const downloadAllSlides = async () => {
+    try {
+      const zip = new JSZip()
+      
+      // Process all slides and add them to the zip
+      for (let i = 0; i < slides.length; i++) {
+        const canvas = canvasRefs.current[i]
+        if (!canvas) continue
+        
+        const slide = slides[i]
+        const fileName = `slide-${i + 1}-${slide.kind.toLowerCase()}.png`
+        
+        // Convert canvas to blob
+        const dataUrl = canvas.toDataURL('image/png')
+        const base64Data = dataUrl.split(',')[1]
+        
+        // Add image to zip
+        zip.file(fileName, base64Data, { base64: true })
+      }
+      
+      // Generate zip file and trigger download
+      const zipBlob = await zip.generateAsync({ type: 'blob' })
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(zipBlob)
+      link.download = 'all-slides.zip'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      // Clean up the object URL
+      URL.revokeObjectURL(link.href)
+    } catch (error) {
+      console.error('Error creating zip file:', error)
+      // Fallback to individual downloads if zip fails
+      slides.forEach((_, index) => {
+        setTimeout(() => downloadSlide(index), index * 200)
+      })
+    }
   }
 
   return (

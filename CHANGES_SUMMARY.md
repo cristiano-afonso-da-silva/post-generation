@@ -178,7 +178,7 @@ NEXT_PUBLIC_API_URL=http://localhost:3000
 - [ ] Sign up page should show with proper styling ✅
 - [ ] Sign in page should show with proper styling ✅
 - [ ] Verification page should show with proper styling ✅
-- [ ] Main app should work (generate carousels)
+- [ ] Main app should work (generate notes)
 
 ## All Ready! 🎉
 

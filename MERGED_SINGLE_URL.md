@@ -41,7 +41,7 @@ post-generation/
 │   │   ├── health/
 │   │   │   └── route.ts      ← Health check endpoint
 │   │   └── social/
-│   │       └── route.ts      ← Main API (ideas & carousel)
+│   │       └── route.ts      ← Main API (ideas & note)
 │   ├── landing/
 │   │   └── page.tsx          ← Landing page ✅ STYLED
 │   ├── signin/
@@ -120,11 +120,11 @@ Body: {
 }
 ```
 
-### Generate Carousel
+### Generate Note
 ```
 POST http://localhost:3000/api/social
 Body: {
-  "action": "carousel",
+  "action": "note",
   "ideaTitle": "post idea",
   "accountDescription": "your description"
 }

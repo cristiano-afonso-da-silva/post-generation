@@ -1,8 +1,8 @@
-# 🔧 Carousel Format Error Fixed
+# 🔧 Note Format Error Fixed
 
 ## Error Message
 ```
-Invalid carousel format from Gemini - missing or empty slides array
+Invalid note format from Gemini - missing or empty slides array
 ```
 
 ## What You Asked
@@ -86,7 +86,7 @@ console.log('✅ JSON parsed successfully');
 console.log('📊 Parsed data structure:', JSON.stringify(data, null, 2));
 
 if (!data.slides) {
-  console.error('❌ Invalid carousel structure!');
+      console.error('❌ Invalid note structure!');
   console.error('📊 Received data:', JSON.stringify(data, null, 2));
   console.error('📄 Full Gemini response:', responseText);
 }
@@ -99,7 +99,7 @@ if (!data.slides) {
 ### Original Backend → Next.js API Routes
 
 **What I Kept:**
-- ✅ All original prompts (IDEAS_PROMPT, CAROUSEL_PROMPT)
+- ✅ All original prompts (IDEAS_PROMPT, NOTE_PROMPT)
 - ✅ All validation logic
 - ✅ All formatting functions
 - ✅ Word count requirements

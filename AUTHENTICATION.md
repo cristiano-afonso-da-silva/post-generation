@@ -168,7 +168,7 @@ To add OAuth providers:
 
 Currently, the app only uses Supabase for authentication. No custom database tables are created.
 
-If you want to store user-specific data (like saved carousels), you'll need to:
+If you want to store user-specific data (like saved notes), you'll need to:
 1. Create tables in Supabase
 2. Enable Row Level Security
 3. Create policies to protect user data

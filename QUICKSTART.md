@@ -32,7 +32,7 @@ http://localhost:3000
 1. **Landing Page** - Beautiful styled landing page
 2. **Sign Up** - Create an account
 3. **Verify Email** - Enter 6-digit code from email
-4. **Main App** - Generate carousel posts
+4. **Main App** - Generate note posts
 
 ## 🎨 All Pages Now Styled
 

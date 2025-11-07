@@ -72,7 +72,7 @@ The `user_credits` table has been created in Supabase with:
 
    - Sign up a new user
    - User should have 1 credit
-   - Generate 1 carousel (credit deducted)
+   - Generate 1 note (credit deducted)
    - Try to generate again → should show upgrade prompt
 
 2. **Test Subscription Flow:**
@@ -97,7 +97,7 @@ The `user_credits` table has been created in Supabase with:
 ✅ Webhook handling for subscription events
 ✅ Credit display in header
 ✅ Upgrade prompt when credits run out
-✅ Automatic credit deduction on carousel generation
+✅ Automatic credit deduction on note generation
 ✅ Monthly credit renewal via webhooks
 
 ## Important Notes

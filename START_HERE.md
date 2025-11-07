@@ -27,7 +27,7 @@ The application will show:
 1. Landing page with styled design
 2. Sign up / Sign in pages
 3. Email verification
-4. Main carousel generator
+4. Main note generator
 
 ---
 

@@ -91,7 +91,7 @@ This helps diagnose issues if they occur in the future.
 
 ## Testing
 
-Try generating a carousel again. The error should no longer occur even if Gemini returns JSON with control characters.
+Try generating a note again. The error should no longer occur even if Gemini returns JSON with control characters.
 
 If you still see errors, check the server console for the logged error details.
 

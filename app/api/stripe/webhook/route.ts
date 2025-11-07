@@ -57,16 +57,16 @@ export async function POST(request: NextRequest) {
             break
           }
 
-          // Update user credits with subscription info and grant credits
+          // Update user credits with subscription info (don't grant credits here - invoice.payment_succeeded will handle it)
           await updateUserSubscription(userId, {
             stripe_customer_id: customerId,
             stripe_subscription_id: subscriptionId,
             subscription_status: 'active',
             current_plan: plan.id as any,
-            credits_remaining: plan.credits, // Grant monthly credits
+            // Don't set credits_remaining here - invoice.payment_succeeded will grant credits
           })
 
-          console.log(`Subscription created for user ${userId}, granted ${plan.credits} credits`)
+          console.log(`Subscription created for user ${userId}, plan: ${plan.id}`)
         }
         break
       }
@@ -127,43 +127,6 @@ export async function POST(request: NextRequest) {
         break
       }
 
-      case 'invoice.payment_succeeded': {
-        const invoice = event.data.object as Stripe.Invoice
-        const customerId = invoice.customer as string
-        const subscriptionId = invoice.subscription as string
-
-        if (!subscriptionId) {
-          break
-        }
-
-        // Find user by Stripe customer ID
-        const userCredits = await getUserCreditsByStripeCustomerId(customerId)
-        if (!userCredits) {
-          console.error('User not found for customer ID:', customerId)
-          break
-        }
-
-        // Get subscription to find the plan
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId as string)
-        const priceId = subscription.items.data[0]?.price.id
-        
-        if (!priceId) {
-          console.error('No price ID in subscription')
-          break
-        }
-
-        const plan = getPlanByPriceId(priceId)
-        if (!plan) {
-          console.error('Plan not found for price ID:', priceId)
-          break
-        }
-
-        // Grant monthly credits (this happens on successful payment each month)
-        await addCredits(userCredits.user_id, plan.credits)
-
-        console.log(`Monthly credits granted: ${plan.credits} credits for user ${userCredits.user_id}`)
-        break
-      }
 
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice
@@ -184,6 +147,46 @@ export async function POST(request: NextRequest) {
         console.log(`Payment failed for user ${userCredits.user_id}`)
         break
       }
+
+      case 'invoice.payment_succeeded':
+      case 'invoice_payment.paid': // Legacy event name - handle same as payment_succeeded
+        {
+          const invoice = event.data.object as Stripe.Invoice
+          const customerId = invoice.customer as string
+          const subscriptionId = invoice.subscription as string
+
+          if (!subscriptionId) {
+            break
+          }
+
+          // Find user by Stripe customer ID
+          const userCredits = await getUserCreditsByStripeCustomerId(customerId)
+          if (!userCredits) {
+            console.error('User not found for customer ID:', customerId)
+            break
+          }
+
+          // Get subscription to find the plan
+          const subscription = await stripe.subscriptions.retrieve(subscriptionId as string)
+          const priceId = subscription.items.data[0]?.price.id
+          
+          if (!priceId) {
+            console.error('No price ID in subscription')
+            break
+          }
+
+          const plan = getPlanByPriceId(priceId)
+          if (!plan) {
+            console.error('Plan not found for price ID:', priceId)
+            break
+          }
+
+          // Grant monthly credits (this happens on successful payment each month)
+          await addCredits(userCredits.user_id, plan.credits)
+
+          console.log(`Monthly credits granted: ${plan.credits} credits for user ${userCredits.user_id}`)
+          break
+        }
 
       default:
         console.log(`Unhandled event type: ${event.type}`)

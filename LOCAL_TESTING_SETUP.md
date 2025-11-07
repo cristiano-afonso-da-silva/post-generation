@@ -58,7 +58,7 @@ Make sure:
 ## Step 6: Test the Flow
 
 1. **Sign up** a new user → Should get 1 free credit
-2. **Generate a carousel** → Credit should be deducted
+2. **Generate a note** → Credit should be deducted
 3. **Try to generate again** → Should show upgrade prompt
 4. **Click "Upgrade"** → Should open Stripe Checkout
 5. **Use test card:** `4242 4242 4242 4242`

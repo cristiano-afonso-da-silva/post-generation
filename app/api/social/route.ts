@@ -13,7 +13,7 @@ if (!GEMINI_API_KEY) {
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY!);
 
-// Model for regular generation (ideas and carousel)
+// Model for regular generation (ideas and note)
 // Note: We'll add responseSchema per request, not globally
 const model = genAI.getGenerativeModel({
   model: GEMINI_MODEL,
@@ -66,19 +66,19 @@ const safeJsonParse = (text: string) => {
   }
 };
 
-const formatToMarkdown = (carousel: any, underlineWords: any = {}) => {
+const formatToMarkdown = (note: any, underlineWords: any = {}) => {
   const lines: string[] = [];
   
   lines.push('═'.repeat(80));
-  lines.push(`📝 ${carousel.ideaTitle.toUpperCase()}`);
+  lines.push(`📝 ${note.ideaTitle.toUpperCase()}`);
   lines.push('═'.repeat(80));
   lines.push('');
   
-  carousel.slides.forEach((slide: any, index: number) => {
+  note.slides.forEach((slide: any, index: number) => {
     const slideNum = index + 1;
     const emoji = slide.kind === 'HOOK' ? '🎣' : slide.kind === 'CTA' ? '📢' : '📄';
     
-    lines.push(`┌─ Slide ${slideNum}/${carousel.slides.length} ${emoji} ${slide.kind} ${'─'.repeat(Math.max(0, 50 - slideNum.toString().length - slide.kind.length))}`);
+    lines.push(`┌─ Slide ${slideNum}/${note.slides.length} ${emoji} ${slide.kind} ${'─'.repeat(Math.max(0, 50 - slideNum.toString().length - slide.kind.length))}`);
     lines.push('│');
     
     if (slide.title) {
@@ -126,15 +126,15 @@ const formatToMarkdown = (carousel: any, underlineWords: any = {}) => {
   lines.push('📝 INSTAGRAM CAPTION');
   lines.push('═'.repeat(80));
   lines.push('');
-  lines.push(carousel.caption);
+  lines.push(note.caption);
   lines.push('');
   lines.push('═'.repeat(80));
   lines.push('📊 STATISTICS');
   lines.push('═'.repeat(80));
-  lines.push(`Total Slides: ${carousel.stats.totalSlides}`);
-  lines.push(`Hook Words: ${carousel.stats.hookWords}`);
-  lines.push(`Middle Slides: ${carousel.stats.middleSlides}`);
-  lines.push(`Caption Words: ${carousel.stats.captionWords}`);
+  lines.push(`Total Slides: ${note.stats.totalSlides}`);
+  lines.push(`Hook Words: ${note.stats.hookWords}`);
+  lines.push(`Middle Slides: ${note.stats.middleSlides}`);
+  lines.push(`Caption Words: ${note.stats.captionWords}`);
   lines.push('═'.repeat(80));
   
   lines.push('');
@@ -215,15 +215,15 @@ Return ONLY valid JSON matching this exact structure:
 Think strategically about what would make someone stop scrolling and engage.
 `.trim();
 
-const CAROUSEL_PROMPT = (ideaTitle: string, accountDescription: string) => `
-You are an expert Instagram carousel creator. Your posts go viral because they're perfectly structured and valuable.
+const NOTE_PROMPT = (ideaTitle: string, accountDescription: string) => `
+You are an expert Instagram note creator. Your posts go viral because they're perfectly structured and valuable.
 
 CONTEXT
 Account: ${accountDescription || 'General audience'}
 Post Idea: "${ideaTitle}"
 
 TASK
-Create a complete carousel with slides and caption that follows these EXACT specifications:
+Create a complete note with slides and caption that follows these EXACT specifications:
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SLIDE 1: HOOK (FIRST SLIDE)
@@ -320,12 +320,12 @@ QUALITY CHECKLIST
 ✓ Simple, clear English throughout
 `.trim();
 
-const CAROUSEL_SCHEMA = {
+const NOTE_SCHEMA = {
   type: SchemaType.OBJECT,
   properties: {
     ideaTitle: {
       type: SchemaType.STRING,
-      description: "The main title of the carousel"
+      description: "The main title of the note"
     },
     slides: {
       type: SchemaType.ARRAY,
@@ -538,22 +538,22 @@ Return JSON with:
   return results;
 }
 
-async function generateCarousel(ideaTitle: string, accountDescription: string) {
+async function generateNote(ideaTitle: string, accountDescription: string) {
   const startTime = Date.now();
   
   try {
-    console.log(`🚀 Generating carousel for: "${ideaTitle}"`);
+    console.log(`🚀 Generating note for: "${ideaTitle}"`);
     
     const result = await model.generateContent({
       contents: [{
         role: 'user',
-        parts: [{ text: CAROUSEL_PROMPT(ideaTitle, accountDescription) }]
+        parts: [{ text: NOTE_PROMPT(ideaTitle, accountDescription) }]
       }],
       generationConfig: {
         temperature: 0.8,
         maxOutputTokens: 2000,
         responseMimeType: 'application/json',
-        responseSchema: CAROUSEL_SCHEMA
+        responseSchema: NOTE_SCHEMA
       }
     });
     
@@ -573,13 +573,13 @@ async function generateCarousel(ideaTitle: string, accountDescription: string) {
     }
     
     if (!data.slides || !Array.isArray(data.slides) || data.slides.length < 4) {
-      console.error('❌ Invalid carousel structure!');
+      console.error('❌ Invalid note structure!');
       console.error('📊 Received data:', JSON.stringify(data, null, 2));
-      throw new Error(`Invalid carousel format: must have at least 4 slides, got ${data.slides?.length || 0}`);
+      throw new Error(`Invalid note format: must have at least 4 slides, got ${data.slides?.length || 0}`);
     }
     
     if (data.slides.length > 9) {
-      console.warn(`⚠️  Carousel has ${data.slides.length} slides (max 9), trimming...`);
+      console.warn(`⚠️  Note has ${data.slides.length} slides (max 9), trimming...`);
       data.slides = data.slides.slice(0, 9);
     }
     
@@ -607,7 +607,7 @@ async function generateCarousel(ideaTitle: string, accountDescription: string) {
     const captionWords = wordCount(data.caption);
     
     // Add stats to data object so formatToMarkdown can use them
-    const carouselWithStats = {
+    const noteWithStats = {
       ...data,
       stats: {
         totalSlides: data.slides.length,
@@ -617,11 +617,11 @@ async function generateCarousel(ideaTitle: string, accountDescription: string) {
       }
     };
     
-    const formatted = formatToMarkdown(carouselWithStats, underlineWords);
+    const formatted = formatToMarkdown(noteWithStats, underlineWords);
     
     return {
       success: true,
-      action: 'carousel',
+      action: 'note',
       data: {
         ideaTitle: data.ideaTitle || ideaTitle,
         slides: data.slides,
@@ -641,10 +641,10 @@ async function generateCarousel(ideaTitle: string, accountDescription: string) {
       }
     };
   } catch (error: any) {
-    console.error('Error generating carousel:', error);
+    console.error('Error generating note:', error);
     return {
       success: false,
-      error: error.message || 'Failed to generate carousel',
+      error: error.message || 'Failed to generate note',
     };
   }
 }
@@ -677,7 +677,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(result);
     }
     
-    if (action === 'carousel') {
+    if (action === 'note') {
       if (!ideaTitle || typeof ideaTitle !== 'string' || ideaTitle.trim().length === 0) {
         return NextResponse.json(
           { success: false, error: 'Missing or invalid ideaTitle' },
@@ -685,7 +685,7 @@ export async function POST(request: NextRequest) {
         );
       }
       
-      const result = await generateCarousel(ideaTitle.trim(), accountDescription?.trim() || '');
+      const result = await generateNote(ideaTitle.trim(), accountDescription?.trim() || '');
       return NextResponse.json(result);
     }
     

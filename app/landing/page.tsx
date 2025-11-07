@@ -1,14 +1,26 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '../context/AuthContext'
+import AccountButton from '../components/AccountButton'
 import '../globals.css'
+
+const platforms = ['Instagram', 'LinkedIn', 'Threads', 'X']
 
 export default function LandingPage() {
   const router = useRouter()
-  const { user, loading } = useAuth()
+  const { user, loading, credits } = useAuth()
+  const [currentPlatform, setCurrentPlatform] = useState(0)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentPlatform((prev) => (prev + 1) % platforms.length)
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [])
 
   // Allow authenticated users to view the landing page if they navigate here explicitly
   // No auto-redirect - let users stay on landing page if they want
@@ -54,24 +66,15 @@ export default function LandingPage() {
           </Link>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             {user ? (
-              <Link
-                href="/"
-                style={{
-                  padding: '10px 24px',
-                  borderRadius: '8px',
-                  background: '#ffbd59',
-                  color: '#000000',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  textDecoration: 'none',
-                  transition: 'all 0.3s ease',
-                }}
-              >
-                Go to App
-              </Link>
+              <AccountButton
+                credits={credits?.credits_remaining ?? 0}
+                subscriptionStatus={credits?.subscription_status ?? null}
+                currentPlan={credits?.current_plan ?? null}
+              />
             ) : (
               <Link
                 href="/signup"
+                className="nav-button"
                 style={{
                   padding: '10px 24px',
                   borderRadius: '8px',
@@ -98,14 +101,14 @@ export default function LandingPage() {
         textAlign: 'center',
       }}>
         <h1 style={{
-          fontSize: 'clamp(48px, 8vw, 96px)',
+          fontSize: 'clamp(36px, 6vw, 72px)',
           fontWeight: '700',
           marginBottom: '24px',
           lineHeight: '1.1',
           letterSpacing: '-2px',
           color: '#000000',
         }}>
-          Generate <span style={{ color: '#ffbd59' }}>Social Posts</span> in Seconds
+          Generate <span style={{ color: '#ffbd59' }}>{platforms[currentPlatform]} Posts</span> in Seconds
         </h1>
         <p style={{
           fontSize: 'clamp(18px, 2vw, 24px)',
@@ -115,7 +118,7 @@ export default function LandingPage() {
           margin: '0 auto 48px',
           lineHeight: '1.6',
         }}>
-          AI-powered carousel generation for Instagram. Create engaging posts in seconds.
+          AI-powered content generation for social media. Create engaging posts that capture your audience.
         </p>
         <Link
           href="/signup"
@@ -335,7 +338,7 @@ export default function LandingPage() {
               marginBottom: '24px',
               fontStyle: 'italic',
             }}>
-              "This tool has completely transformed how I create content for Instagram. I can generate professional carousels in minutes instead of hours!"
+              "This tool has completely transformed how I create content for Instagram. I can generate professional notes in minutes instead of hours!"
             </p>
             <div style={{
               fontSize: '16px',

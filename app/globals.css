@@ -80,19 +80,17 @@ a {
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: background-color 0.2s ease;
   position: relative;
   overflow: hidden;
 }
 
 .button:hover {
   background: #ffa929;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(255, 189, 89, 0.4);
 }
 
 .button:active {
-  transform: translateY(0);
+  background: #ffa929;
 }
 
 .button:disabled {
@@ -102,14 +100,29 @@ a {
 }
 
 .button.secondary {
-  background: #ffffff;
-  border: 2px solid #000000;
+  background: #ededed;
+  border: none;
   color: #000000;
 }
 
 .button.secondary:hover {
-  background: #f5f5f5;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  background: #e5e5e5;
+}
+
+.button.secondary:active {
+  background: #d4d4d4;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   NAV BUTTON
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.nav-button {
+  transition: all 0.3s ease;
+}
+
+.nav-button:hover {
+  background: #ffa929 !important;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -292,6 +305,16 @@ a {
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
+   PLANS GRID
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.plans-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
    RESPONSIVE
    ════════════════════════════════════════════════════════════════════════════ */
 
@@ -306,5 +329,9 @@ a {
   
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .plans-grid {
+    grid-template-columns: 1fr;
   }
 }

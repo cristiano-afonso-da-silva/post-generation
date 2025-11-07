@@ -37,7 +37,20 @@ export async function POST(request: NextRequest) {
 
     let customerId = creditData?.stripe_customer_id
 
-    if (!customerId) {
+    // Verify customer exists in current Stripe mode (test/live)
+    let customerExists = false
+    if (customerId) {
+      try {
+        await stripe.customers.retrieve(customerId)
+        customerExists = true
+      } catch (error: any) {
+        // Customer doesn't exist in current mode (e.g., switching from live to test mode)
+        console.log(`Customer ${customerId} not found in current Stripe mode, creating new customer`)
+        customerExists = false
+      }
+    }
+
+    if (!customerId || !customerExists) {
       // Create new Stripe customer
       const customer = await stripe.customers.create({
         email: userData.user.email,

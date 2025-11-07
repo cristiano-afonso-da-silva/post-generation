@@ -66,7 +66,7 @@ npm run dev  # Starts both frontend and backend
 4. You'll be automatically signed in and redirected
 
 ### 6. Use the App
-- Generate carousel posts as before
+- Generate note posts as before
 - Your email appears in the top-right corner
 - Click "Sign Out" to log out
 
@@ -74,7 +74,7 @@ npm run dev  # Starts both frontend and backend
 
 | Route | Access | Description |
 |-------|--------|-------------|
-| `/` | 🔒 Protected | Main carousel generator |
+| `/` | 🔒 Protected | Main note generator |
 | `/landing` | 🌐 Public | Landing page |
 | `/signin` | 🌐 Public | Sign in page |
 | `/signup` | 🌐 Public | Sign up page |
@@ -111,7 +111,7 @@ npm run dev  # Starts both frontend and backend
 - Auth protection (redirects to landing if not signed in)
 - User email display in header
 - Sign out button
-- All previous carousel generation features
+- All previous note generation features
 
 ## Security Features
 
@@ -200,7 +200,7 @@ Your authentication system is fully configured and ready to use. Just:
 2. Open `http://localhost:3001`
 3. Sign up with your email
 4. Verify your account
-5. Start generating carousel posts!
+5. Start generating note posts!
 
 ---
 

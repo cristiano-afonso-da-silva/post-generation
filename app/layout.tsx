@@ -4,7 +4,7 @@ import { AuthProvider } from './context/AuthContext'
 
 export const metadata: Metadata = {
   title: 'Post My Note - Social Media Content Creator',
-  description: 'Generate high-quality Instagram carousel posts using AI',
+  description: 'Generate high-quality Instagram note posts using AI',
 }
 
 export default function RootLayout({

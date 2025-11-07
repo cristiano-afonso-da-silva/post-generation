@@ -18,6 +18,6 @@ Please add the following three images to this directory:
 ## Image Format
 
 - File names: example1, example2, example3 (with any image extension: .jpg, .png, .webp, etc.)
-- Aspect ratio: 9:16 (vertical, Instagram story/carousel format)
+- Aspect ratio: 9:16 (vertical, Instagram story/note format)
 - Recommended dimensions: 1080x1920px or similar
 

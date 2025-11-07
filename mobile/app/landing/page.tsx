@@ -44,7 +44,7 @@ export default function LandingPage() {
       {/* Hero Section */}
       <div className="container mx-auto px-6 py-20 text-center">
         <h1 className="text-6xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 bg-clip-text text-transparent">
-          Create Stunning Carousel Posts
+          Create Stunning Note Posts
         </h1>
         <p className="text-xl md:text-2xl text-gray-300 mb-12 max-w-3xl mx-auto">
         Generate ready-to-post content with AI. Perfect for Instagram, LinkedIn, X and more.
@@ -67,7 +67,7 @@ export default function LandingPage() {
             <div className="text-4xl mb-4">🤖</div>
             <h3 className="text-2xl font-bold mb-3">AI-Powered</h3>
             <p className="text-gray-400">
-              Generate compelling content ideas and carousel posts using advanced AI technology
+              Generate compelling content ideas and note posts using advanced AI technology
             </p>
           </div>
           <div className="p-8 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-purple-400/50 transition-all">
@@ -81,7 +81,7 @@ export default function LandingPage() {
             <div className="text-4xl mb-4">⚡</div>
             <h3 className="text-2xl font-bold mb-3">Instant Download</h3>
             <p className="text-gray-400">
-              Generate and download your carousel slides in seconds, ready to post
+              Generate and download your note slides in seconds, ready to post
             </p>
           </div>
         </div>
@@ -95,7 +95,7 @@ export default function LandingPage() {
         <div className="grid md:grid-cols-3 gap-8">
           <div className="p-8 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-purple-400/50 transition-all">
             <p className="text-gray-300 mb-6 italic leading-relaxed">
-              "This tool has completely transformed how I create content for Instagram. I can generate professional carousels in minutes instead of hours!"
+              "This tool has completely transformed how I create content for Instagram. I can generate professional notes in minutes instead of hours!"
             </p>
             <div className="text-lg font-semibold text-white">
               Sarah Chen

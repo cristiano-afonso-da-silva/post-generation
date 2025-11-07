@@ -3,16 +3,18 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { History } from 'lucide-react'
 import './globals.css'
 import SlideImageGenerator from './components/SlideImageGenerator'
 import { FONT_COMBINATIONS, COLOR_THEMES } from './config/slideThemes'
 import { useAuth } from './context/AuthContext'
-import CreditDisplay from './components/CreditDisplay'
+import AccountButton from './components/AccountButton'
 import UpgradePrompt from './components/UpgradePrompt'
+import SubscriptionModal from './components/SubscriptionModal'
 
 const API_URL = ''
 
-interface Carousel {
+interface Note {
   ideaTitle: string
   slides: Array<{
     title: string
@@ -26,17 +28,18 @@ interface Carousel {
 export default function Home() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user, loading: authLoading, signOut, credits, refreshCredits } = useAuth()
+  const { user, loading: authLoading, credits, refreshCredits } = useAuth()
   
   const [accountDescription, setAccountDescription] = useState('')
   const [ideas, setIdeas] = useState<string[]>([])
-  const [carousel, setCarousel] = useState<Carousel | null>(null)
+  const [note, setNote] = useState<Note | null>(null)
   const [loadingIdeas, setLoadingIdeas] = useState(false)
-  const [loadingCarousel, setLoadingCarousel] = useState(false)
+  const [loadingNote, setLoadingNote] = useState(false)
   const [selectedIdea, setSelectedIdea] = useState<string | null>(null)
   const [currentStep, setCurrentStep] = useState<'generating' | 'analysing' | 'rendering' | null>(null)
   const [error, setError] = useState('')
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
   
   // Theme settings
   const [fontCombinationId, setFontCombinationId] = useState('combination-1')
@@ -44,7 +47,7 @@ export default function Home() {
 
   // Save theme changes to localStorage
   useEffect(() => {
-    if (carousel) {
+    if (note) {
       try {
         localStorage.setItem('postGeneration_fontCombinationId', fontCombinationId)
         localStorage.setItem('postGeneration_colorThemeId', colorThemeId)
@@ -52,7 +55,7 @@ export default function Home() {
         console.error('Error saving theme to localStorage:', error)
       }
     }
-  }, [fontCombinationId, colorThemeId, carousel])
+  }, [fontCombinationId, colorThemeId, note])
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -76,18 +79,18 @@ export default function Home() {
     }
   }, [searchParams, refreshCredits, router])
 
-  // Load carousel from localStorage on mount
+  // Load note from localStorage on mount
   useEffect(() => {
     if (user && !authLoading) {
       try {
-        const savedCarousel = localStorage.getItem('postGeneration_carousel')
+        const savedNote = localStorage.getItem('postGeneration_note')
         const savedAccountDescription = localStorage.getItem('postGeneration_accountDescription')
         const savedFontCombination = localStorage.getItem('postGeneration_fontCombinationId')
         const savedColorTheme = localStorage.getItem('postGeneration_colorThemeId')
         
-        if (savedCarousel) {
-          const parsedCarousel = JSON.parse(savedCarousel)
-          setCarousel(parsedCarousel)
+        if (savedNote) {
+          const parsedNote = JSON.parse(savedNote)
+          setNote(parsedNote)
         }
         
         if (savedAccountDescription) {
@@ -106,11 +109,6 @@ export default function Home() {
       }
     }
   }, [user, authLoading])
-
-  const handleSignOut = async () => {
-    await signOut()
-    router.push('/landing')
-  }
 
   if (authLoading) {
     return (
@@ -136,7 +134,7 @@ export default function Home() {
     setLoadingIdeas(true)
     setError('')
     setIdeas([])
-    setCarousel(null)
+    setNote(null)
 
     try {
       const response = await fetch(`${API_URL}/api/social`, {
@@ -164,7 +162,7 @@ export default function Home() {
     }
   }
 
-  const generateCarousel = async (idea: string) => {
+  const generateNote = async (idea: string) => {
     if (!user?.id) {
       setError('User not authenticated')
       return
@@ -175,16 +173,16 @@ export default function Home() {
     let creditsRemaining = 0
 
     // First, check context credits (fastest, already loaded)
-    if (credits && credits.credits_remaining > 0) {
-      hasCredits = true
+    if (credits && credits.credits_remaining !== undefined && credits.credits_remaining !== null) {
       creditsRemaining = credits.credits_remaining
+      hasCredits = creditsRemaining > 0
     } else {
       // If context doesn't have credits, check via API
       try {
         const checkResponse = await fetch(`/api/credits/check?userId=${user.id}`)
         if (checkResponse.ok) {
           const checkData = await checkResponse.json()
-          creditsRemaining = checkData.creditsRemaining || 0
+          creditsRemaining = checkData.creditsRemaining ?? 0
           hasCredits = creditsRemaining > 0
           
           // Update context with fresh data
@@ -193,29 +191,30 @@ export default function Home() {
           }
         } else {
           // If API fails, use context as fallback
-          hasCredits = credits ? credits.credits_remaining > 0 : false
-          creditsRemaining = credits?.credits_remaining || 0
+          creditsRemaining = credits?.credits_remaining ?? 0
+          hasCredits = creditsRemaining > 0
         }
       } catch (error) {
         console.error('Error checking credits:', error)
         // If check fails, use context credits as fallback
-        hasCredits = credits ? credits.credits_remaining > 0 : false
-        creditsRemaining = credits?.credits_remaining || 0
+        creditsRemaining = credits?.credits_remaining ?? 0
+        hasCredits = creditsRemaining > 0
       }
     }
 
-    // Check if user has credits (only deduct credit for carousel generation, not ideas)
-    // Generating ideas is FREE - only carousel generation costs credits
-    if (!hasCredits || creditsRemaining <= 0) {
+    // Check if user has credits (only deduct credit for note generation, not ideas)
+    // Generating ideas is FREE - only note generation costs credits
+    // Allow generation if user has at least 1 credit (creditsRemaining > 0)
+    if (creditsRemaining <= 0) {
       console.log('No credits available. Credits remaining:', creditsRemaining, 'Context credits:', credits)
       setShowUpgradePrompt(true)
       return
     }
 
     setSelectedIdea(idea)
-    setLoadingCarousel(true)
+    setLoadingNote(true)
     setError('')
-    setCarousel(null)
+    setNote(null)
     setCurrentStep('generating')
 
     // Simulate step progression
@@ -227,7 +226,7 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'carousel',
+          action: 'note',
           ideaTitle: idea,
           accountDescription: accountDescription.trim()
         })
@@ -237,10 +236,12 @@ export default function Home() {
 
       if (result.success) {
         // Credit will be deducted when slides are actually generated in SlideImageGenerator
-        setCarousel(result.data)
-        // Save to localStorage
+        setNote(result.data)
+        // Clear generation_id to force new generation creation (new ideaTitle = new generation)
         try {
-          localStorage.setItem('postGeneration_carousel', JSON.stringify(result.data))
+          localStorage.removeItem('postGeneration_generationId')
+          localStorage.removeItem('postGeneration_contentHash')
+          localStorage.setItem('postGeneration_note', JSON.stringify(result.data))
           localStorage.setItem('postGeneration_accountDescription', accountDescription.trim())
           localStorage.setItem('postGeneration_fontCombinationId', fontCombinationId)
           localStorage.setItem('postGeneration_colorThemeId', colorThemeId)
@@ -250,7 +251,7 @@ export default function Home() {
         setError('')
         setCurrentStep(null)
       } else {
-        setError(result.error || 'Failed to generate carousel')
+        setError(result.error || 'Failed to generate note')
         setCurrentStep(null)
       }
     } catch (err: any) {
@@ -258,25 +259,27 @@ export default function Home() {
       setError('Failed to connect to server. Please try again.')
       setCurrentStep(null)
     } finally {
-      setLoadingCarousel(false)
+      setLoadingNote(false)
     }
   }
 
   const reset = () => {
     setAccountDescription('')
     setIdeas([])
-    setCarousel(null)
+    setNote(null)
     setSelectedIdea(null)
     setCurrentStep(null)
     setError('')
     // Clear localStorage
     try {
-      localStorage.removeItem('postGeneration_carousel')
+      localStorage.removeItem('postGeneration_note')
       localStorage.removeItem('postGeneration_accountDescription')
       localStorage.removeItem('postGeneration_fontCombinationId')
       localStorage.removeItem('postGeneration_colorThemeId')
       localStorage.removeItem('postGeneration_canvasImages')
       localStorage.removeItem('postGeneration_contentHash')
+      localStorage.removeItem('postGeneration_generationId')
+      localStorage.removeItem('postGeneration_fullContentHash')
     } catch (error) {
       console.error('Error clearing localStorage:', error)
     }
@@ -316,20 +319,33 @@ export default function Home() {
           </Link>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             {credits && (
-              <CreditDisplay
-                credits={credits.credits_remaining}
-                subscriptionStatus={credits.subscription_status}
-                currentPlan={credits.current_plan}
-              />
+              <>
+                <Link 
+                  href="/history"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    background: '#f5f5f5',
+                    border: '2px solid #e5e5e5',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    textDecoration: 'none',
+                  }}
+                  title="History"
+                >
+                  <History size={20} color="#000000" />
+                </Link>
+                <AccountButton
+                  credits={credits.credits_remaining}
+                  subscriptionStatus={credits.subscription_status}
+                  currentPlan={credits.current_plan}
+                />
+              </>
             )}
-            <span style={{ fontSize: '14px', color: '#666666', fontWeight: '500' }}>{user.email}</span>
-            <button
-              onClick={handleSignOut}
-              className="button secondary"
-              style={{ padding: '10px 20px', fontSize: '14px' }}
-            >
-              Sign Out
-            </button>
           </div>
         </div>
       </header>
@@ -337,42 +353,40 @@ export default function Home() {
       <div className="container">
         {/* Input Section - Always Visible */}
         <div style={{ marginBottom: '40px' }}>
-          <div className="card" style={{ maxWidth: '900px', margin: '0 auto' }}>
-            <h2 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '8px', color: '#000000' }}>
-              Describe Your Business
-            </h2>
-            <p style={{ color: '#666666', marginBottom: '24px', fontSize: '15px' }}>
-              Tell us about your business to generate post ideas
-            </p>
-            
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <input
-                type="text"
-                className="input"
-                placeholder="e.g., productivity coach helping remote workers overcome procrastination"
-                value={accountDescription}
-                onChange={(e) => setAccountDescription(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && generateIdeas()}
-                style={{ flex: 1, minWidth: '300px' }}
-              />
+          <h2 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '8px', color: '#000000' }}>
+            Describe Your Business
+          </h2>
+          <p style={{ color: '#666666', marginBottom: '24px', fontSize: '15px' }}>
+            Tell us about your business to generate post ideas
+          </p>
+          
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              className="input"
+              placeholder="e.g., productivity coach helping remote workers overcome procrastination"
+              value={accountDescription}
+              onChange={(e) => setAccountDescription(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && generateIdeas()}
+              style={{ flex: 1, minWidth: '300px' }}
+            />
+            <button
+              className="button"
+              onClick={generateIdeas}
+              disabled={loadingIdeas || !accountDescription.trim()}
+              style={{ minWidth: '150px' }}
+            >
+              {loadingIdeas ? 'Generating...' : 'Generate Ideas'}
+            </button>
+            {(ideas.length > 0 || note) && (
               <button
-                className="button"
-                onClick={generateIdeas}
-                disabled={loadingIdeas || !accountDescription.trim()}
-                style={{ minWidth: '150px' }}
+                className="button secondary"
+                onClick={reset}
+                style={{ minWidth: '120px' }}
               >
-                {loadingIdeas ? 'Generating...' : 'Generate Ideas'}
+                Reset
               </button>
-              {(ideas.length > 0 || carousel) && (
-                <button
-                  className="button secondary"
-                  onClick={reset}
-                  style={{ minWidth: '120px' }}
-                >
-                  Reset
-                </button>
-              )}
-            </div>
+            )}
           </div>
         </div>
 
@@ -393,8 +407,8 @@ export default function Home() {
                 {ideas.map((idea, index) => (
                   <button
                     key={index}
-                    onClick={() => generateCarousel(idea)}
-                    disabled={loadingCarousel}
+                    onClick={() => generateNote(idea)}
+                    disabled={loadingNote}
                     className="idea-button"
                   >
                     <span className="idea-number">{index + 1}</span>
@@ -407,7 +421,7 @@ export default function Home() {
         )}
 
         {/* Loading Steps Section */}
-        {selectedIdea && loadingCarousel && (
+        {selectedIdea && loadingNote && (
           <div style={{ marginBottom: '40px' }}>
             <div className="card" style={{ maxWidth: '900px', margin: '0 auto' }}>
               <h2 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '32px', color: '#000000' }}>
@@ -519,8 +533,8 @@ export default function Home() {
           </div>
         )}
 
-        {/* Carousel Results */}
-        {carousel && !loadingCarousel && (
+        {/* Note Results */}
+        {note && !loadingNote && (
           <div>
             {/* Theme Customization */}
             <div className="card" style={{ maxWidth: '900px', margin: '0 auto 32px' }}>
@@ -567,11 +581,13 @@ export default function Home() {
 
             {/* Generated Slides */}
             <SlideImageGenerator 
-              slides={carousel.slides}
-              ideaTitle={carousel.ideaTitle}
-              underlineWords={carousel.underlineWords || {}}
+              slides={note.slides}
+              ideaTitle={note.ideaTitle}
+              underlineWords={note.underlineWords || {}}
               fontCombinationId={fontCombinationId}
               colorThemeId={colorThemeId}
+              accountDescription={accountDescription}
+              caption={note.caption}
             />
 
             {/* Slides Content */}
@@ -580,7 +596,7 @@ export default function Home() {
                 Slides Content
               </h3>
               <div style={{ display: 'grid', gap: '16px' }}>
-                {carousel.slides.map((slide, index) => (
+                {note.slides.map((slide, index) => (
                   <div 
                     key={index}
                     className={`slide-card ${slide.kind === 'HOOK' ? 'hook' : slide.kind === 'CTA' ? 'cta' : 'middle'}`}
@@ -635,7 +651,7 @@ export default function Home() {
                 lineHeight: '1.8',
                 color: '#000000'
               }}>
-                {carousel.caption}
+                {note.caption}
               </div>
             </div>
           </div>
@@ -647,6 +663,15 @@ export default function Home() {
         isOpen={showUpgradePrompt}
         onClose={() => setShowUpgradePrompt(false)}
         currentPlan={credits?.current_plan || null}
+      />
+
+      {/* Subscription Modal */}
+      <SubscriptionModal
+        isOpen={showSubscriptionModal}
+        onClose={() => setShowSubscriptionModal(false)}
+        currentPlan={credits?.current_plan || null}
+        credits={credits?.credits_remaining}
+        subscriptionStatus={credits?.subscription_status || null}
       />
     </div>
   )
