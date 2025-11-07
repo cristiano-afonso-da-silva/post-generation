@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import './globals.css'
 import SlideImageGenerator from './components/SlideImageGenerator'
+import { FONT_COMBINATIONS, COLOR_THEMES } from './config/slideThemes'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
 
@@ -19,6 +20,7 @@ interface Carousel {
   }>
   caption: string
   formatted: string
+  underlineWords?: Record<number, { underline: string; highlight: string }>
   stats: {
     totalSlides: number
     hookWords: number
@@ -35,6 +37,10 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [step, setStep] = useState<'input' | 'ideas' | 'carousel'>('input')
+  
+  // Theme settings
+  const [fontCombinationId, setFontCombinationId] = useState('combination-1')
+  const [colorThemeId, setColorThemeId] = useState('purple-black')
 
   const generateIdeas = async () => {
     if (!accountDescription.trim()) {
@@ -458,10 +464,104 @@ export default function Home() {
             </pre>
           </div>
 
+          {/* Theme Customization */}
+          <div className="card" style={{ marginTop: '32px' }}>
+            <h3 style={{ 
+              fontSize: '24px', 
+              fontWeight: '700',
+              marginBottom: '24px',
+              background: 'linear-gradient(135deg, #ffffff 0%, rgba(255,255,255,0.8) 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text'
+            }}>
+              🎨 Customize Slide Design
+            </h3>
+            
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+              gap: '24px'
+            }}>
+              {/* Font Combination Selector */}
+              <div>
+                <label style={{ 
+                  display: 'block',
+                  marginBottom: '12px',
+                  color: 'rgba(255,255,255,0.8)',
+                  fontSize: '14px',
+                  fontWeight: '600'
+                }}>
+                  Font Combination
+                </label>
+                <select
+                  value={fontCombinationId}
+                  onChange={(e) => setFontCombinationId(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '14px 16px',
+                    borderRadius: '12px',
+                    border: '2px solid rgba(255,255,255,0.1)',
+                    background: 'rgba(0, 0, 0, 0.3)',
+                    color: 'white',
+                    fontSize: '16px',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  {FONT_COMBINATIONS.map(combo => (
+                    <option key={combo.id} value={combo.id} style={{ background: '#1a1a1a' }}>
+                      {combo.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Color Theme Selector */}
+              <div>
+                <label style={{ 
+                  display: 'block',
+                  marginBottom: '12px',
+                  color: 'rgba(255,255,255,0.8)',
+                  fontSize: '14px',
+                  fontWeight: '600'
+                }}>
+                  Color Theme
+                </label>
+                <select
+                  value={colorThemeId}
+                  onChange={(e) => setColorThemeId(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '14px 16px',
+                    borderRadius: '12px',
+                    border: '2px solid rgba(255,255,255,0.1)',
+                    background: 'rgba(0, 0, 0, 0.3)',
+                    color: 'white',
+                    fontSize: '16px',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  {COLOR_THEMES.map(theme => (
+                    <option key={theme.id} value={theme.id} style={{ background: '#1a1a1a' }}>
+                      {theme.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
           {/* Image Generation */}
           <SlideImageGenerator 
             slides={carousel.slides}
             ideaTitle={carousel.ideaTitle}
+            underlineWords={carousel.underlineWords || {}}
+            fontCombinationId={fontCombinationId}
+            colorThemeId={colorThemeId}
           />
 
           {/* Action Buttons */}

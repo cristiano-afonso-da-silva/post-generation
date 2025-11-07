@@ -90,7 +90,7 @@ const safeJsonParse = (text) => {
 /**
  * Format carousel data to Markdown for display
  */
-const formatToMarkdown = (carousel) => {
+const formatToMarkdown = (carousel, underlineWords = {}) => {
   const lines = [];
   
   // Title
@@ -142,6 +142,20 @@ const formatToMarkdown = (carousel) => {
         lines.push(currentLine);
       }
       lines.push(`│`);
+      
+      // Show emphasis words for MIDDLE slides
+      if (slide.kind === 'MIDDLE' && underlineWords[index]) {
+        const emphasis = underlineWords[index];
+        if (emphasis.underline) {
+          lines.push(`│ ━ Underline: ${emphasis.underline}`);
+        }
+        if (emphasis.highlight) {
+          lines.push(`│ ✨ Highlight: ${emphasis.highlight}`);
+        }
+        if (emphasis.underline || emphasis.highlight) {
+          lines.push(`│`);
+        }
+      }
     }
     lines.push(`└${'─'.repeat(78)}`);
     lines.push('');
@@ -161,6 +175,29 @@ const formatToMarkdown = (carousel) => {
   });
   
   lines.push('');
+  lines.push('═'.repeat(80));
+  
+  // Add Gemini emphasis extraction output
+  lines.push('');
+  lines.push('🎨 GEMINI EMPHASIS EXTRACTION');
+  lines.push('═'.repeat(80));
+  lines.push('');
+  
+  Object.keys(underlineWords).forEach(key => {
+    const data = underlineWords[key];
+    if (data && (data.underline || data.highlight)) {
+      const slideNum = parseInt(key) + 1;
+      lines.push(`Slide ${slideNum}:`);
+      if (data.underline) {
+        lines.push(`  ━ Underline: ${data.underline}`);
+      }
+      if (data.highlight) {
+        lines.push(`  ✨ Highlight: ${data.highlight}`);
+      }
+      lines.push('');
+    }
+  });
+  
   lines.push('═'.repeat(80));
   
   return lines.join('\n');
@@ -237,6 +274,9 @@ Create a complete carousel with slides and caption that follows these EXACT spec
 SLIDE 1: HOOK (FIRST SLIDE)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - title: The hook text itself (maximum 10 words)
+  * Use simple English - easy to understand, clear, and direct
+  * Avoid complex words or jargon
+  * Make it attention-grabbing and engaging
 - content: "" (leave empty)
 - kind: "HOOK"
 
@@ -360,6 +400,21 @@ const CAROUSEL_SCHEMA = {
     required: ['ideaTitle', 'slides', 'caption']
   };
 
+const UNDERLINE_SCHEMA = {
+  type: SchemaType.OBJECT,
+  properties: {
+    underline: {
+      type: SchemaType.STRING,
+      description: "Comma-separated list of important words/phrases to underline"
+    },
+    highlight: {
+      type: SchemaType.STRING,
+      description: "Single most important word to highlight with background color"
+    }
+  },
+  required: ['underline', 'highlight']
+};
+
 // ════════════════════════════════════════════════════════════════════════════
 // Core Generation Functions
 // ════════════════════════════════════════════════════════════════════════════
@@ -425,14 +480,36 @@ async function generateCarousel(ideaTitle, accountDescription) {
   
   const data = safeJsonParse(response.response.text());
   
+  // Remove asterisks from all slide content
+  if (data.slides && Array.isArray(data.slides)) {
+    data.slides.forEach(slide => {
+      if (slide.title) {
+        slide.title = slide.title.replace(/\*/g, '');
+      }
+      if (slide.content) {
+        slide.content = slide.content.replace(/\*/g, '');
+      }
+    });
+  }
+  
+  // Remove asterisks from caption
+  if (data.caption) {
+    data.caption = data.caption.replace(/\*/g, '');
+  }
+  
   // Comprehensive validation
   validateCarousel(data);
+  
+  // Extract underline words for each MIDDLE slide
+  console.log('🎨 Extracting important words to underline...');
+  const underlineWords = await extractUnderlineWords(data.slides);
   
   console.log(`✅ Generated carousel with ${data.slides.length} slides`);
   
   return {
     ...data,
-    formatted: formatToMarkdown(data),
+    underlineWords,
+    formatted: formatToMarkdown(data, underlineWords),
     stats: {
       totalSlides: data.slides.length,
       hookWords: wordCount(data.slides[0].title), // Hook text is in title field
@@ -440,6 +517,128 @@ async function generateCarousel(ideaTitle, accountDescription) {
       captionWords: wordCount(data.caption)
     }
   };
+}
+
+/**
+ * Extract important words to underline and highlight from each slide's content
+ */
+async function extractUnderlineWords(slides) {
+  const underlineWords = {};
+  
+  for (let i = 0; i < slides.length; i++) {
+    const slide = slides[i];
+    
+    // Skip empty slides
+    if (!slide.content && !slide.title) {
+      underlineWords[i] = { underline: '', highlight: '' };
+      continue;
+    }
+    
+    // Get text to analyze based on slide type
+    let textToAnalyze = '';
+    let slideTypeInstructions = '';
+    
+    if (slide.kind === 'HOOK') {
+      textToAnalyze = slide.title || slide.content;
+      slideTypeInstructions = 'This is a HOOK slide. Extract 1 most impactful word to highlight with background color. No underlines needed for hook slides.';
+    } else if (slide.kind === 'CTA') {
+      textToAnalyze = slide.content;
+      slideTypeInstructions = 'This is a CTA (Call-to-Action) slide. Extract 2-3 important words/phrases to underline. No highlight needed for CTA slides.';
+    } else if (slide.kind === 'MIDDLE') {
+      textToAnalyze = slide.content;
+      slideTypeInstructions = 'This is a MIDDLE slide. Extract 2-4 words/phrases to underline AND 1 most important word to highlight.';
+    }
+    
+    if (!textToAnalyze) {
+      underlineWords[i] = { underline: '', highlight: '' };
+      continue;
+    }
+    
+    const prompt = `
+You are analyzing carousel slide content to identify words/phrases for emphasis.
+
+${slideTypeInstructions}
+
+Slide Content:
+"${textToAnalyze}"
+
+Extract emphasis based on slide type:
+
+${slide.kind === 'HOOK' ? `
+HOOK SLIDE:
+- Extract 1 SINGLE MOST IMPORTANT word to highlight (with background color)
+- Leave "underline" empty
+- Example: { "underline": "", "highlight": "instantly" }
+` : ''}
+
+${slide.kind === 'CTA' ? `
+CTA SLIDE:
+- Extract 2-3 important words or short phrases to underline
+- Leave "highlight" empty
+- Example: { "underline": "take action, join now, start today", "highlight": "" }
+` : ''}
+
+${slide.kind === 'MIDDLE' ? `
+MIDDLE SLIDE:
+- UNDERLINE: 2-4 important words or short phrases (1-3 consecutive words each)
+- HIGHLIGHT: 1 SINGLE MOST IMPORTANT word (not phrase)
+- Example: { "underline": "cold exposure, increases metabolism, 300%", "highlight": "300%" }
+` : ''}
+
+Rules:
+- Use EXACT words as they appear (preserve capitalization)
+- For underline: comma-separated list
+- For highlight: single word only
+- Words should capture the core message
+
+Now extract the words for this slide:
+`.trim();
+
+    try {
+      const response = await model.generateContent({
+        contents: [{
+          role: 'user',
+          parts: [{ text: prompt }]
+        }],
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 100,
+          responseMimeType: 'application/json',
+          responseSchema: UNDERLINE_SCHEMA
+        }
+      });
+      
+      const rawResponse = response.response.text();
+      console.log(`  Slide ${i + 1} raw response: ${rawResponse}`);
+      
+      const result = safeJsonParse(rawResponse);
+      underlineWords[i] = {
+        underline: result.underline || '',
+        highlight: result.highlight || ''
+      };
+      
+      if (result.underline || result.highlight) {
+        console.log(`  Slide ${i + 1} - Underline: "${result.underline || 'none'}", Highlight: "${result.highlight || 'none'}"`);
+      } else {
+        console.warn(`  Slide ${i + 1}: No words extracted`);
+      }
+    } catch (error) {
+      console.warn(`⚠️  Failed to extract underline words for slide ${i + 1}:`, error.message);
+      underlineWords[i] = { underline: '', highlight: '' };
+    }
+  }
+  
+  console.log('\n📊 Emphasis Words Summary:');
+  Object.keys(underlineWords).forEach(key => {
+    const data = underlineWords[key];
+    if (data && (data.underline || data.highlight)) {
+      console.log(`  Slide ${parseInt(key) + 1}:`);
+      console.log(`    Underline: "${data.underline}"`);
+      console.log(`    Highlight: "${data.highlight}"`);
+    }
+  });
+  
+  return underlineWords;
 }
 
 /**
@@ -598,6 +797,7 @@ app.post('/api/social', async (req, res) => {
           slides: result.slides,
           caption: result.caption,
           formatted: result.formatted,
+          underlineWords: result.underlineWords,
           stats: result.stats
         },
         meta: {
