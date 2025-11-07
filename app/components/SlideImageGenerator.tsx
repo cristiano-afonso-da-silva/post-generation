@@ -61,8 +61,11 @@ export default function SlideImageGenerator({
                 const img = new Image()
                 await new Promise<void>((resolve) => {
                   img.onload = () => {
-                    canvas.width = img.width
-                    canvas.height = img.height
+                    // Only set dimensions if they're different to avoid flash
+                    if (canvas.width !== img.width || canvas.height !== img.height) {
+                      canvas.width = img.width
+                      canvas.height = img.height
+                    }
                     const ctx = canvas.getContext('2d')
                     if (ctx) {
                       ctx.drawImage(img, 0, 0)
@@ -197,8 +200,11 @@ export default function SlideImageGenerator({
     // Instagram carousel dimensions (4:5 ratio)
     const width = 1080
     const height = 1350
-    canvas.width = width
-    canvas.height = height
+    // Only set dimensions if they're different to avoid unnecessary reflow
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width
+      canvas.height = height
+    }
 
     // Load background.jpg for all slides - NO OVERLAY
     try {
@@ -775,7 +781,16 @@ export default function SlideImageGenerator({
               marginBottom: '12px'
             }}>
               <canvas
-                ref={el => canvasRefs.current[index] = el}
+                ref={el => {
+                  canvasRefs.current[index] = el
+                  // Set dimensions immediately to prevent flash
+                  if (el) {
+                    el.width = 1080
+                    el.height = 1350
+                  }
+                }}
+                width={1080}
+                height={1350}
                 style={{
                   position: 'absolute',
                   top: 0,

@@ -60,6 +60,7 @@ a {
   padding: 32px;
   margin-bottom: 24px;
   transition: all 0.3s ease;
+  cursor: pointer;
 }
 
 .card:hover {
