@@ -1,4 +1,4 @@
-# 🎨 Post Generation - AI-Powered Social Media Content Creator
+# 🎨 Post My Note - AI-Powered Social Media Content Creator
 
 A complete full-stack application for generating high-quality Instagram carousel posts using Google Gemini AI. Generate post ideas, create complete carousels with slides and captions, and download ready-to-post images.
 

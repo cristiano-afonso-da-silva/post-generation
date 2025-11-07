@@ -102,6 +102,7 @@ export default function SignUpPage() {
                 required
                 className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-purple-400 transition-colors"
                 placeholder="you@example.com"
+                autoComplete="off"
               />
             </div>
 
@@ -117,6 +118,7 @@ export default function SignUpPage() {
                 required
                 className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-purple-400 transition-colors"
                 placeholder="••••••••"
+                autoComplete="new-password"
               />
               <p className="mt-1 text-xs text-gray-500">Must be at least 6 characters</p>
             </div>
@@ -133,6 +135,7 @@ export default function SignUpPage() {
                 required
                 className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-purple-400 transition-colors"
                 placeholder="••••••••"
+                autoComplete="new-password"
               />
             </div>
 

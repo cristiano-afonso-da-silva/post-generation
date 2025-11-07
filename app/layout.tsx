@@ -3,7 +3,7 @@ import './globals.css'
 import { AuthProvider } from './context/AuthContext'
 
 export const metadata: Metadata = {
-  title: 'Post Generation - Social Media Content Creator',
+  title: 'Post My Note - Social Media Content Creator',
   description: 'Generate high-quality Instagram carousel posts using AI',
 }
 

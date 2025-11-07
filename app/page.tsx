@@ -157,7 +157,7 @@ export default function Home() {
           alignItems: 'center',
         }}>
           <div style={{ fontSize: '24px', fontWeight: '700', color: '#000000', letterSpacing: '-0.5px' }}>
-            Post Generator
+            Post My Note
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <span style={{ fontSize: '14px', color: '#666666', fontWeight: '500' }}>{user.email}</span>

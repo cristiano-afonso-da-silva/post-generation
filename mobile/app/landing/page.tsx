@@ -29,15 +29,9 @@ export default function LandingPage() {
       {/* Navigation */}
       <nav className="container mx-auto px-6 py-6 flex justify-between items-center">
         <div className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-          AI Post Generator
+          Post My Note
         </div>
         <div className="flex gap-4">
-          <Link
-            href="/signin"
-            className="px-6 py-2 rounded-lg border border-purple-400 hover:bg-purple-400/10 transition-all"
-          >
-            Sign In
-          </Link>
           <Link
             href="/signup"
             className="px-6 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 transition-all"
@@ -93,6 +87,41 @@ export default function LandingPage() {
         </div>
       </div>
 
+      {/* Testimonials */}
+      <div className="container mx-auto px-6 py-20">
+        <h2 className="text-4xl font-bold text-center mb-16 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+          What Our Users Say
+        </h2>
+        <div className="grid md:grid-cols-3 gap-8">
+          <div className="p-8 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-purple-400/50 transition-all">
+            <p className="text-gray-300 mb-6 italic leading-relaxed">
+              "This tool has completely transformed how I create content for Instagram. I can generate professional carousels in minutes instead of hours!"
+            </p>
+            <div className="text-lg font-semibold text-white">
+              Sarah Chen
+            </div>
+          </div>
+
+          <div className="p-8 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-purple-400/50 transition-all">
+            <p className="text-gray-300 mb-6 italic leading-relaxed">
+              "The AI understands my brand voice perfectly. Every post feels authentic and engaging. Highly recommend!"
+            </p>
+            <div className="text-lg font-semibold text-white">
+              Marcus Johnson
+            </div>
+          </div>
+
+          <div className="p-8 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-purple-400/50 transition-all">
+            <p className="text-gray-300 mb-6 italic leading-relaxed">
+              "As a small business owner, this saves me so much time and money. The quality is incredible and the customization options are perfect."
+            </p>
+            <div className="text-lg font-semibold text-white">
+              Emily Rodriguez
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* CTA Section */}
       <div className="container mx-auto px-6 py-20 text-center">
         <div className="max-w-2xl mx-auto p-12 rounded-2xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 backdrop-blur-sm border border-purple-400/30">
@@ -111,7 +140,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="container mx-auto px-6 py-8 border-t border-white/10 text-center text-gray-400">
-        <p>© 2025 AI Post Generator. All rights reserved.</p>
+        <p>© 2025 Post My Note. All rights reserved.</p>
       </footer>
     </div>
   )

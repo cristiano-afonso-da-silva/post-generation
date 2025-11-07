@@ -98,7 +98,7 @@ export default function VerifyPage() {
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', background: '#ffffff' }}>
       <div style={{ width: '100%', maxWidth: '440px' }}>
         <Link href="/signin" style={{ display: 'inline-block', marginBottom: '32px' }}>
-          <span style={{ fontSize: '24px', fontWeight: '700', color: '#000000' }}>← Post Generator</span>
+          <span style={{ fontSize: '24px', fontWeight: '700', color: '#000000' }}>← Post My Note</span>
         </Link>
 
         <h1 style={{ fontSize: '36px', fontWeight: '700', marginBottom: '8px', color: '#000000' }}>

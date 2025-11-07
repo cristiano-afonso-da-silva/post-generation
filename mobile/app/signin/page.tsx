@@ -84,6 +84,7 @@ export default function SignInPage() {
                 required
                 className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-purple-400 transition-colors"
                 placeholder="you@example.com"
+                autoComplete="off"
               />
             </div>
 
@@ -99,6 +100,7 @@ export default function SignInPage() {
                 required
                 className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-purple-400 transition-colors"
                 placeholder="••••••••"
+                autoComplete="off"
               />
             </div>
 

@@ -12,7 +12,7 @@ This application uses Supabase for authentication. Follow these steps to set it 
 1. Go to [supabase.com](https://supabase.com)
 2. Click "Start your project"
 3. Create a new project:
-   - **Name:** Post Generation (or any name)
+   - **Name:** Post My Note (or any name)
    - **Database Password:** Choose a strong password
    - **Region:** Choose closest to you
 4. Wait for the project to be created (2-3 minutes)
@@ -179,8 +179,8 @@ If you want to store user-specific data (like saved carousels), you'll need to:
 ### Sign Up
 ```typescript
 const { data, error } = await supabase.auth.signUp({
-  email: 'user@example.com',
-  password: 'password123',
+  email: 'your-email@example.com',
+  password: 'your-secure-password',
   options: {
     emailRedirectTo: 'http://localhost:3001/verify'
   }
@@ -190,15 +190,15 @@ const { data, error } = await supabase.auth.signUp({
 ### Sign In
 ```typescript
 const { data, error } = await supabase.auth.signInWithPassword({
-  email: 'user@example.com',
-  password: 'password123'
+  email: 'your-email@example.com',
+  password: 'your-secure-password'
 })
 ```
 
 ### Verify Email
 ```typescript
 const { data, error } = await supabase.auth.verifyOtp({
-  email: 'user@example.com',
+  email: 'your-email@example.com',
   token: '123456',
   type: 'signup'
 })
