@@ -16,11 +16,19 @@ A complete full-stack application for generating high-quality Instagram carousel
 - 📊 **Statistics & Metadata** - Word counts, generation times, and more
 
 ### Frontend Web App
+- 🔐 **Authentication System** - Secure user authentication with Supabase
+  - Landing page with feature showcase
+  - Email/password sign up with verification
+  - Sign in/out functionality
+  - Protected routes
 - 🎨 **Modern AI Design** - Dark theme with purple gradients and glassmorphism
 - 📱 **Responsive UI** - Beautiful, mobile-friendly interface
 - 🖼️ **Image Generation** - Automatically generate downloadable slide images
   - 1080x1350px (4:5 ratio for Instagram)
-  - White background, black text
+  - Custom backgrounds and fonts
+  - Dynamic color themes (6 presets)
+  - AI-powered text emphasis (underline & highlight)
+  - Font combinations (Poppins + DreamingOutloudSans)
   - Vertically centered content
   - Safe zones for Instagram UI
 - 📥 **Download Functionality** - Download individual slides or all at once
@@ -32,6 +40,7 @@ A complete full-stack application for generating high-quality Instagram carousel
 - Node.js 18+ installed
 - npm or yarn
 - Google Gemini API key ([Get one here](https://makersuite.google.com/app/apikey))
+- Supabase account ([Sign up here](https://supabase.com))
 
 ### 1. Clone and Setup
 
@@ -39,87 +48,127 @@ A complete full-stack application for generating high-quality Instagram carousel
 # Clone the repository
 cd post-generation
 
-# Install backend dependencies
-cd backend
-npm install
-
-# Install frontend dependencies
-cd ../mobile
+# Install all dependencies (backend + frontend)
 npm install
 ```
 
-### 2. Backend Setup
+### 2. Environment Setup
 
-Create a `.env` file in the `backend` folder:
+Create environment files in the root folder:
 
+**Backend configuration** (`.env`):
 ```bash
-cd backend
 echo "GEMINI_API_KEY=your_api_key_here" > .env
 echo "PORT=3000" >> .env
 ```
 
-### 3. Start the Backend Server
-
+**Frontend configuration** (`.env.local`):
 ```bash
-cd backend
-npm start
+cat > .env.local << EOF
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+
+# Backend API URL
+NEXT_PUBLIC_API_URL=http://localhost:3000
+EOF
 ```
 
-You should see:
+**To get your Supabase credentials:**
+1. Go to [supabase.com](https://supabase.com) and create a project
+2. In your project dashboard, go to Settings → API
+3. Copy your Project URL and anon/public key
+4. Paste them into `.env.local`
+
+### 3. Add Background Image (Optional)
+
+Place a background image at:
 ```
-🚀 POST GENERATION API SERVER
-📍 Server running at: http://localhost:3000
-🤖 AI Model: gemini-2.0-flash-exp
+public/backgrounds/background.jpg
 ```
 
-### 4. Start the Frontend
+### 4. Start the Application
 
-In a new terminal:
-
+**Option 1: Start both frontend and backend together (recommended):**
 ```bash
-cd mobile
 npm run dev
 ```
 
-The Next.js app will start on `http://localhost:3001` (or another port if 3001 is taken).
+**Option 2: Start them separately:**
+```bash
+# Terminal 1 - Backend API
+npm run dev:backend
+
+# Terminal 2 - Frontend
+npm run dev:frontend
+```
+
+The app will be available at `http://localhost:3000`.
 
 ### 5. Use the App
 
-1. Open `http://localhost:3001` in your browser
-2. Enter your account description
-3. Generate 10 post ideas
-4. Select an idea to generate a complete carousel
-5. Download the slide images!
+1. Open `http://localhost:3000` in your browser
+2. You'll see the landing page - click "Get Started" or "Sign Up"
+3. Create an account with your email
+4. Check your email for a verification code (6 digits)
+5. Enter the code to verify your account
+6. Once signed in, you can:
+   - Enter your account description
+   - Generate 10 post ideas
+   - Select an idea to generate a complete carousel
+   - Customize font and color themes
+   - Download the slide images!
 
 ## 📁 Project Structure
 
 ```
 post-generation/
-├── backend/
-│   ├── server.mjs          # Express API server
-│   ├── test-api.mjs        # Interactive test script
-│   ├── package.json         # Backend dependencies
-│   └── .env                # Environment variables (API key)
-│
-├── mobile/
-│   ├── app/
-│   │   ├── page.tsx        # Main Next.js page
-│   │   ├── layout.tsx      # Root layout
-│   │   ├── globals.css     # Global styles
-│   │   └── components/
-│   │       └── SlideImageGenerator.tsx  # Image generation component
-│   ├── package.json        # Frontend dependencies
-│   └── next.config.js      # Next.js configuration
-│
-└── README.md              # This file
+├── app/
+│   ├── page.tsx            # Main carousel generator page (protected)
+│   ├── layout.tsx          # Root layout with AuthProvider
+│   ├── globals.css         # Global styles
+│   ├── landing/
+│   │   └── page.tsx        # Landing page
+│   ├── signin/
+│   │   └── page.tsx        # Sign in page
+│   ├── signup/
+│   │   └── page.tsx        # Sign up page
+│   ├── verify/
+│   │   └── page.tsx        # Email verification page
+│   ├── components/
+│   │   └── SlideImageGenerator.tsx  # Image generation component
+│   ├── context/
+│   │   └── AuthContext.tsx # Authentication context
+│   ├── lib/
+│   │   └── supabase.ts     # Supabase client
+│   └── config/
+│       ├── slideThemes.ts  # Font & color theme configuration
+│       └── README.md       # Theme customization guide
+├── public/
+│   ├── backgrounds/
+│   │   ├── background.jpg  # Slide background image
+│   │   └── README.md
+│   └── fonts/
+│       ├── Poppins-Bold.ttf
+│       └── DreamingOutloudSans-Regular.otf
+├── server.mjs              # Express API server
+├── test-api.mjs            # Interactive test script
+├── package.json            # All dependencies (backend + frontend)
+├── .env                    # Backend environment variables (API key)
+├── .env.local              # Frontend environment variables (Supabase keys)
+├── next.config.js          # Next.js configuration
+├── tsconfig.json           # TypeScript configuration
+└── README.md               # This file
 ```
 
 ## 🔌 API Documentation
 
 ### Base URL
 ```
-http://localhost:3000
+http://localhost:3000/api
 ```
+
+**Note:** The backend API runs on port 3000 with `/api` prefix, while the Next.js frontend runs on the same port.
 
 ### Endpoints
 
@@ -252,25 +301,28 @@ The frontend automatically generates downloadable images for each slide:
 
 ## 🛠️ Configuration
 
-### Backend Environment Variables
+### Environment Variables
 
-Create `backend/.env`:
+Create `.env` (backend):
 ```bash
 GEMINI_API_KEY=your_api_key_here
 PORT=3000
 NODE_ENV=development
 ```
 
-### Frontend Environment Variables (Optional)
-
-Create `mobile/.env.local`:
+Create `.env.local` (frontend):
 ```bash
+# Supabase Configuration (REQUIRED)
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+
+# Backend API URL (Optional, defaults to http://localhost:3000)
 NEXT_PUBLIC_API_URL=http://localhost:3000
 ```
 
 ### Model Selection
 
-To change the AI model, edit `backend/server.mjs`:
+To change the AI model, edit `server.mjs`:
 ```javascript
 const GEMINI_MODEL = 'gemini-2.0-flash-exp'; // Current model
 
@@ -292,7 +344,6 @@ Typical generation times:
 ### Test Backend API
 
 ```bash
-cd backend
 npm test
 ```
 
@@ -303,21 +354,20 @@ This runs an interactive test script that:
 - Generates a carousel
 - Shows formatted output
 
-### Test Frontend
+### Test Full Application
 
 ```bash
-cd mobile
 npm run dev
 ```
 
-Then open `http://localhost:3001` in your browser.
+Then open `http://localhost:3000` in your browser.
 
 ## 🐛 Troubleshooting
 
 ### Backend Issues
 
 **"Missing GEMINI_API_KEY"**
-- Make sure `.env` file exists in `backend/` folder
+- Make sure `.env` file exists in the root folder
 - Check the API key is valid: `GEMINI_API_KEY=your_key`
 
 **"Port 3000 already in use"**
@@ -331,44 +381,57 @@ Then open `http://localhost:3001` in your browser.
 ### Frontend Issues
 
 **"Failed to fetch"**
-- Make sure backend is running on port 3000
-- Check CORS configuration in backend
+- Make sure both frontend and backend are running (`npm run dev`)
+- Check CORS configuration in `server.mjs`
 - Verify `NEXT_PUBLIC_API_URL` matches backend URL
+
+**Authentication not working**
+- Check Supabase credentials in `.env.local`
+- Verify Supabase project is active
+- Check browser console for errors
+- Enable email authentication in Supabase dashboard:
+  - Go to Authentication → Settings
+  - Enable Email provider
+  - Configure email templates (optional)
 
 **Images not generating**
 - Check browser console for errors
 - Ensure canvas is supported in your browser
+- Make sure background image exists at `public/backgrounds/background.jpg`
+- Verify fonts are loaded correctly
 - Try refreshing the page
 
 ## 📝 Development
 
-### Backend Development
+### Development Mode (Both Frontend + Backend)
 
 ```bash
-cd backend
-npm run dev  # Auto-reload on changes
+npm run dev  # Runs both with auto-reload
 ```
 
-### Frontend Development
-
-```bash
-cd mobile
-npm run dev  # Next.js dev server with hot reload
-```
-
-### Build for Production
+### Or run separately:
 
 **Backend:**
 ```bash
-cd backend
-npm start
+npm run dev:backend  # Auto-reload on changes
 ```
 
 **Frontend:**
 ```bash
-cd mobile
+npm run dev:frontend  # Next.js dev server with hot reload
+```
+
+### Build for Production
+
+```bash
+# Build frontend
 npm run build
+
+# Start production server
 npm start
+
+# Start backend API (in separate terminal)
+npm run start:backend
 ```
 
 ## 🎯 Usage Examples
@@ -396,8 +459,11 @@ curl -X POST http://localhost:3000/api/social \
 
 ## 🔒 Security Notes
 
-- Never commit `.env` files to git
+- Never commit `.env` or `.env.local` files to git
 - Keep your Gemini API key secure
+- Keep your Supabase keys secure (they're already in `.gitignore`)
+- The anon key is safe to use in the frontend
+- For production, configure Supabase Row Level Security (RLS) policies
 - The `.gitignore` file is configured to exclude sensitive files
 
 ## 📚 Tech Stack
@@ -412,7 +478,9 @@ curl -X POST http://localhost:3000/api/social \
 - **Next.js 14** - React framework
 - **React** - UI library
 - **TypeScript** - Type safety
+- **Supabase** - Authentication & database
 - **Canvas API** - Image generation
+- **Custom Fonts** - Poppins & DreamingOutloudSans
 
 ## 🤝 Contributing
 

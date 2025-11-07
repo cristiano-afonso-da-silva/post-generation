@@ -1,11 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import './globals.css'
 import SlideImageGenerator from './components/SlideImageGenerator'
 import { FONT_COMBINATIONS, COLOR_THEMES } from './config/slideThemes'
+import { useAuth } from './context/AuthContext'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
+const API_URL = '' // Empty string for same-origin API routes
 
 interface Idea {
   ideas: string[]
@@ -30,6 +32,9 @@ interface Carousel {
 }
 
 export default function Home() {
+  const router = useRouter()
+  const { user, loading: authLoading, signOut } = useAuth()
+  
   const [accountDescription, setAccountDescription] = useState('')
   const [ideas, setIdeas] = useState<string[]>([])
   const [selectedIdea, setSelectedIdea] = useState<string>('')
@@ -41,6 +46,43 @@ export default function Home() {
   // Theme settings
   const [fontCombinationId, setFontCombinationId] = useState('combination-1')
   const [colorThemeId, setColorThemeId] = useState('purple-black')
+
+  // Redirect to landing if not authenticated
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/landing')
+    }
+  }, [user, authLoading, router])
+
+  const handleSignOut = async () => {
+    await signOut()
+    router.push('/landing')
+  }
+
+  // Show loading while checking authentication
+  if (authLoading) {
+    return (
+      <div style={{ 
+        minHeight: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        background: 'linear-gradient(to bottom right, #1a1a2e, #16213e, #0f3460)'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
+          <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '18px' }}>
+            Loading...
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't render anything if not authenticated (will redirect)
+  if (!user) {
+    return null
+  }
 
   const generateIdeas = async () => {
     if (!accountDescription.trim()) {
@@ -73,7 +115,7 @@ export default function Home() {
     } catch (err: any) {
       console.error('Error:', err)
       if (err.message?.includes('fetch')) {
-        setError(`Failed to connect to server at ${API_URL}. Make sure the backend is running on port 3000.`)
+        setError(`Failed to connect to server. Please try again.`)
       } else {
         setError(err.message || 'Failed to connect to server')
       }
@@ -110,7 +152,7 @@ export default function Home() {
     } catch (err: any) {
       console.error('Error:', err)
       if (err.message?.includes('fetch')) {
-        setError(`Failed to connect to server at ${API_URL}. Make sure the backend is running on port 3000.`)
+        setError(`Failed to connect to server. Please try again.`)
       } else {
         setError(err.message || 'Failed to connect to server')
       }
@@ -133,8 +175,53 @@ export default function Home() {
       <header style={{ 
         textAlign: 'center', 
         marginBottom: '60px',
-        paddingTop: '20px'
+        paddingTop: '20px',
+        position: 'relative'
       }}>
+        {/* User Info & Sign Out */}
+        <div style={{
+          position: 'absolute',
+          top: '20px',
+          right: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <div style={{
+            fontSize: '14px',
+            color: 'rgba(255,255,255,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <span>👤</span>
+            <span>{user.email}</span>
+          </div>
+          <button
+            onClick={handleSignOut}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '8px',
+              border: '1px solid rgba(255,255,255,0.2)',
+              background: 'rgba(255,255,255,0.05)',
+              color: 'rgba(255,255,255,0.8)',
+              fontSize: '14px',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'
+            }}
+          >
+            Sign Out
+          </button>
+        </div>
+
         <h1 style={{ 
           fontSize: 'clamp(32px, 6vw, 64px)', 
           marginBottom: '16px', 
