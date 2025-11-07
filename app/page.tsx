@@ -7,11 +7,7 @@ import SlideImageGenerator from './components/SlideImageGenerator'
 import { FONT_COMBINATIONS, COLOR_THEMES } from './config/slideThemes'
 import { useAuth } from './context/AuthContext'
 
-const API_URL = '' // Empty string for same-origin API routes
-
-interface Idea {
-  ideas: string[]
-}
+const API_URL = ''
 
 interface Carousel {
   ideaTitle: string
@@ -21,14 +17,7 @@ interface Carousel {
     kind: 'HOOK' | 'MIDDLE' | 'CTA'
   }>
   caption: string
-  formatted: string
   underlineWords?: Record<number, { underline: string; highlight: string }>
-  stats: {
-    totalSlides: number
-    hookWords: number
-    middleSlides: number
-    captionWords: number
-  }
 }
 
 export default function Home() {
@@ -37,17 +26,15 @@ export default function Home() {
   
   const [accountDescription, setAccountDescription] = useState('')
   const [ideas, setIdeas] = useState<string[]>([])
-  const [selectedIdea, setSelectedIdea] = useState<string>('')
   const [carousel, setCarousel] = useState<Carousel | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loadingIdeas, setLoadingIdeas] = useState(false)
+  const [loadingCarousel, setLoadingCarousel] = useState(false)
   const [error, setError] = useState('')
-  const [step, setStep] = useState<'input' | 'ideas' | 'carousel'>('input')
   
   // Theme settings
   const [fontCombinationId, setFontCombinationId] = useState('combination-1')
   const [colorThemeId, setColorThemeId] = useState('purple-black')
 
-  // Redirect to landing if not authenticated
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/landing')
@@ -59,27 +46,17 @@ export default function Home() {
     router.push('/landing')
   }
 
-  // Show loading while checking authentication
   if (authLoading) {
     return (
-      <div style={{ 
-        minHeight: '100vh', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        background: 'linear-gradient(to bottom right, #1a1a2e, #16213e, #0f3460)'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
-          <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '18px' }}>
-            Loading...
-          </div>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="loading">
+          <div className="spinner"></div>
+          <span style={{ color: '#000000' }}>Loading...</span>
         </div>
       </div>
     )
   }
 
-  // Don't render anything if not authenticated (will redirect)
   if (!user) {
     return null
   }
@@ -90,9 +67,10 @@ export default function Home() {
       return
     }
 
-    setLoading(true)
+    setLoadingIdeas(true)
     setError('')
-    setStep('ideas')
+    setIdeas([])
+    setCarousel(null)
 
     try {
       const response = await fetch(`${API_URL}/api/social`, {
@@ -114,21 +92,16 @@ export default function Home() {
       }
     } catch (err: any) {
       console.error('Error:', err)
-      if (err.message?.includes('fetch')) {
-        setError(`Failed to connect to server. Please try again.`)
-      } else {
-        setError(err.message || 'Failed to connect to server')
-      }
+      setError('Failed to connect to server. Please try again.')
     } finally {
-      setLoading(false)
+      setLoadingIdeas(false)
     }
   }
 
   const generateCarousel = async (idea: string) => {
-    setLoading(true)
+    setLoadingCarousel(true)
     setError('')
-    setSelectedIdea(idea)
-    setStep('carousel')
+    setCarousel(null)
 
     try {
       const response = await fetch(`${API_URL}/api/social`, {
@@ -151,530 +124,249 @@ export default function Home() {
       }
     } catch (err: any) {
       console.error('Error:', err)
-      if (err.message?.includes('fetch')) {
-        setError(`Failed to connect to server. Please try again.`)
-      } else {
-        setError(err.message || 'Failed to connect to server')
-      }
+      setError('Failed to connect to server. Please try again.')
     } finally {
-      setLoading(false)
+      setLoadingCarousel(false)
     }
   }
 
-  const resetFlow = () => {
-    setStep('input')
+  const reset = () => {
+    setAccountDescription('')
     setIdeas([])
-    setSelectedIdea('')
     setCarousel(null)
     setError('')
   }
 
   return (
-    <div className="container">
+    <div style={{ background: '#ffffff', minHeight: '100vh' }}>
       {/* Header */}
-      <header style={{ 
-        textAlign: 'center', 
-        marginBottom: '60px',
-        paddingTop: '20px',
-        position: 'relative'
+      <header style={{
+        borderBottom: '2px solid #e5e5e5',
+        padding: '24px 0',
+        background: '#ffffff',
+        position: 'sticky',
+        top: 0,
+        zIndex: 100,
       }}>
-        {/* User Info & Sign Out */}
         <div style={{
-          position: 'absolute',
-          top: '20px',
-          right: '20px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px'
-        }}>
-          <div style={{
-            fontSize: '14px',
-            color: 'rgba(255,255,255,0.6)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <span>👤</span>
-            <span>{user.email}</span>
-          </div>
-          <button
-            onClick={handleSignOut}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '8px',
-              border: '1px solid rgba(255,255,255,0.2)',
-              background: 'rgba(255,255,255,0.05)',
-              color: 'rgba(255,255,255,0.8)',
-              fontSize: '14px',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
-              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
-              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'
-            }}
-          >
-            Sign Out
-          </button>
-        </div>
-
-        <h1 style={{ 
-          fontSize: 'clamp(32px, 6vw, 64px)', 
-          marginBottom: '16px', 
-          fontWeight: '800',
-          letterSpacing: '-0.02em'
-        }}>
-          <span className="gradient-text">AI Post Generator</span>
-        </h1>
-        <p style={{ 
-          fontSize: 'clamp(16px, 2vw, 20px)', 
-          opacity: 0.8,
-          maxWidth: '600px',
+          maxWidth: '1400px',
           margin: '0 auto',
-          lineHeight: '1.6'
+          padding: '0 24px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
         }}>
-          Generate high-quality Instagram carousel posts powered by AI
-        </p>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#000000', letterSpacing: '-0.5px' }}>
+            Post Generator
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <span style={{ fontSize: '14px', color: '#666666', fontWeight: '500' }}>{user.email}</span>
+            <button
+              onClick={handleSignOut}
+              className="button secondary"
+              style={{ padding: '10px 20px', fontSize: '14px' }}
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
       </header>
 
-      {error && (
-        <div className="error">
-          ❌ {error}
-        </div>
-      )}
-
-      {/* Step 1: Account Description Input */}
-      {step === 'input' && (
-        <div className="card" style={{ maxWidth: '800px', margin: '0 auto' }}>
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '12px',
-            marginBottom: '32px'
-          }}>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '12px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '20px',
-              fontWeight: '700'
-            }}>
-              1
-            </div>
-            <h2 style={{ 
-              fontSize: '28px', 
-              fontWeight: '700',
-              background: 'linear-gradient(135deg, #ffffff 0%, rgba(255,255,255,0.8) 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text'
-            }}>
+      <div className="container">
+        {/* Input Section - Always Visible */}
+        <div style={{ marginBottom: '40px' }}>
+          <div className="card" style={{ maxWidth: '900px', margin: '0 auto' }}>
+            <h2 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '8px', color: '#000000' }}>
               Describe Your Account
             </h2>
-          </div>
-          
-          <p style={{ 
-            marginBottom: '24px', 
-            color: 'rgba(255,255,255,0.6)', 
-            fontSize: '16px',
-            lineHeight: '1.6'
-          }}>
-            Tell us about your account or topic. We'll generate unique post ideas tailored to your audience.
-          </p>
-          
-          <div style={{ marginBottom: '24px' }}>
-            <input
-              type="text"
-              className="input"
-              placeholder="e.g., productivity coach helping remote workers overcome procrastination"
-              value={accountDescription}
-              onChange={(e) => setAccountDescription(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && generateIdeas()}
-            />
-          </div>
-          
-          <button
-            className="button"
-            onClick={generateIdeas}
-            disabled={loading || !accountDescription.trim()}
-            style={{ width: '100%' }}
-          >
-            {loading ? (
-              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                <span className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></span>
-                Generating...
-              </span>
-            ) : (
-              'Generate Ideas →'
-            )}
-          </button>
-        </div>
-      )}
-
-      {/* Step 2: Ideas Selection */}
-      {step === 'ideas' && !loading && ideas.length > 0 && (
-        <div className="card" style={{ maxWidth: '900px', margin: '0 auto' }}>
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '12px',
-            marginBottom: '32px'
-          }}>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '12px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '20px',
-              fontWeight: '700'
-            }}>
-              2
-            </div>
-            <h2 style={{ 
-              fontSize: '28px', 
-              fontWeight: '700',
-              background: 'linear-gradient(135deg, #ffffff 0%, rgba(255,255,255,0.8) 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text'
-            }}>
-              Choose Your Idea
-            </h2>
-          </div>
-          
-          <p style={{ 
-            marginBottom: '32px', 
-            color: 'rgba(255,255,255,0.6)', 
-            fontSize: '16px'
-          }}>
-            Select an idea to generate a complete carousel post
-          </p>
-          
-          <div style={{ display: 'grid', gap: '16px', marginBottom: '32px' }}>
-            {ideas.map((idea, index) => (
+            <p style={{ color: '#666666', marginBottom: '24px', fontSize: '15px' }}>
+              Tell us about your account to generate post ideas
+            </p>
+            
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                className="input"
+                placeholder="e.g., productivity coach helping remote workers overcome procrastination"
+                value={accountDescription}
+                onChange={(e) => setAccountDescription(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && generateIdeas()}
+                style={{ flex: 1, minWidth: '300px' }}
+              />
               <button
-                key={index}
-                onClick={() => generateCarousel(idea)}
-                disabled={loading}
-                className="idea-button"
+                className="button"
+                onClick={generateIdeas}
+                disabled={loadingIdeas || !accountDescription.trim()}
+                style={{ minWidth: '150px' }}
               >
-                <span className="idea-number">{index + 1}</span>
-                {idea}
+                {loadingIdeas ? 'Generating...' : 'Generate Ideas'}
               </button>
-            ))}
-          </div>
-          
-          <button
-            className="button secondary"
-            onClick={resetFlow}
-            style={{ width: '100%' }}
-          >
-            ← Start Over
-          </button>
-        </div>
-      )}
-
-      {/* Loading State */}
-      {loading && (
-        <div className="card" style={{ maxWidth: '600px', margin: '0 auto' }}>
-          <div className="loading">
-            <div className="spinner"></div>
-            <span style={{ fontSize: '18px', color: 'rgba(255,255,255,0.8)' }}>
-              {step === 'ideas' ? 'Generating ideas with AI...' : 'Creating your carousel...'}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Step 3: Carousel Display */}
-      {step === 'carousel' && !loading && carousel && (
-        <div>
-          {/* Stats Card */}
-          <div className="card" style={{ marginBottom: '32px' }}>
-            <h2 style={{ 
-              fontSize: '28px', 
-              marginBottom: '24px',
-              fontWeight: '700',
-              background: 'linear-gradient(135deg, #ffffff 0%, rgba(255,255,255,0.8) 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text'
-            }}>
-              Generated Carousel
-            </h2>
-            
-            <div style={{ 
-              marginBottom: '24px', 
-              padding: '20px', 
-              background: 'rgba(102, 126, 234, 0.1)',
-              border: '1px solid rgba(102, 126, 234, 0.2)',
-              borderRadius: '16px'
-            }}>
-              <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)', marginBottom: '8px' }}>
-                Selected Idea
-              </div>
-              <div style={{ fontSize: '18px', fontWeight: '600', color: '#667eea' }}>
-                {selectedIdea}
-              </div>
-            </div>
-            
-            <div className="stats-grid">
-              <div className="stat-card">
-                <div className="stat-value">{carousel.stats.totalSlides}</div>
-                <div className="stat-label">Total Slides</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-value">{carousel.stats.hookWords}</div>
-                <div className="stat-label">Hook Words</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-value">{carousel.stats.middleSlides}</div>
-                <div className="stat-label">Content Slides</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-value">{carousel.stats.captionWords}</div>
-                <div className="stat-label">Caption Words</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Slides Display */}
-          <div className="card">
-            <h3 style={{ 
-              marginBottom: '24px', 
-              fontSize: '24px',
-              fontWeight: '700'
-            }}>
-              📱 Carousel Slides
-            </h3>
-            <div style={{ display: 'grid', gap: '16px' }}>
-              {carousel.slides.map((slide, index) => (
-                <div 
-                  key={index}
-                  className={`slide-card ${
-                    slide.kind === 'HOOK' ? 'hook' : 
-                    slide.kind === 'CTA' ? 'cta' : 
-                    'middle'
-                  }`}
+              {(ideas.length > 0 || carousel) && (
+                <button
+                  className="button secondary"
+                  onClick={reset}
+                  style={{ minWidth: '120px' }}
                 >
-                  <div style={{ 
-                    fontSize: '12px', 
-                    fontWeight: '600', 
-                    color: 'rgba(255,255,255,0.5)', 
-                    marginBottom: '12px',
-                    textTransform: 'uppercase',
-                    letterSpacing: '1px'
-                  }}>
-                    {slide.kind} • Slide {index + 1}
-                  </div>
-                  {slide.title && (
-                    <div style={{ 
-                      fontWeight: '700', 
-                      marginBottom: '12px', 
-                      color: '#ffffff',
-                      fontSize: '18px'
-                    }}>
-                      {slide.title}
-                    </div>
-                  )}
-                  {slide.content && (
-                    <div style={{ 
-                      color: 'rgba(255,255,255,0.8)', 
-                      fontSize: '16px',
-                      lineHeight: '1.6'
-                    }}>
-                      {slide.content}
-                    </div>
-                  )}
+                  Reset
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {error && (
+          <div className="error" style={{ maxWidth: '900px', margin: '0 auto 32px' }}>
+            {error}
+          </div>
+        )}
+
+        {/* Ideas Section */}
+        {ideas.length > 0 && (
+          <div style={{ marginBottom: '40px' }}>
+            <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+              <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
+                Choose an Idea
+              </h3>
+              <div style={{ display: 'grid', gap: '12px' }}>
+                {ideas.map((idea, index) => (
+                  <button
+                    key={index}
+                    onClick={() => generateCarousel(idea)}
+                    disabled={loadingCarousel}
+                    className="idea-button"
+                  >
+                    <span className="idea-number">{index + 1}</span>
+                    <span style={{ flex: 1 }}>{idea}</span>
+                    {loadingCarousel && <span className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Carousel Results */}
+        {carousel && !loadingCarousel && (
+          <div>
+            {/* Theme Customization */}
+            <div className="card" style={{ maxWidth: '900px', margin: '0 auto 32px' }}>
+              <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
+                Customize Design
+              </h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000000' }}>
+                    Font Combination
+                  </label>
+                  <select
+                    value={fontCombinationId}
+                    onChange={(e) => setFontCombinationId(e.target.value)}
+                    className="input"
+                    style={{ cursor: 'pointer', padding: '12px' }}
+                  >
+                    {FONT_COMBINATIONS.map(combo => (
+                      <option key={combo.id} value={combo.id}>
+                        {combo.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Caption Display */}
-          <div className="card">
-            <h3 style={{ 
-              marginBottom: '24px', 
-              fontSize: '24px',
-              fontWeight: '700'
-            }}>
-              📝 Instagram Caption
-            </h3>
-            <div style={{ 
-              padding: '24px', 
-              background: 'rgba(255,255,255,0.02)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: '16px',
-              whiteSpace: 'pre-wrap',
-              fontSize: '16px',
-              lineHeight: '1.8',
-              color: 'rgba(255,255,255,0.9)'
-            }}>
-              {carousel.caption}
-            </div>
-          </div>
-
-          {/* Formatted Output */}
-          <div className="card">
-            <h3 style={{ 
-              marginBottom: '24px', 
-              fontSize: '24px',
-              fontWeight: '700'
-            }}>
-              📄 Formatted Output
-            </h3>
-            <pre style={{ 
-              whiteSpace: 'pre-wrap',
-              fontFamily: 'monospace',
-              fontSize: '13px',
-              lineHeight: '1.6',
-              background: 'rgba(0, 0, 0, 0.3)',
-              padding: '24px',
-              borderRadius: '12px',
-              overflow: 'auto',
-              maxHeight: '600px',
-              border: '1px solid rgba(255,255,255,0.1)',
-              color: 'rgba(255,255,255,0.9)'
-            }}>
-              {carousel.formatted}
-            </pre>
-          </div>
-
-          {/* Theme Customization */}
-          <div className="card" style={{ marginTop: '32px' }}>
-            <h3 style={{ 
-              fontSize: '24px', 
-              fontWeight: '700',
-              marginBottom: '24px',
-              background: 'linear-gradient(135deg, #ffffff 0%, rgba(255,255,255,0.8) 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text'
-            }}>
-              🎨 Customize Slide Design
-            </h3>
-            
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-              gap: '24px'
-            }}>
-              {/* Font Combination Selector */}
-              <div>
-                <label style={{ 
-                  display: 'block',
-                  marginBottom: '12px',
-                  color: 'rgba(255,255,255,0.8)',
-                  fontSize: '14px',
-                  fontWeight: '600'
-                }}>
-                  Font Combination
-                </label>
-                <select
-                  value={fontCombinationId}
-                  onChange={(e) => setFontCombinationId(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '14px 16px',
-                    borderRadius: '12px',
-                    border: '2px solid rgba(255,255,255,0.1)',
-                    background: 'rgba(0, 0, 0, 0.3)',
-                    color: 'white',
-                    fontSize: '16px',
-                    cursor: 'pointer',
-                    outline: 'none',
-                    transition: 'all 0.3s ease'
-                  }}
-                >
-                  {FONT_COMBINATIONS.map(combo => (
-                    <option key={combo.id} value={combo.id} style={{ background: '#1a1a1a' }}>
-                      {combo.name}
-                    </option>
-                  ))}
-                </select>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000000' }}>
+                    Color Theme
+                  </label>
+                  <select
+                    value={colorThemeId}
+                    onChange={(e) => setColorThemeId(e.target.value)}
+                    className="input"
+                    style={{ cursor: 'pointer', padding: '12px' }}
+                  >
+                    {COLOR_THEMES.map(theme => (
+                      <option key={theme.id} value={theme.id}>
+                        {theme.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
+            </div>
 
-              {/* Color Theme Selector */}
-              <div>
-                <label style={{ 
-                  display: 'block',
-                  marginBottom: '12px',
-                  color: 'rgba(255,255,255,0.8)',
-                  fontSize: '14px',
-                  fontWeight: '600'
-                }}>
-                  Color Theme
-                </label>
-                <select
-                  value={colorThemeId}
-                  onChange={(e) => setColorThemeId(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '14px 16px',
-                    borderRadius: '12px',
-                    border: '2px solid rgba(255,255,255,0.1)',
-                    background: 'rgba(0, 0, 0, 0.3)',
-                    color: 'white',
-                    fontSize: '16px',
-                    cursor: 'pointer',
-                    outline: 'none',
-                    transition: 'all 0.3s ease'
-                  }}
-                >
-                  {COLOR_THEMES.map(theme => (
-                    <option key={theme.id} value={theme.id} style={{ background: '#1a1a1a' }}>
-                      {theme.name}
-                    </option>
-                  ))}
-                </select>
+            {/* Generated Slides */}
+            <SlideImageGenerator 
+              slides={carousel.slides}
+              ideaTitle={carousel.ideaTitle}
+              underlineWords={carousel.underlineWords || {}}
+              fontCombinationId={fontCombinationId}
+              colorThemeId={colorThemeId}
+            />
+
+            {/* Slides Content */}
+            <div className="card" style={{ maxWidth: '900px', margin: '32px auto' }}>
+              <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
+                Slides Content
+              </h3>
+              <div style={{ display: 'grid', gap: '16px' }}>
+                {carousel.slides.map((slide, index) => (
+                  <div 
+                    key={index}
+                    className={`slide-card ${slide.kind === 'HOOK' ? 'hook' : slide.kind === 'CTA' ? 'cta' : 'middle'}`}
+                  >
+                    <div style={{ 
+                      fontSize: '11px', 
+                      fontWeight: '700', 
+                      color: '#999999', 
+                      marginBottom: '12px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '1px'
+                    }}>
+                      Slide {index + 1} • {slide.kind}
+                    </div>
+                    {slide.title && (
+                      <div style={{ 
+                        fontWeight: '700', 
+                        marginBottom: '8px', 
+                        color: '#000000', 
+                        fontSize: '17px',
+                        lineHeight: '1.4'
+                      }}>
+                        {slide.title}
+                      </div>
+                    )}
+                    {slide.content && (
+                      <div style={{ 
+                        color: '#333333', 
+                        fontSize: '15px',
+                        lineHeight: '1.6'
+                      }}>
+                        {slide.content}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Caption */}
+            <div className="card" style={{ maxWidth: '900px', margin: '0 auto' }}>
+              <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
+                Instagram Caption
+              </h3>
+              <div style={{ 
+                padding: '20px', 
+                background: '#fafafa',
+                border: '2px solid #e5e5e5',
+                borderRadius: '12px',
+                whiteSpace: 'pre-wrap',
+                fontSize: '15px',
+                lineHeight: '1.8',
+                color: '#000000'
+              }}>
+                {carousel.caption}
               </div>
             </div>
           </div>
-
-          {/* Image Generation */}
-          <SlideImageGenerator 
-            slides={carousel.slides}
-            ideaTitle={carousel.ideaTitle}
-            underlineWords={carousel.underlineWords || {}}
-            fontCombinationId={fontCombinationId}
-            colorThemeId={colorThemeId}
-          />
-
-          {/* Action Buttons */}
-          <div style={{ 
-            display: 'flex', 
-            gap: '16px', 
-            marginTop: '32px',
-            flexWrap: 'wrap'
-          }}>
-            <button
-              className="button secondary"
-              onClick={() => setStep('ideas')}
-              style={{ flex: 1, minWidth: '200px' }}
-            >
-              ← Choose Another Idea
-            </button>
-            <button
-              className="button"
-              onClick={resetFlow}
-              style={{ flex: 1, minWidth: '200px' }}
-            >
-              🎨 Start Over
-            </button>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

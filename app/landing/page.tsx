@@ -18,92 +18,97 @@ export default function LandingPage() {
 
   if (loading) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div className="loading">
           <div className="spinner"></div>
-          <span>Loading...</span>
+          <span style={{ color: '#000000' }}>Loading...</span>
         </div>
       </div>
     )
   }
 
   return (
-    <div style={{ minHeight: '100vh', color: '#ffffff' }}>
+    <div style={{ minHeight: '100vh', background: '#ffffff' }}>
       {/* Navigation */}
       <nav style={{
-        maxWidth: '1400px',
-        margin: '0 auto',
-        padding: '24px 20px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        borderBottom: '2px solid #e5e5e5',
+        padding: '24px 0',
       }}>
-        <div className="gradient-text" style={{ fontSize: '28px', fontWeight: '800' }}>
-          AI Post Generator
-        </div>
-        <div style={{ display: 'flex', gap: '16px' }}>
-          <Link
-            href="/signin"
-            style={{
-              padding: '12px 24px',
-              borderRadius: '12px',
-              border: '2px solid rgba(102, 126, 234, 0.5)',
-              background: 'transparent',
-              color: '#ffffff',
-              fontSize: '16px',
-              fontWeight: '600',
-              textDecoration: 'none',
-              transition: 'all 0.3s ease',
-              display: 'inline-block',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(102, 126, 234, 0.1)'
-              e.currentTarget.style.borderColor = 'rgba(102, 126, 234, 0.8)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent'
-              e.currentTarget.style.borderColor = 'rgba(102, 126, 234, 0.5)'
-            }}
-          >
-            Sign In
-          </Link>
-          <Link
-            href="/signup"
-            className="button"
-            style={{
-              textDecoration: 'none',
-              display: 'inline-block',
-            }}
-          >
-            Get Started
-          </Link>
+        <div style={{
+          maxWidth: '1200px',
+          margin: '0 auto',
+          padding: '0 24px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#000000', letterSpacing: '-0.5px' }}>
+            Post Generator
+          </div>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <Link
+              href="/signin"
+              style={{
+                padding: '10px 24px',
+                borderRadius: '8px',
+                border: '2px solid #e5e5e5',
+                background: '#ffffff',
+                color: '#000000',
+                fontSize: '14px',
+                fontWeight: '600',
+                textDecoration: 'none',
+                transition: 'all 0.3s ease',
+              }}
+            >
+              Sign In
+            </Link>
+            <Link
+              href="/signup"
+              style={{
+                padding: '10px 24px',
+                borderRadius: '8px',
+                background: '#ffbd59',
+                color: '#000000',
+                fontSize: '14px',
+                fontWeight: '600',
+                textDecoration: 'none',
+                transition: 'all 0.3s ease',
+              }}
+            >
+              Get Started
+            </Link>
+          </div>
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <div className="container" style={{ textAlign: 'center', paddingTop: '60px', paddingBottom: '60px' }}>
-        <h1 className="gradient-text" style={{
+      {/* Hero */}
+      <div style={{
+        maxWidth: '1200px',
+        margin: '0 auto',
+        padding: '120px 24px 80px',
+        textAlign: 'center',
+      }}>
+        <h1 style={{
           fontSize: 'clamp(48px, 8vw, 96px)',
-          fontWeight: '800',
+          fontWeight: '700',
           marginBottom: '24px',
           lineHeight: '1.1',
+          letterSpacing: '-2px',
+          color: '#000000',
         }}>
-          Create Stunning Carousel Posts
+          Generate Carousels
+          <br />
+          <span style={{ color: '#ffbd59' }}>Instantly</span>
         </h1>
         <p style={{
-          fontSize: 'clamp(18px, 2.5vw, 28px)',
-          color: 'rgba(255,255,255,0.8)',
+          fontSize: 'clamp(18px, 2vw, 24px)',
+          color: '#666666',
           marginBottom: '48px',
-          maxWidth: '800px',
-          margin: '0 auto 48px auto',
+          maxWidth: '600px',
+          margin: '0 auto 48px',
           lineHeight: '1.6',
         }}>
-          Generate engaging social media carousels with AI-powered content and beautiful designs
+          AI-powered carousel generation for Instagram. Create engaging posts in seconds.
         </p>
         <Link
           href="/signup"
@@ -111,104 +116,134 @@ export default function LandingPage() {
           style={{
             textDecoration: 'none',
             display: 'inline-block',
-            padding: '20px 48px',
             fontSize: '18px',
+            padding: '20px 48px',
           }}
         >
-          Start Creating Free
+          Start Creating →
         </Link>
       </div>
 
       {/* Features */}
-      <div className="container" style={{ paddingTop: '60px', paddingBottom: '60px' }}>
-        <h2 className="gradient-text" style={{
-          fontSize: 'clamp(36px, 5vw, 48px)',
-          fontWeight: '700',
-          textAlign: 'center',
-          marginBottom: '64px',
-        }}>
-          Why Choose Our Platform?
-        </h2>
+      <div style={{
+        maxWidth: '1200px',
+        margin: '0 auto',
+        padding: '80px 24px',
+      }}>
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
           gap: '32px',
         }}>
-          <div className="card" style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '64px', marginBottom: '16px' }}>🤖</div>
-            <h3 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '12px', color: '#ffffff' }}>
+          <div className="card">
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '12px',
+              background: '#ffbd59',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '20px',
+              fontSize: '24px',
+            }}>
+              ✨
+            </div>
+            <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '12px', color: '#000000' }}>
               AI-Powered
             </h3>
-            <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '16px', lineHeight: '1.6' }}>
-              Generate compelling content ideas and carousel posts using advanced AI technology
+            <p style={{ color: '#666666', lineHeight: '1.6', fontSize: '15px' }}>
+              Advanced AI generates compelling content tailored to your audience
             </p>
           </div>
-          <div className="card" style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '64px', marginBottom: '16px' }}>🎨</div>
-            <h3 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '12px', color: '#ffffff' }}>
-              Beautiful Designs
+
+          <div className="card">
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '12px',
+              background: '#ffbd59',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '20px',
+              fontSize: '24px',
+            }}>
+              🎨
+            </div>
+            <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '12px', color: '#000000' }}>
+              Customizable
             </h3>
-            <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '16px', lineHeight: '1.6' }}>
-              Choose from multiple font combinations and color themes to match your brand
+            <p style={{ color: '#666666', lineHeight: '1.6', fontSize: '15px' }}>
+              Multiple themes and fonts to match your brand perfectly
             </p>
           </div>
-          <div className="card" style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '64px', marginBottom: '16px' }}>⚡</div>
-            <h3 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '12px', color: '#ffffff' }}>
-              Instant Download
+
+          <div className="card">
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '12px',
+              background: '#ffbd59',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '20px',
+              fontSize: '24px',
+            }}>
+              ⚡
+            </div>
+            <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '12px', color: '#000000' }}>
+              Instant Export
             </h3>
-            <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '16px', lineHeight: '1.6' }}>
-              Generate and download your carousel slides in seconds, ready to post
+            <p style={{ color: '#666666', lineHeight: '1.6', fontSize: '15px' }}>
+              Download ready-to-post images in seconds
             </p>
           </div>
         </div>
       </div>
 
-      {/* CTA Section */}
-      <div className="container" style={{ paddingTop: '60px', paddingBottom: '60px', textAlign: 'center' }}>
-        <div className="card" style={{
-          maxWidth: '800px',
-          margin: '0 auto',
-          padding: '64px 32px',
-          background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%)',
+      {/* CTA */}
+      <div style={{
+        maxWidth: '800px',
+        margin: '0 auto',
+        padding: '80px 24px',
+        textAlign: 'center',
+      }}>
+        <h2 style={{
+          fontSize: 'clamp(32px, 5vw, 48px)',
+          fontWeight: '700',
+          marginBottom: '16px',
+          color: '#000000',
         }}>
-          <h2 className="gradient-text" style={{
-            fontSize: 'clamp(32px, 4vw, 48px)',
-            fontWeight: '700',
-            marginBottom: '16px',
-          }}>
-            Ready to Get Started?
-          </h2>
-          <p style={{
-            fontSize: '20px',
-            color: 'rgba(255,255,255,0.8)',
-            marginBottom: '32px',
-          }}>
-            Join thousands of creators making amazing content
-          </p>
-          <Link
-            href="/signup"
-            className="button"
-            style={{
-              textDecoration: 'none',
-              display: 'inline-block',
-              padding: '20px 48px',
-              fontSize: '18px',
-            }}
-          >
-            Sign Up Now
-          </Link>
-        </div>
+          Ready to create?
+        </h2>
+        <p style={{ fontSize: '18px', color: '#666666', marginBottom: '32px' }}>
+          Join thousands of creators making amazing content
+        </p>
+        <Link
+          href="/signup"
+          className="button"
+          style={{
+            textDecoration: 'none',
+            display: 'inline-block',
+            fontSize: '18px',
+            padding: '20px 48px',
+          }}
+        >
+          Sign Up Free
+        </Link>
       </div>
 
       {/* Footer */}
       <footer style={{
-        borderTop: '1px solid rgba(255,255,255,0.1)',
-        padding: '32px 20px',
+        borderTop: '2px solid #e5e5e5',
+        padding: '32px 24px',
         textAlign: 'center',
-        color: 'rgba(255,255,255,0.5)',
+        color: '#999999',
+        fontSize: '14px',
       }}>
-        <p>© 2025 AI Post Generator. All rights reserved.</p>
+        © 2025 Post Generator. All rights reserved.
       </footer>
     </div>
   )
