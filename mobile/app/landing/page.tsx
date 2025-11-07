@@ -47,7 +47,7 @@ export default function LandingPage() {
           Create Stunning Carousel Posts
         </h1>
         <p className="text-xl md:text-2xl text-gray-300 mb-12 max-w-3xl mx-auto">
-          Generate engaging social media carousels with AI-powered content and beautiful designs
+        Generate ready-to-post content with AI. Perfect for Instagram, LinkedIn, X and more.
         </p>
         <Link
           href="/signup"

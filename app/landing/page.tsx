@@ -142,7 +142,7 @@ export default function LandingPage() {
           gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
           gap: '32px',
         }}>
-          <div className="card">
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <div style={{
               width: '44px',
               height: '44px',
@@ -155,12 +155,12 @@ export default function LandingPage() {
             <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '12px', color: '#000000' }}>
               AI-Powered
             </h3>
-            <p style={{ color: '#666666', lineHeight: '1.6', fontSize: '15px' }}>
+            <p style={{ color: '#666666', lineHeight: '1.6', fontSize: '15px', marginBottom: '0', flexGrow: 1 }}>
               Our AI creates professional, engaging posts from a single line of text.
             </p>
           </div>
 
-          <div className="card">
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <div style={{
               width: '48px',
               height: '48px',
@@ -172,21 +172,21 @@ export default function LandingPage() {
             <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '12px', color: '#000000' }}>
               Customizable
             </h3>
-            <p style={{ color: '#666666', lineHeight: '1.6', fontSize: '15px' }}>
+            <p style={{ color: '#666666', lineHeight: '1.6', fontSize: '15px', marginBottom: '0', flexGrow: 1 }}>
               Edit themes, fonts, and colors to fit your brand style.
             </p>
           </div>
 
-          <div className="card">
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <div style={{
-              width: '48px',
-              height: '48px',
+              width: '60px',
+              height: '60px',
               marginBottom: '20px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}>
-              <svg width="62" height="62" viewBox="0 0 62 62" style={{ display: 'block' }}>
+              <svg width="60" height="60" viewBox="0 0 62 62" style={{ display: 'block' }}>
                 <path
                   d="M 10 10 Q 10 5 15 5 L 46 26 Q 52 31 46 36 L 15 57 Q 10 57 10 52 L 10 10 Z"
                   fill="#ffbd59"
@@ -198,7 +198,7 @@ export default function LandingPage() {
             <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '12px', color: '#000000' }}>
               Instant Export
             </h3>
-            <p style={{ color: '#666666', lineHeight: '1.6', fontSize: '15px' }}>
+            <p style={{ color: '#666666', lineHeight: '1.6', fontSize: '15px', marginBottom: '0', flexGrow: 1 }}>
               Download ready-to-share images instantly — no design skills needed.
             </p>
           </div>

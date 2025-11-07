@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { getFontCombination, getColorTheme } from '../config/slideThemes'
+import { useAuth } from '../context/AuthContext'
 
 interface Slide {
   title: string
@@ -15,6 +16,7 @@ interface Props {
   underlineWords?: Record<number, { underline: string; highlight: string }>
   fontCombinationId?: string
   colorThemeId?: string
+  onGenerationComplete?: () => void
 }
 
 export default function SlideImageGenerator({ 
@@ -22,11 +24,14 @@ export default function SlideImageGenerator({
   ideaTitle, 
   underlineWords = {},
   fontCombinationId = 'combination-1',
-  colorThemeId = 'black'
+  colorThemeId = 'black',
+  onGenerationComplete
 }: Props) {
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([])
   const [generating, setGenerating] = useState(false)
   const [imagesLoaded, setImagesLoaded] = useState(false)
+  const { user, refreshCredits } = useAuth()
+  const hasDeductedCredit = useRef(false)
 
   // Get selected font combination and color theme
   const FONT_CONFIG = getFontCombination(fontCombinationId)
@@ -61,11 +66,8 @@ export default function SlideImageGenerator({
                 const img = new Image()
                 await new Promise<void>((resolve) => {
                   img.onload = () => {
-                    // Only set dimensions if they're different to avoid flash
-                    if (canvas.width !== img.width || canvas.height !== img.height) {
-                      canvas.width = img.width
-                      canvas.height = img.height
-                    }
+                    canvas.width = img.width
+                    canvas.height = img.height
                     const ctx = canvas.getContext('2d')
                     if (ctx) {
                       ctx.drawImage(img, 0, 0)
@@ -115,9 +117,33 @@ export default function SlideImageGenerator({
       console.error('Error saving images to localStorage:', error)
     }
     
+    // Deduct credit when slides are generated (only once per carousel generation)
+    if (user?.id && !hasDeductedCredit.current) {
+      try {
+        const deductResponse = await fetch('/api/credits/deduct', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id }),
+        })
+
+        if (deductResponse.ok) {
+          // Refresh credits in context to update UI immediately
+          await refreshCredits()
+          hasDeductedCredit.current = true
+        }
+      } catch (creditError) {
+        console.error('Error deducting credit:', creditError)
+      }
+    }
+    
     setGenerating(false)
     setImagesLoaded(true)
-  }, [slides, ideaTitle, underlineWords, fontCombinationId, colorThemeId])
+    
+    // Notify parent component that generation is complete
+    if (onGenerationComplete) {
+      onGenerationComplete()
+    }
+  }, [slides, ideaTitle, underlineWords, fontCombinationId, colorThemeId, user?.id, refreshCredits, onGenerationComplete])
 
   // Load images from localStorage or generate new ones
   useEffect(() => {
@@ -126,8 +152,11 @@ export default function SlideImageGenerator({
       const timer = setTimeout(async () => {
         const loaded = await loadImagesFromStorage()
         if (!loaded) {
-          // If images weren't loaded from storage, generate new ones
+          // If images weren't loaded from storage, generate new ones (will deduct credit)
           generateAllSlides()
+        } else {
+          // Images loaded from cache - don't deduct credit, but reset flag for next generation
+          hasDeductedCredit.current = true
         }
       }, 100)
       return () => clearTimeout(timer)
@@ -137,9 +166,23 @@ export default function SlideImageGenerator({
   // Regenerate if theme, fonts, or underline words change (but only if images were already loaded)
   useEffect(() => {
     if (slides.length > 0 && imagesLoaded) {
-      generateAllSlides()
+      // Don't deduct credit for theme/font changes - only for new carousel generation
+      // Temporarily set flag to prevent deduction
+      const wasDeducted = hasDeductedCredit.current
+      hasDeductedCredit.current = true
+      const regenerate = async () => {
+        await generateAllSlides()
+        // Restore flag after generation
+        hasDeductedCredit.current = wasDeducted
+      }
+      regenerate()
     }
   }, [fontCombinationId, colorThemeId, imagesLoaded, slides.length, generateAllSlides])
+  
+  // Reset credit deduction flag when slides change (new carousel)
+  useEffect(() => {
+    hasDeductedCredit.current = false
+  }, [ideaTitle, slides.length])
 
   const loadImage = (src: string): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
@@ -200,11 +243,8 @@ export default function SlideImageGenerator({
     // Instagram carousel dimensions (4:5 ratio)
     const width = 1080
     const height = 1350
-    // Only set dimensions if they're different to avoid unnecessary reflow
-    if (canvas.width !== width || canvas.height !== height) {
-      canvas.width = width
-      canvas.height = height
-    }
+    canvas.width = width
+    canvas.height = height
 
     // Load background.jpg for all slides - NO OVERLAY
     try {
@@ -781,16 +821,7 @@ export default function SlideImageGenerator({
               marginBottom: '12px'
             }}>
               <canvas
-                ref={el => {
-                  canvasRefs.current[index] = el
-                  // Set dimensions immediately to prevent flash
-                  if (el) {
-                    el.width = 1080
-                    el.height = 1350
-                  }
-                }}
-                width={1080}
-                height={1350}
+                ref={el => canvasRefs.current[index] = el}
                 style={{
                   position: 'absolute',
                   top: 0,

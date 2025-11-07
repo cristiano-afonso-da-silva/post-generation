@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import './globals.css'
 import SlideImageGenerator from './components/SlideImageGenerator'
 import { FONT_COMBINATIONS, COLOR_THEMES } from './config/slideThemes'
 import { useAuth } from './context/AuthContext'
+import CreditDisplay from './components/CreditDisplay'
+import UpgradePrompt from './components/UpgradePrompt'
 
 const API_URL = ''
 
@@ -23,7 +25,8 @@ interface Carousel {
 
 export default function Home() {
   const router = useRouter()
-  const { user, loading: authLoading, signOut } = useAuth()
+  const searchParams = useSearchParams()
+  const { user, loading: authLoading, signOut, credits, refreshCredits } = useAuth()
   
   const [accountDescription, setAccountDescription] = useState('')
   const [ideas, setIdeas] = useState<string[]>([])
@@ -33,6 +36,7 @@ export default function Home() {
   const [selectedIdea, setSelectedIdea] = useState<string | null>(null)
   const [currentStep, setCurrentStep] = useState<'generating' | 'analysing' | 'rendering' | null>(null)
   const [error, setError] = useState('')
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
   
   // Theme settings
   const [fontCombinationId, setFontCombinationId] = useState('combination-1')
@@ -55,6 +59,22 @@ export default function Home() {
       router.push('/landing')
     }
   }, [user, authLoading, router])
+
+  // Handle Stripe checkout success/cancel
+  useEffect(() => {
+    const success = searchParams.get('success')
+    const canceled = searchParams.get('canceled')
+    
+    if (success === 'true') {
+      // Refresh credits after successful subscription
+      refreshCredits()
+      // Clean URL
+      router.replace('/')
+    } else if (canceled === 'true') {
+      // Clean URL
+      router.replace('/')
+    }
+  }, [searchParams, refreshCredits, router])
 
   // Load carousel from localStorage on mount
   useEffect(() => {
@@ -145,6 +165,53 @@ export default function Home() {
   }
 
   const generateCarousel = async (idea: string) => {
+    if (!user?.id) {
+      setError('User not authenticated')
+      return
+    }
+
+    // Check credits - use context first (already loaded), then API as fallback
+    let hasCredits = false
+    let creditsRemaining = 0
+
+    // First, check context credits (fastest, already loaded)
+    if (credits && credits.credits_remaining > 0) {
+      hasCredits = true
+      creditsRemaining = credits.credits_remaining
+    } else {
+      // If context doesn't have credits, check via API
+      try {
+        const checkResponse = await fetch(`/api/credits/check?userId=${user.id}`)
+        if (checkResponse.ok) {
+          const checkData = await checkResponse.json()
+          creditsRemaining = checkData.creditsRemaining || 0
+          hasCredits = creditsRemaining > 0
+          
+          // Update context with fresh data
+          if (checkData.creditsRemaining !== undefined) {
+            await refreshCredits()
+          }
+        } else {
+          // If API fails, use context as fallback
+          hasCredits = credits ? credits.credits_remaining > 0 : false
+          creditsRemaining = credits?.credits_remaining || 0
+        }
+      } catch (error) {
+        console.error('Error checking credits:', error)
+        // If check fails, use context credits as fallback
+        hasCredits = credits ? credits.credits_remaining > 0 : false
+        creditsRemaining = credits?.credits_remaining || 0
+      }
+    }
+
+    // Check if user has credits (only deduct credit for carousel generation, not ideas)
+    // Generating ideas is FREE - only carousel generation costs credits
+    if (!hasCredits || creditsRemaining <= 0) {
+      console.log('No credits available. Credits remaining:', creditsRemaining, 'Context credits:', credits)
+      setShowUpgradePrompt(true)
+      return
+    }
+
     setSelectedIdea(idea)
     setLoadingCarousel(true)
     setError('')
@@ -169,6 +236,7 @@ export default function Home() {
       const result = await response.json()
 
       if (result.success) {
+        // Credit will be deducted when slides are actually generated in SlideImageGenerator
         setCarousel(result.data)
         // Save to localStorage
         try {
@@ -247,6 +315,13 @@ export default function Home() {
             Post My Note
           </Link>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            {credits && (
+              <CreditDisplay
+                credits={credits.credits_remaining}
+                subscriptionStatus={credits.subscription_status}
+                currentPlan={credits.current_plan}
+              />
+            )}
             <span style={{ fontSize: '14px', color: '#666666', fontWeight: '500' }}>{user.email}</span>
             <button
               onClick={handleSignOut}
@@ -566,6 +641,13 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {/* Upgrade Prompt */}
+      <UpgradePrompt
+        isOpen={showUpgradePrompt}
+        onClose={() => setShowUpgradePrompt(false)}
+        currentPlan={credits?.current_plan || null}
+      />
     </div>
   )
 }
