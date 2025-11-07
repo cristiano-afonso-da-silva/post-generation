@@ -74,7 +74,7 @@ export default function SignUpPage() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', background: '#ffffff' }}>
       <div style={{ width: '100%', maxWidth: '440px' }}>
-        <Link href="/landing" style={{ display: 'inline-block', marginBottom: '32px' }}>
+        <Link href="/" style={{ display: 'inline-block', marginBottom: '32px' }}>
           <span style={{ fontSize: '24px', fontWeight: '700', color: '#000000' }}>← Post My Note</span>
         </Link>
 
@@ -85,7 +85,7 @@ export default function SignUpPage() {
           Start creating amazing content today
         </p>
 
-        <form onSubmit={handleSignUp} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <form onSubmit={handleSignUp} autoComplete="off" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {error && <div className="error">{error}</div>}
 
           <div>
@@ -101,6 +101,8 @@ export default function SignUpPage() {
               className="input"
               placeholder="you@example.com"
               autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore="true"
             />
           </div>
 

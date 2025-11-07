@@ -58,7 +58,7 @@ export default function SignInPage() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', background: '#ffffff' }}>
       <div style={{ width: '100%', maxWidth: '440px' }}>
-        <Link href="/landing" style={{ display: 'inline-block', marginBottom: '32px' }}>
+        <Link href="/" style={{ display: 'inline-block', marginBottom: '32px' }}>
           <span style={{ fontSize: '24px', fontWeight: '700', color: '#000000' }}>← Post My Note</span>
         </Link>
 
@@ -69,7 +69,7 @@ export default function SignInPage() {
           Sign in to your account to continue
         </p>
 
-        <form onSubmit={handleSignIn} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <form onSubmit={handleSignIn} autoComplete="off" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {error && <div className="error">{error}</div>}
 
           <div>
@@ -85,6 +85,8 @@ export default function SignInPage() {
               className="input"
               placeholder="you@example.com"
               autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore="true"
             />
           </div>
 
@@ -100,7 +102,9 @@ export default function SignInPage() {
               required
               className="input"
               placeholder="••••••••"
-              autoComplete="off"
+              autoComplete="new-password"
+              data-lpignore="true"
+              data-1p-ignore="true"
             />
           </div>
 

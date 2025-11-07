@@ -83,7 +83,7 @@ export default function SignUpPage() {
 
         {/* Sign Up Form */}
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8">
-          <form onSubmit={handleSignUp} className="space-y-6">
+          <form onSubmit={handleSignUp} autoComplete="off" className="space-y-6">
             {error && (
               <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/50 text-red-400 text-sm">
                 {error}
@@ -103,6 +103,8 @@ export default function SignUpPage() {
                 className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-purple-400 transition-colors"
                 placeholder="you@example.com"
                 autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
               />
             </div>
 

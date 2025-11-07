@@ -97,7 +97,7 @@ export default function VerifyPage() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', background: '#ffffff' }}>
       <div style={{ width: '100%', maxWidth: '440px' }}>
-        <Link href="/signin" style={{ display: 'inline-block', marginBottom: '32px' }}>
+        <Link href="/" style={{ display: 'inline-block', marginBottom: '32px' }}>
           <span style={{ fontSize: '24px', fontWeight: '700', color: '#000000' }}>← Post My Note</span>
         </Link>
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { getFontCombination, getColorTheme } from '../config/slideThemes'
 
 interface Slide {
@@ -26,26 +26,117 @@ export default function SlideImageGenerator({
 }: Props) {
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([])
   const [generating, setGenerating] = useState(false)
+  const [imagesLoaded, setImagesLoaded] = useState(false)
 
   // Get selected font combination and color theme
   const FONT_CONFIG = getFontCombination(fontCombinationId)
   const COLOR_THEME = getColorTheme(colorThemeId)
 
-  useEffect(() => {
-    if (slides.length > 0) {
-      generateAllSlides()
+  const loadImagesFromStorage = useCallback(async () => {
+    try {
+      const savedImages = localStorage.getItem('postGeneration_canvasImages')
+      const savedContentHash = localStorage.getItem('postGeneration_contentHash')
+      
+      // Create current content hash
+      const currentContentHash = JSON.stringify({ ideaTitle, slides, underlineWords, fontCombinationId, colorThemeId })
+      
+      if (savedImages && savedContentHash === currentContentHash) {
+        const imageDataUrls = JSON.parse(savedImages)
+        // Check if we have the same number of slides
+        if (imageDataUrls.length === slides.length) {
+          // Wait for all canvas refs to be available
+          let allCanvasesReady = true
+          for (let i = 0; i < slides.length; i++) {
+            if (!canvasRefs.current[i]) {
+              allCanvasesReady = false
+              break
+            }
+          }
+          
+          if (allCanvasesReady) {
+            // Load images onto canvases
+            for (let i = 0; i < slides.length; i++) {
+              const canvas = canvasRefs.current[i]
+              if (canvas && imageDataUrls[i]) {
+                const img = new Image()
+                await new Promise<void>((resolve) => {
+                  img.onload = () => {
+                    canvas.width = img.width
+                    canvas.height = img.height
+                    const ctx = canvas.getContext('2d')
+                    if (ctx) {
+                      ctx.drawImage(img, 0, 0)
+                    }
+                    resolve()
+                  }
+                  img.onerror = () => resolve()
+                  img.src = imageDataUrls[i]
+                })
+              }
+            }
+            setImagesLoaded(true)
+            setGenerating(false)
+            return true
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error loading images from localStorage:', error)
     }
-  }, [slides, underlineWords, fontCombinationId, colorThemeId])
+    // If no saved images or content doesn't match, return false to trigger generation
+    return false
+  }, [slides, ideaTitle, underlineWords, fontCombinationId, colorThemeId])
 
-  const generateAllSlides = async () => {
+  const generateAllSlides = useCallback(async () => {
     setGenerating(true)
+    
+    const imageDataUrls: string[] = []
     
     for (let i = 0; i < slides.length; i++) {
       await generateSlideImage(i)
+      // Save canvas to data URL
+      const canvas = canvasRefs.current[i]
+      if (canvas) {
+        imageDataUrls.push(canvas.toDataURL('image/png'))
+      }
+    }
+    
+    // Create a content hash to verify images match current carousel
+    const contentHash = JSON.stringify({ ideaTitle, slides, underlineWords, fontCombinationId, colorThemeId })
+    
+    // Save all images to localStorage with content hash
+    try {
+      localStorage.setItem('postGeneration_canvasImages', JSON.stringify(imageDataUrls))
+      localStorage.setItem('postGeneration_contentHash', contentHash)
+    } catch (error) {
+      console.error('Error saving images to localStorage:', error)
     }
     
     setGenerating(false)
-  }
+    setImagesLoaded(true)
+  }, [slides, ideaTitle, underlineWords, fontCombinationId, colorThemeId])
+
+  // Load images from localStorage or generate new ones
+  useEffect(() => {
+    if (slides.length > 0) {
+      // Wait a bit for canvas refs to be set
+      const timer = setTimeout(async () => {
+        const loaded = await loadImagesFromStorage()
+        if (!loaded) {
+          // If images weren't loaded from storage, generate new ones
+          generateAllSlides()
+        }
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [slides.length, loadImagesFromStorage, generateAllSlides])
+
+  // Regenerate if theme, fonts, or underline words change (but only if images were already loaded)
+  useEffect(() => {
+    if (slides.length > 0 && imagesLoaded) {
+      generateAllSlides()
+    }
+  }, [fontCombinationId, colorThemeId, imagesLoaded, slides.length, generateAllSlides])
 
   const loadImage = (src: string): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
@@ -637,35 +728,9 @@ export default function SlideImageGenerator({
         fontSize: '24px',
         fontWeight: '700'
       }}>
-        📸 Downloadable Slide Images
+        Your slides
       </h3>
       
-      <p style={{ 
-        marginBottom: '24px', 
-        color: 'rgba(255,255,255,0.6)', 
-        fontSize: '16px'
-      }}>
-        Preview and download your carousel slides as images (1080x1350px, 4:5 ratio)
-      </p>
-      
-      <div style={{
-        marginBottom: '24px',
-        padding: '16px',
-        background: 'rgba(102, 126, 234, 0.1)',
-        border: '1px solid rgba(102, 126, 234, 0.3)',
-        borderRadius: '12px',
-        fontSize: '14px',
-        color: 'rgba(255,255,255,0.8)'
-      }}>
-        <strong>📁 Background Image:</strong> Place <code style={{background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px'}}>background.jpg</code> in the <code style={{background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px'}}>mobile/public/backgrounds/</code> folder.
-        <br />
-        <br />
-        This single image will be used for <strong>all slides</strong>.
-        <br />
-        <br />
-        If <code>background.jpg</code> is not found, slides will use a white background.
-      </div>
-
       {generating && (
         <div style={{ 
           textAlign: 'center', 
@@ -742,7 +807,7 @@ export default function SlideImageGenerator({
         className="button"
         style={{ width: '100%' }}
       >
-        📥 Download All Slides
+        Download All Slides
       </button>
     </div>
   )
