@@ -29,11 +29,11 @@ export async function GET(request: NextRequest) {
     // Fetch subscription from Stripe
     const subscription = await stripe.subscriptions.retrieve(
       userCredits.stripe_subscription_id
-    )
+    ) as Stripe.Subscription
 
     // Return current_period_end as renewal date
     return NextResponse.json({
-      renewalDate: subscription.current_period_end
+      renewalDate: (subscription as any).current_period_end
     })
   } catch (error: any) {
     console.error('Error fetching subscription renewal date:', error)
