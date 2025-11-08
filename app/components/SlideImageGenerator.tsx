@@ -991,7 +991,7 @@ export default function SlideImageGenerator({
               marginBottom: '12px'
             }}>
               <canvas
-                ref={el => canvasRefs.current[index] = el}
+                ref={el => { canvasRefs.current[index] = el }}
                 style={{
                   position: 'absolute',
                   top: 0,
