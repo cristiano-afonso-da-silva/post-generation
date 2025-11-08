@@ -55,6 +55,7 @@ interface Props {
   colorThemeId?: string
   accountDescription?: string
   caption?: string
+  backgroundImageUrl?: string | null
   onGenerationComplete?: () => void
 }
 
@@ -66,6 +67,7 @@ export default function SlideImageGenerator({
   colorThemeId = 'black',
   accountDescription = '',
   caption = '',
+  backgroundImageUrl = null,
   onGenerationComplete
 }: Props) {
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([])
@@ -98,7 +100,7 @@ export default function SlideImageGenerator({
       const savedHash = savedFullContentHash || savedContentHash
       
       // Create current full content hash (includes theme/font for image matching)
-      const currentFullContentHash = JSON.stringify({ ideaTitle, slides, underlineWords, fontCombinationId, colorThemeId })
+      const currentFullContentHash = JSON.stringify({ ideaTitle, slides, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl: backgroundImageUrl || null })
       
       if (savedImages && savedHash && savedHash === currentFullContentHash) {
         const imageDataUrls = JSON.parse(savedImages)
@@ -145,7 +147,7 @@ export default function SlideImageGenerator({
     }
     // If no saved images or content doesn't match, return false to trigger generation
     return false
-  }, [slides, ideaTitle, underlineWords, fontCombinationId, colorThemeId])
+  }, [slides, ideaTitle, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl])
 
   // Auto-save function
   const saveToDatabase = useCallback(async (imageDataUrls: string[]) => {
@@ -225,7 +227,7 @@ export default function SlideImageGenerator({
     } catch (error: any) {
       console.error('❌ Error auto-saving generation:', error.message || error)
     }
-  }, [ideaTitle, slides, underlineWords, fontCombinationId, colorThemeId, user?.id])
+  }, [ideaTitle, slides, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl, user?.id])
 
   const generateAllSlides = useCallback(async () => {
     setGenerating(true)
@@ -242,7 +244,7 @@ export default function SlideImageGenerator({
     }
     
     // Create full content hash (includes theme/font) for image matching
-    const fullContentHash = JSON.stringify({ ideaTitle, slides, underlineWords, fontCombinationId, colorThemeId })
+    const fullContentHash = JSON.stringify({ ideaTitle, slides, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl: backgroundImageUrl || null })
     // Create content hash (only ideaTitle + slides) for generation update detection
     const contentHash = JSON.stringify({ ideaTitle, slides })
     
@@ -325,7 +327,7 @@ export default function SlideImageGenerator({
     if (onGenerationComplete) {
       onGenerationComplete()
     }
-  }, [slides, ideaTitle, underlineWords, fontCombinationId, colorThemeId, user?.id, refreshCredits, onGenerationComplete, saveToDatabase])
+  }, [slides, ideaTitle, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl, user?.id, refreshCredits, onGenerationComplete, saveToDatabase])
 
   // Load images from localStorage or generate new ones
   useEffect(() => {
@@ -359,7 +361,7 @@ export default function SlideImageGenerator({
       }
       regenerate()
     }
-  }, [fontCombinationId, colorThemeId, imagesLoaded, slides.length, generateAllSlides])
+  }, [fontCombinationId, colorThemeId, backgroundImageUrl, imagesLoaded, slides.length, generateAllSlides])
   
   // Reset credit deduction flag when slides change (new note)
   useEffect(() => {
@@ -431,14 +433,22 @@ export default function SlideImageGenerator({
     canvas.width = width
     canvas.height = height
 
-    // Load background.jpg for all slides - NO OVERLAY
-    try {
-      const bgImage = await loadImage('/backgrounds/background.jpg')
-      
-      // Draw background image covering entire canvas - no overlay
-      ctx.drawImage(bgImage, 0, 0, width, height)
+    if (backgroundImageUrl) {
+      try {
+        const bgImage = await loadImage(backgroundImageUrl)
+        const scale = Math.max(width / bgImage.width, height / bgImage.height)
+        const scaledWidth = bgImage.width * scale
+        const scaledHeight = bgImage.height * scale
+        const offsetX = (width - scaledWidth) / 2
+        const offsetY = (height - scaledHeight) / 2
+
+        ctx.drawImage(bgImage, offsetX, offsetY, scaledWidth, scaledHeight)
     } catch (error) {
-      // Fallback to white background if background.jpg not found
+        console.warn(`Unable to load background ${backgroundImageUrl}, falling back to plain color:`, error)
+        ctx.fillStyle = '#FFFFFF'
+        ctx.fillRect(0, 0, width, height)
+      }
+    } else {
       ctx.fillStyle = '#FFFFFF'
       ctx.fillRect(0, 0, width, height)
     }
@@ -458,7 +468,7 @@ export default function SlideImageGenerator({
     // For HOOK slide - just show the hook text with word highlighting
     if (cleanSlide.kind === 'HOOK') {
       const hookText = cleanSlide.title || cleanSlide.content
-
+      
       const hookFontMatch = FONT_CONFIG.hook.font.match(/(\d+\.?\d*)px/)
       const hookBaseFontSize = hookFontMatch ? parseFloat(hookFontMatch[1]) : 130
       const hookLineHeightRatio = FONT_CONFIG.hook.lineHeight / Math.max(1, hookBaseFontSize)
@@ -470,21 +480,21 @@ export default function SlideImageGenerator({
 
       const wrapHookText = (fontSize: number) => {
         ctx.font = buildHookFont(fontSize)
-        const words = hookText.split(' ')
+      const words = hookText.split(' ')
         const wrappedLines: string[] = []
-        let currentLine = ''
-
-        for (const word of words) {
-          const testLine = currentLine ? `${currentLine} ${word}` : word
-          const metrics = ctx.measureText(testLine)
-
-          if (metrics.width > safeWidth && currentLine) {
+      let currentLine = ''
+      
+      for (const word of words) {
+        const testLine = currentLine ? `${currentLine} ${word}` : word
+        const metrics = ctx.measureText(testLine)
+        
+        if (metrics.width > safeWidth && currentLine) {
             wrappedLines.push(currentLine)
-            currentLine = word
-          } else {
-            currentLine = testLine
-          }
+          currentLine = word
+        } else {
+          currentLine = testLine
         }
+      }
         if (currentLine) wrappedLines.push(currentLine)
 
         const lineHeight = fontSize * hookLineHeightRatio
@@ -542,11 +552,11 @@ export default function SlideImageGenerator({
       // Get highlight word
       const emphasisData = underlineWords[index] || { underline: '', highlight: '' }
       const highlightWord = emphasisData.highlight.toLowerCase().replace(/[.,!?;:–—\-'"]/g, '').trim()
-
+      
       // Find last occurrence of highlight word
       let lastHighlightLineIndex = -1
       let lastHighlightWordIndex = -1
-
+      
       if (highlightWord) {
         for (let lineIdx = hookLines.length - 1; lineIdx >= 0; lineIdx--) {
           const lineWords = hookLines[lineIdx].split(' ')
@@ -561,55 +571,55 @@ export default function SlideImageGenerator({
           if (lastHighlightLineIndex !== -1) break
         }
       }
-
+      
       // Start Y position - center the entire text block
       let y = centerY - (hookTotalHeight / 2) + (hookLines.length > 0 ? hookFontSize : 0)
       const x = safeMarginSides
-
+      
       // Draw each line
       hookLines.forEach((line, lineIndex) => {
         const lineWords = line.split(' ')
-
+        
         // First pass: Draw highlight backgrounds
         let tempX = x
         lineWords.forEach((word, wordIndex) => {
           const cleanWord = word.toLowerCase().replace(/[.,!?;:–—\-'"]/g, '').trim()
           const wordMetrics = ctx.measureText(word)
-
+          
           if (cleanWord === highlightWord && lineIndex === lastHighlightLineIndex && wordIndex === lastHighlightWordIndex) {
             const cleanedWord = word.replace(/^[.,!?;:–—\-'"]+|[.,!?;:–—\-'"]+$/g, '')
             const cleanedMetrics = ctx.measureText(cleanedWord)
             const leadingPuncMatch = word.match(/^[.,!?;:–—\-'"]+/)
             const leadingPuncWidth = leadingPuncMatch ? ctx.measureText(leadingPuncMatch[0]).width : 0
-
+            
             const bgX = tempX + leadingPuncWidth
             const bgY = y - highlightOffset
             const bgWidth = cleanedMetrics.width
-
+            
             ctx.fillStyle = highlightFillStyle
             ctx.fillRect(bgX, bgY, bgWidth, highlightHeight)
           }
-
+          
           const spaceWidth = ctx.measureText(' ').width
           tempX += wordMetrics.width + spaceWidth
         })
-
+        
         // Second pass: Draw text
         let currentX = x
         lineWords.forEach((word, wordIndex) => {
           ctx.fillStyle = COLOR_THEME.textColor
           ctx.fillText(word, currentX, y)
-
+          
           const wordMetrics = ctx.measureText(word)
           currentX += wordMetrics.width
           if (wordIndex < lineWords.length - 1) {
             currentX += ctx.measureText(' ').width
           }
         })
-
+        
         y += hookLineHeight
       })
-
+      
     } else if (cleanSlide.kind === 'CTA') {
       // CTA content with underlines and line breaks
       ctx.font = FONT_CONFIG.content.font
@@ -1190,7 +1200,18 @@ export default function SlideImageGenerator({
   }
 
   return (
-    <div className="card" style={{ marginTop: '32px' }}>
+    <div
+      className="card"
+      style={{
+        marginTop: 0,
+        height: '100%',
+        maxHeight: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        paddingBottom: '16px',
+        overflow: 'hidden'
+      }}
+    >
       <h3 style={{ 
         marginBottom: '24px', 
         fontSize: '24px',
@@ -1209,19 +1230,27 @@ export default function SlideImageGenerator({
         </div>
       )}
 
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+      <div
+        style={{
+          display: 'flex',
         gap: '24px',
-        marginBottom: '24px'
-      }}>
+          overflowX: 'auto',
+          overflowY: 'hidden',
+          paddingBottom: '16px',
+          marginBottom: '24px',
+          flex: 1,
+          minHeight: 0
+        }}
+      >
         {slides.map((slide, index) => (
           <div key={index} style={{
             background: 'rgba(255,255,255,0.02)',
             border: '1px solid rgba(255,255,255,0.1)',
             borderRadius: '16px',
             padding: '16px',
-            transition: 'all 0.3s ease'
+            transition: 'all 0.3s ease',
+            minWidth: '320px',
+            flex: '0 0 320px'
           }}>
             <div style={{ 
               marginBottom: '12px',

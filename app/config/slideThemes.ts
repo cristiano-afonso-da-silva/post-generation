@@ -86,25 +86,32 @@ export const COLOR_THEMES: ColorTheme[] = [
     underlineColor: '#000000'
   },
   {
+    id: 'orange-black',
+    name: 'Orange + Black',
+    textColor: '#000000',
+    highlightColor: 'rgba(249, 115, 22, 0.5)',
+    underlineColor: '#000000'
+  },
+  {
     id: 'coral-navy',
-    name: 'Coral + Navy',
-    textColor: '#1a1a3e',
+    name: 'Coral + Black',
+    textColor: '#000000',
     highlightColor: 'rgba(255, 107, 107, 0.5)',
-    underlineColor: '#1a1a3e'
+    underlineColor: '#000000'
   },
   {
     id: 'gold-green',
-    name: 'Gold + Green',
-    textColor: '#0d3b2e',
-    highlightColor: 'rgba(255, 195, 0, 0.6)',
-    underlineColor: '#0d3b2e'
+    name: 'Gold + Black',
+    textColor: '#000000',
+    highlightColor: 'rgba(255, 195, 0, 0.5)',
+    underlineColor: '#000000'
   },
   {
     id: 'mint-gray',
-    name: 'Mint + Gray',
-    textColor: '#2d2d2d',
+    name: 'Mint + Black',
+    textColor: '#000000',
     highlightColor: 'rgba(0, 230, 118, 0.5)',
-    underlineColor: '#2d2d2d'
+    underlineColor: '#000000'
   }
 ]
 

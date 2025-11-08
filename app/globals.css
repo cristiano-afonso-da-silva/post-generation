@@ -44,9 +44,9 @@ a {
    ════════════════════════════════════════════════════════════════════════════ */
 
 .container {
-  max-width: 1400px;
+  max-width: none;
   margin: 0 auto;
-  padding: 40px 24px;
+  padding: 32px 48px;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -315,6 +315,57 @@ a {
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
+   TOGGLE SWITCH
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.toggle-switch {
+  position: relative;
+  width: 58px;
+  height: 32px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  border: 2px solid #e5e7eb;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 26px;
+  height: 26px;
+  background: #ffffff;
+  border-radius: 50%;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.toggle-switch.on {
+  background: #ffbd59;
+  border-color: #ffbd59;
+}
+
+.toggle-switch.on .toggle-slider {
+  transform: translateX(26px);
+  box-shadow: 0 2px 8px rgba(255, 189, 89, 0.4);
+}
+
+.toggle-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
    RESPONSIVE
    ════════════════════════════════════════════════════════════════════════════ */
 
@@ -335,3 +386,33 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+/* --- Two-column layout for Home page --- */
+.two-col {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.left-pane {
+  flex: 0 0 30%;
+}
+
+.right-pane {
+  flex: 0 0 70%;
+}
+
+/* Stack on smaller screens */
+@media (max-width: 1024px) {
+  .two-col {
+    flex-direction: column;
+  }
+  .left-pane,
+  .right-pane {
+    flex: 1 1 auto;
+  }
+}
+

@@ -3,7 +3,8 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { History } from 'lucide-react'
+import { History, Palette, Edit3, MessageSquare } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import './globals.css'
 import SlideImageGenerator from './components/SlideImageGenerator'
 import { FONT_COMBINATIONS, COLOR_THEMES } from './config/slideThemes'
@@ -13,6 +14,12 @@ import UpgradePrompt from './components/UpgradePrompt'
 import SubscriptionModal from './components/SubscriptionModal'
 
 const API_URL = ''
+
+type BackgroundOption = {
+  id: string
+  label: string
+  src: string
+}
 
 interface Note {
   ideaTitle: string
@@ -65,8 +72,17 @@ export default function Home() {
   const [editedSlides, setEditedSlides] = useState<Note['slides']>([])
   const [slidesDirty, setSlidesDirty] = useState(false)
   const [savingSlides, setSavingSlides] = useState(false)
+  const [activeLeftTab, setActiveLeftTab] = useState<'design' | 'slides' | 'caption'>('design')
+  const [expandedSlideIndexes, setExpandedSlideIndexes] = useState<number[]>([])
+const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] = [
+  { id: 'design', label: 'Customize Design', icon: Palette },
+  { id: 'slides', label: 'Edit Slides', icon: Edit3 },
+  { id: 'caption', label: 'Post Caption', icon: MessageSquare }
+]
 
   const showDebugPanel = false
+  const [backgroundOptions, setBackgroundOptions] = useState<BackgroundOption[]>([])
+  const [backgroundId, setBackgroundId] = useState<string>('')
   
   // Theme settings
   const [fontCombinationId, setFontCombinationId] = useState('combination-1')
@@ -95,11 +111,82 @@ export default function Home() {
     if (note) {
       setEditedSlides(note.slides.map(slide => ({ ...slide })))
       setSlidesDirty(false)
+      setExpandedSlideIndexes([])
     } else {
       setEditedSlides([])
       setSlidesDirty(false)
+      setExpandedSlideIndexes([])
     }
   }, [note])
+
+  const toggleSlideExpansion = (index: number) => {
+    setExpandedSlideIndexes(prev => {
+      if (prev.includes(index)) {
+        return prev.filter(i => i !== index)
+      }
+      return [...prev, index]
+    })
+  }
+
+  // Detect available background images (bg1.jpg, bg2.jpg, ...)
+  useEffect(() => {
+    let isMounted = true
+    const loadBackgrounds = async () => {
+      const detected: BackgroundOption[] = []
+      const maxBackgrounds = 10
+
+      await Promise.all(
+        Array.from({ length: maxBackgrounds }, (_, i) => i + 1).map(async (num) => {
+          const id = `bg${num}`
+          const src = `/backgrounds/${id}.jpg`
+          try {
+            const res = await fetch(src, { method: 'HEAD' })
+            if (res.ok) {
+              detected.push({
+                id,
+                label: `Background ${num}`,
+                src
+              })
+            }
+          } catch {
+            // Ignore missing files
+          }
+        })
+      )
+
+      if (isMounted) {
+        setBackgroundOptions(detected)
+
+        try {
+          const savedId = localStorage.getItem('postGeneration_backgroundId')
+          if (savedId && detected.some(option => option.id === savedId)) {
+            setBackgroundId(savedId)
+          } else if (detected.length > 0) {
+            setBackgroundId(detected[0].id)
+          } else {
+            setBackgroundId('')
+          }
+        } catch (error) {
+          console.warn('Unable to read background preference from localStorage:', error)
+          setBackgroundId(detected[0]?.id ?? '')
+        }
+      }
+    }
+
+    loadBackgrounds()
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!backgroundId) return
+    try {
+      localStorage.setItem('postGeneration_backgroundId', backgroundId)
+    } catch (error) {
+      console.warn('Unable to persist background preference to localStorage:', error)
+    }
+  }, [backgroundId])
 
   // Load note from localStorage on mount
   useEffect(() => {
@@ -407,7 +494,7 @@ export default function Home() {
         <div style={{
           maxWidth: '1400px',
           margin: '0 auto',
-          padding: '0 24px',
+          padding: '0 48px',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -458,26 +545,42 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="container">
+      <div
+        className="container"
+        style={{
+          height: 'calc(100vh - 120px)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden'
+        }}
+      >
         {/* Input Section - Always Visible */}
-        <div style={{ marginBottom: '40px' }}>
-          <h2 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '8px', color: '#000000' }}>
-            Describe Your Business
-          </h2>
-          <p style={{ color: '#666666', marginBottom: '24px', fontSize: '15px' }}>
-            Tell us about your business to generate post ideas
-          </p>
-          
+        <div style={{ marginBottom: '24px', flex: '0 0 auto' }}>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
             <input
               type="text"
               className="input"
-              placeholder="e.g., productivity coach helping remote workers overcome procrastination"
+              placeholder="Describe your business: e.g., productivity coach helping remote workers overcome procrastination"
               value={accountDescription}
               onChange={(e) => setAccountDescription(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && generateIdeas()}
               style={{ flex: 1, minWidth: '300px' }}
             />
+            <label
+              className={`toggle-switch ${includeImages ? 'on' : ''}`}
+              style={{ display: 'flex', alignItems: 'center', position: 'relative' }}
+            >
+              <input
+                type="checkbox"
+                checked={includeImages}
+                onChange={(e) => setIncludeImages(e.target.checked)}
+                aria-label={includeImages ? 'Disable images' : 'Enable images'}
+              />
+              <span className="toggle-slider"></span>
+            </label>
+            <span className="toggle-label" style={{ marginRight: '8px' }}>
+              Images {includeImages ? 'On' : 'Off'}
+            </span>
             <button
               className="button"
               onClick={generateIdeas}
@@ -486,7 +589,6 @@ export default function Home() {
             >
               {loadingIdeas ? 'Generating...' : 'Generate Ideas'}
             </button>
-            {(ideas.length > 0 || note) && (
               <button
                 className="button secondary"
                 onClick={reset}
@@ -494,70 +596,274 @@ export default function Home() {
               >
                 Reset
               </button>
-            )}
           </div>
           
           {/* Include Images Toggle */}
-          <div style={{ 
-            marginTop: '16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '12px 16px',
-            background: '#f8f9fa',
-            borderRadius: '8px',
-            border: '1px solid #e5e7eb'
-          }}>
-            <label style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '8px',
-              cursor: 'pointer',
-              userSelect: 'none'
-            }}>
-              <input
-                type="checkbox"
-                checked={includeImages}
-                onChange={(e) => setIncludeImages(e.target.checked)}
-                style={{
-                  width: '18px',
-                  height: '18px',
-                  cursor: 'pointer',
-                  accentColor: '#8B5CF6'
-                }}
-              />
-              <span style={{ 
-                fontSize: '14px', 
-                fontWeight: '500',
-                color: '#374151'
-              }}>
-                Include images in posts (uses Pexels API)
-              </span>
-            </label>
-            <span style={{
-              fontSize: '12px',
-              color: '#6b7280',
-              marginLeft: '8px'
-            }}>
-              {includeImages ? '🖼️ Images enabled' : '📝 Text only'}
-            </span>
-          </div>
+          {/* Include Images Toggle is now above in the main action row */}
         </div>
 
         {error && (
-          <div className="error" style={{ maxWidth: '900px', margin: '0 auto 32px' }}>
+          <div className="error" style={{ margin: '0 0 32px' }}>
             {error}
           </div>
         )}
 
-        {/* Ideas Section */}
-        {ideas.length > 0 && !selectedIdea && (
-          <div style={{ marginBottom: '40px' }}>
-            <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+        {/* Two-Column Layout - Always Visible */}
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'minmax(260px, 0.3fr) minmax(0, 0.7fr)', 
+          gap: '32px',
+          alignItems: 'start',
+          flex: 1,
+          overflow: 'hidden'
+          }}>
+            {/* LEFT COLUMN */}
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '24px', height: '100%', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                {leftTabs.map(tab => {
+                  const TabIcon = tab.icon
+                  return (
+                    <button
+                      key={tab.id}
+                      className={`button ${activeLeftTab === tab.id ? '' : 'secondary'}`}
+                      onClick={() => setActiveLeftTab(tab.id)}
+                      disabled={!note}
+                      style={{
+                        padding: '12px',
+                        width: '56px',
+                        height: '56px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: !note ? 0.5 : 1,
+                        cursor: !note ? 'not-allowed' : 'pointer'
+                      }}
+                      title={tab.label}
+                      aria-label={tab.label}
+                    >
+                      <TabIcon size={20} />
+                    </button>
+                  )
+                })}
+              </div>
+
+              {activeLeftTab === 'design' && (
+                <div style={{ opacity: !note ? 0.5 : 1, pointerEvents: !note ? 'none' : 'auto' }}>
+                  <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
+                    Customize Design
+                  </h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000000' }}>
+                        Font Combination
+                      </label>
+                      <select
+                        value={fontCombinationId}
+                        onChange={(e) => setFontCombinationId(e.target.value)}
+                        className="input"
+                        style={{ cursor: 'pointer', padding: '12px' }}
+                      >
+                        {FONT_COMBINATIONS.map(combo => (
+                          <option key={combo.id} value={combo.id}>
+                            {combo.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000000' }}>
+                        Color Theme
+                      </label>
+                      <select
+                        value={colorThemeId}
+                        onChange={(e) => setColorThemeId(e.target.value)}
+                        className="input"
+                        style={{ cursor: 'pointer', padding: '12px' }}
+                      >
+                        {COLOR_THEMES.map(theme => (
+                          <option key={theme.id} value={theme.id}>
+                            {theme.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {backgroundOptions.length > 0 && (
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000000' }}>
+                          Background Texture
+                        </label>
+                        <select
+                          value={backgroundId}
+                          onChange={(e) => setBackgroundId(e.target.value)}
+                          className="input"
+                          style={{ cursor: 'pointer', padding: '12px' }}
+                        >
+                          {backgroundOptions.map(option => (
+                            <option key={option.id} value={option.id}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {activeLeftTab === 'slides' && (
+                <div style={{ opacity: !note ? 0.5 : 1, pointerEvents: !note ? 'none' : 'auto' }}>
+                  <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
+                    Slides Content
+                  </h3>
+                  <p style={{ fontSize: '14px', color: '#4b5563', marginBottom: '16px' }}>
+                    {!note ? 'Generate a post to edit slides here' : 'Edit any slide text below. Save to refresh the preview and generated assets.'}
+                  </p>
+                  {note && (
+                  <div style={{ display: 'grid', gap: '12px' }}>
+                    {editedSlides.map((slide, index) => {
+                      const kind = note.slides[index]?.kind ?? 'MIDDLE'
+                      const isExpanded = expandedSlideIndexes.includes(index)
+                      return (
+                        <div 
+                          key={index}
+                          className={`slide-card ${kind === 'HOOK' ? 'hook' : kind === 'CTA' ? 'cta' : 'middle'}`}
+                          style={{ padding: '16px' }}
+                        >
+                          <button
+                            onClick={() => toggleSlideExpansion(index)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              width: '100%',
+                              background: 'none',
+                              border: 'none',
+                              padding: 0,
+                              margin: 0,
+                              cursor: 'pointer',
+                              textAlign: 'left'
+                            }}
+                          >
+                            <div style={{ 
+                              fontSize: '11px', 
+                              fontWeight: '700', 
+                              color: '#999999', 
+                              textTransform: 'uppercase',
+                              letterSpacing: '1px'
+                            }}>
+                              Slide {index + 1} • {kind}
+                            </div>
+                            <span style={{ fontSize: '18px', color: '#999999', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
+                              ▾
+                            </span>
+                          </button>
+
+                          {isExpanded && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7280', marginBottom: '6px' }}>
+                                Title
+                              </label>
+                              <input
+                                className="input"
+                                value={slide.title ?? ''}
+                                onChange={(e) => handleSlideFieldChange(index, 'title', e.target.value)}
+                                placeholder="Enter slide title"
+                                style={{ width: '100%' }}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7280', marginBottom: '6px' }}>
+                                Content
+                              </label>
+                              <textarea
+                                className="input"
+                                value={slide.content ?? ''}
+                                onChange={(e) => handleSlideFieldChange(index, 'content', e.target.value)}
+                                placeholder="Enter slide content"
+                                rows={kind === 'CTA' ? 5 : 6}
+                                style={{ width: '100%', resize: 'vertical', minHeight: '120px' }}
+                              />
+                            </div>
+                          </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  )}
+                  {note && (
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'flex-end', 
+                    gap: '12px',
+                    marginTop: '24px'
+                  }}>
+                    <button
+                      className="button secondary"
+                      onClick={resetEditedSlides}
+                      disabled={!slidesDirty || savingSlides}
+                      style={{ minWidth: '130px' }}
+                    >
+                      Reset Changes
+                    </button>
+                    <button
+                      className="button"
+                      onClick={saveEditedSlides}
+                      disabled={!slidesDirty || savingSlides}
+                      style={{ minWidth: '130px' }}
+                    >
+                      {savingSlides ? 'Saving...' : 'Save Slides'}
+                    </button>
+                  </div>
+                  )}
+                </div>
+              )}
+
+              {activeLeftTab === 'caption' && (
+                <div style={{ opacity: !note ? 0.5 : 1, pointerEvents: !note ? 'none' : 'auto' }}>
+                  <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
+                    Instagram Caption
+                  </h3>
+                  <div style={{ 
+                    padding: '20px', 
+                    background: '#fafafa',
+                    border: '2px solid #e5e5e5',
+                    borderRadius: '12px',
+                    whiteSpace: 'pre-wrap',
+                    fontSize: '15px',
+                    lineHeight: '1.8',
+                    color: '#000000'
+                  }}>
+                    {note ? note.caption : 'Generate a post to see the caption here'}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* RIGHT COLUMN - Ideas, Loading, or Generated Slides */}
+            <div style={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '24px', minHeight: 0 }}>
+              {/* Show loading state while generating ideas */}
+              {loadingIdeas && (
+                <div className="card" style={{ textAlign: 'center', padding: '48px 20px' }}>
+                  <div className="spinner" style={{ margin: '0 auto 20px', width: '48px', height: '48px' }}></div>
+                  <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '8px', color: '#000000' }}>
+                    Generating ideas...
+                  </h3>
+                  <p style={{ fontSize: '15px', color: '#666666' }}>
+                    Sit tight—Gemini is crafting 10 fresh angles for you.
+                  </p>
+                </div>
+              )}
+
+              {/* Show Ideas if available and no note selected */}
+              {ideas.length > 0 && !selectedIdea && !note && !loadingIdeas && (
+                <div className="card" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
               <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
                 Choose an Idea
               </h3>
-              <div style={{ display: 'grid', gap: '12px' }}>
+                  <div style={{ display: 'grid', gap: '12px', flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '6px' }}>
                 {ideas.map((idea, index) => (
                   <button
                     key={index}
@@ -569,15 +875,13 @@ export default function Home() {
                     <span style={{ flex: 1 }}>{idea}</span>
                   </button>
                 ))}
-              </div>
             </div>
           </div>
         )}
 
-        {/* Loading Steps Section */}
+              {/* Show Loading Steps if generating */}
         {selectedIdea && loadingNote && (
-          <div style={{ marginBottom: '40px' }}>
-            <div className="card" style={{ maxWidth: '900px', margin: '0 auto' }}>
+                <div className="card">
               <h2 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '32px', color: '#000000' }}>
                 {selectedIdea}
               </h2>
@@ -681,59 +985,14 @@ export default function Home() {
                   }}>
                     Rendering
                   </span>
-                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Note Results */}
+              {/* Show Generated Slides if note exists */}
         {note && !loadingNote && (
-          <div>
-            {/* Theme Customization */}
-            <div className="card" style={{ maxWidth: '900px', margin: '0 auto 32px' }}>
-              <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
-                Customize Design
-              </h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000000' }}>
-                    Font Combination
-                  </label>
-                  <select
-                    value={fontCombinationId}
-                    onChange={(e) => setFontCombinationId(e.target.value)}
-                    className="input"
-                    style={{ cursor: 'pointer', padding: '12px' }}
-                  >
-                    {FONT_COMBINATIONS.map(combo => (
-                      <option key={combo.id} value={combo.id}>
-                        {combo.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000000' }}>
-                    Color Theme
-                  </label>
-                  <select
-                    value={colorThemeId}
-                    onChange={(e) => setColorThemeId(e.target.value)}
-                    className="input"
-                    style={{ cursor: 'pointer', padding: '12px' }}
-                  >
-                    {COLOR_THEMES.map(theme => (
-                      <option key={theme.id} value={theme.id}>
-                        {theme.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* Generated Slides */}
+                <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
             <SlideImageGenerator 
               slides={note.slides}
               ideaTitle={note.ideaTitle}
@@ -742,108 +1001,37 @@ export default function Home() {
               colorThemeId={colorThemeId}
               accountDescription={accountDescription}
               caption={note.caption}
-            />
+                    backgroundImageUrl={
+                      backgroundId
+                        ? backgroundOptions.find(option => option.id === backgroundId)?.src ?? null
+                        : null
+                    }
+                  />
+                </div>
+              )}
 
-            {/* Slides Content */}
-            <div className="card" style={{ maxWidth: '900px', margin: '32px auto' }}>
-              <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
-                Slides Content
+              {/* Show Empty State if nothing to show */}
+              {!ideas.length && !note && !loadingNote && !loadingIdeas && (
+                <div className="card" style={{ textAlign: 'center', padding: '60px 20px', color: '#999' }}>
+                  <h3 style={{ 
+                    marginBottom: '16px', 
+                    fontSize: '24px',
+                    fontWeight: '700',
+                    color: '#000000'
+                  }}>
+                    Your slides
               </h3>
-              <p style={{ fontSize: '14px', color: '#4b5563', marginBottom: '16px' }}>
-                Edit any slide text below. Save to refresh the preview and generated assets.
-              </p>
-              <div style={{ display: 'grid', gap: '16px' }}>
-                {editedSlides.map((slide, index) => {
-                  const kind = note.slides[index]?.kind ?? 'MIDDLE'
-                  return (
-                    <div 
-                      key={index}
-                      className={`slide-card ${kind === 'HOOK' ? 'hook' : kind === 'CTA' ? 'cta' : 'middle'}`}
-                    >
-                      <div style={{ 
-                        fontSize: '11px', 
-                        fontWeight: '700', 
-                        color: '#999999', 
-                        marginBottom: '12px',
-                        textTransform: 'uppercase',
-                        letterSpacing: '1px'
-                      }}>
-                        Slide {index + 1} • {kind}
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7280', marginBottom: '6px' }}>
-                            Title
-                          </label>
-                          <input
-                            className="input"
-                            value={slide.title ?? ''}
-                            onChange={(e) => handleSlideFieldChange(index, 'title', e.target.value)}
-                            placeholder="Enter slide title"
-                            style={{ width: '100%' }}
-                          />
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7280', marginBottom: '6px' }}>
-                            Content
-                          </label>
-                          <textarea
-                            className="input"
-                            value={slide.content ?? ''}
-                            onChange={(e) => handleSlideFieldChange(index, 'content', e.target.value)}
-                            placeholder="Enter slide content"
-                            rows={kind === 'CTA' ? 5 : 6}
-                            style={{ width: '100%', resize: 'vertical', minHeight: '120px' }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'flex-end', 
-                gap: '12px',
-                marginTop: '24px'
-              }}>
-                <button
-                  className="button secondary"
-                  onClick={resetEditedSlides}
-                  disabled={!slidesDirty || savingSlides}
-                  style={{ minWidth: '130px' }}
-                >
-                  Reset Changes
-                </button>
-                <button
-                  className="button"
-                  onClick={saveEditedSlides}
-                  disabled={!slidesDirty || savingSlides}
-                  style={{ minWidth: '130px' }}
-                >
-                  {savingSlides ? 'Saving...' : 'Save Slides'}
-                </button>
-              </div>
+                  <p style={{ fontSize: '15px', color: '#666' }}>
+                    Generate ideas to get started
+                  </p>
+                </div>
+              )}
             </div>
+          </div>
 
-            {/* Caption */}
-            <div className="card" style={{ maxWidth: '900px', margin: '0 auto' }}>
-              <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
-                Instagram Caption
-              </h3>
-              <div style={{ 
-                padding: '20px', 
-                background: '#fafafa',
-                border: '2px solid #e5e5e5',
-                borderRadius: '12px',
-                whiteSpace: 'pre-wrap',
-                fontSize: '15px',
-                lineHeight: '1.8',
-                color: '#000000'
-              }}>
-                {note.caption}
-              </div>
-            </div>
+        {/* Debug Panel - Full Width Below */}
+        {note && !loadingNote && (
+          <div>
 
             {/* DEBUG: Gemini Output & Pexels Integration */}
             {showDebugPanel && (
@@ -852,7 +1040,7 @@ export default function Home() {
                 🐛 DEBUG: Gemini Output & Pexels Integration
               </h3>
               
-              <div style={{ 
+                    <div style={{ 
                 padding: '20px', 
                 background: '#0a0a0a',
                 border: '1px solid #333',
@@ -869,7 +1057,7 @@ export default function Home() {
                     <div key={index} style={{ marginBottom: '30px', paddingBottom: '20px', borderBottom: index < note.slides.length - 1 ? '1px solid #333' : 'none' }}>
                       <div style={{ color: '#ffbd59', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
                         ━━━ SLIDE {index + 1}/{note.slides.length} • {slide.kind} ━━━
-                      </div>
+                    </div>
                       
                       <div style={{ marginLeft: '20px' }}>
                         <div style={{ marginBottom: '8px' }}>
@@ -926,7 +1114,7 @@ export default function Home() {
                                         {emphasis.imageUrl ? (
                                           <div style={{ marginTop: '4px' }}>
                                             <span style={{ color: '#00ff00' }}>✅ SUCCESS!</span>
-                                            <div style={{ 
+                      <div style={{ 
                                               marginTop: '6px', 
                                               padding: '8px', 
                                               background: '#0a0a0a', 
@@ -935,7 +1123,7 @@ export default function Home() {
                                               wordBreak: 'break-all'
                                             }}>
                                               {emphasis.imageUrl}
-                                            </div>
+                      </div>
                                             <img 
                                               src={emphasis.imageUrl} 
                                               alt="Preview" 
@@ -959,7 +1147,7 @@ export default function Home() {
                                       </div>
                                       
                                       {!emphasis.imageUrl && emphasis.imageSearch && (
-                                        <div style={{ 
+                      <div style={{ 
                                           marginTop: '10px', 
                                           padding: '10px', 
                                           background: '#2a1a1a', 
@@ -973,24 +1161,24 @@ export default function Home() {
                                           <br />• Rate limit exceeded (200/hour)
                                           <br />• Network error
                                           <br />• No matching images for these keywords
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
+                      </div>
+                    )}
+                  </div>
+              </div>
                                 </>
                               )}
                               
                               {slide.kind !== 'MIDDLE' && (
                                 <div style={{ marginTop: '8px', color: '#888', fontSize: '12px' }}>
                                   ℹ️  Images only available for MIDDLE slides
-                                </div>
+            </div>
                               )}
                             </div>
                           </div>
                         )}
                         
                         {!emphasis && (
-                          <div style={{ 
+              <div style={{ 
                             marginTop: '10px', 
                             padding: '10px', 
                             background: '#2a1a1a', 
@@ -1036,8 +1224,8 @@ export default function Home() {
                       </pre>
                     </div>
                   </div>
-                </div>
               </div>
+            </div>
             </div>
             )}
           </div>
