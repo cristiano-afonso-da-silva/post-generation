@@ -1,508 +1,234 @@
-# 🎨 Post My Note - AI-Powered Social Media Content Creator
+# 🎨 Post My Note – AI-Powered Instagram Carousel Generator
 
-A complete full-stack application for generating high-quality Instagram note posts using Google Gemini AI. Generate post ideas, create complete notes with slides and captions, and download ready-to-post images.
+This repository contains the full-stack application that powers Post My Note: a workflow for creating high-converting Instagram carousels (hook → middle slides → CTA) complete with captions, downloadable images, and integration with billing and analytics services.  
 
-## ✨ Features
-
-### Backend API
-- 🤖 **AI-Powered Generation** - Uses Google Gemini 2.0 Flash for high-quality content
-- 💡 **Post Ideas Generation** - Generate 10 unique, diverse post ideas
-- 🎨 **Note Creation** - Complete note posts with:
-  - Hook slide (concise, powerful opening)
-  - 2-7 middle slides (detailed content)
-  - CTA slide (call to action)
-  - Professional Instagram caption with hashtags
-- ✅ **Comprehensive Validation** - Ensures quality and structure
-- 📊 **Statistics & Metadata** - Word counts, generation times, and more
-
-### Frontend Web App
-- 🔐 **Authentication System** - Secure user authentication with Supabase
-  - Landing page with feature showcase
-  - Email/password sign up with verification
-  - Sign in/out functionality
-  - Protected routes
-- 🎨 **Modern AI Design** - Dark theme with purple gradients and glassmorphism
-- 📱 **Responsive UI** - Beautiful, mobile-friendly interface
-- 🖼️ **Image Generation** - Automatically generate downloadable slide images
-  - 1080x1350px (4:5 ratio for Instagram)
-  - Custom backgrounds and fonts
-  - Dynamic color themes (6 presets)
-  - AI-powered text emphasis (underline & highlight)
-  - Font combinations (Poppins + DreamingOutloudSans)
-  - Vertically centered content
-  - Safe zones for Instagram UI
-- 📥 **Download Functionality** - Download individual slides or all at once
-- 💫 **Smooth Animations** - Polished user experience
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Node.js 18+ installed
-- npm or yarn
-- Google Gemini API key ([Get one here](https://makersuite.google.com/app/apikey))
-- Supabase account ([Sign up here](https://supabase.com))
-
-### 1. Clone and Setup
-
-```bash
-# Clone the repository
-cd post-generation
-
-# Install all dependencies (backend + frontend)
-npm install
-```
-
-### 2. Environment Setup
-
-Create environment files in the root folder:
-
-**Backend configuration** (`.env`):
-```bash
-echo "GEMINI_API_KEY=your_api_key_here" > .env
-echo "PORT=3000" >> .env
-```
-
-**Frontend configuration** (`.env.local`):
-```bash
-cat > .env.local << EOF
-# Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-
-# Backend API URL
-NEXT_PUBLIC_API_URL=http://localhost:3000
-EOF
-```
-
-**To get your Supabase credentials:**
-1. Go to [supabase.com](https://supabase.com) and create a project
-2. In your project dashboard, go to Settings → API
-3. Copy your Project URL and anon/public key
-4. Paste them into `.env.local`
-
-### 3. Add Background Image (Optional)
-
-Place a background image at:
-```
-public/backgrounds/background.jpg
-```
-
-### 4. Start the Application
-
-**Option 1: Start both frontend and backend together (recommended):**
-```bash
-npm run dev
-```
-
-**Option 2: Start them separately:**
-```bash
-# Terminal 1 - Backend API
-npm run dev:backend
-
-# Terminal 2 - Frontend
-npm run dev:frontend
-```
-
-The app will be available at `http://localhost:3000`.
-
-### 5. Use the App
-
-1. Open `http://localhost:3000` in your browser
-2. You'll see the landing page - click "Get Started" or "Sign Up"
-3. Create an account with your email
-4. Check your email for a verification code (6 digits)
-5. Enter the code to verify your account
-6. Once signed in, you can:
-   - Enter your account description
-   - Generate 10 post ideas
-   - Select an idea to generate a complete note
-   - Customize font and color themes
-   - Download the slide images!
-
-## 📁 Project Structure
-
-```
-post-generation/
-├── app/
-│   ├── page.tsx            # Main note generator page (protected)
-│   ├── layout.tsx          # Root layout with AuthProvider
-│   ├── globals.css         # Global styles
-│   ├── landing/
-│   │   └── page.tsx        # Landing page
-│   ├── signin/
-│   │   └── page.tsx        # Sign in page
-│   ├── signup/
-│   │   └── page.tsx        # Sign up page
-│   ├── verify/
-│   │   └── page.tsx        # Email verification page
-│   ├── components/
-│   │   └── SlideImageGenerator.tsx  # Image generation component
-│   ├── context/
-│   │   └── AuthContext.tsx # Authentication context
-│   ├── lib/
-│   │   └── supabase.ts     # Supabase client
-│   └── config/
-│       ├── slideThemes.ts  # Font & color theme configuration
-│       └── README.md       # Theme customization guide
-├── public/
-│   ├── backgrounds/
-│   │   ├── background.jpg  # Slide background image
-│   │   └── README.md
-│   └── fonts/
-│       ├── Poppins-Bold.ttf
-│       └── DreamingOutloudSans-Regular.otf
-├── server.mjs              # Express API server
-├── test-api.mjs            # Interactive test script
-├── package.json            # All dependencies (backend + frontend)
-├── .env                    # Backend environment variables (API key)
-├── .env.local              # Frontend environment variables (Supabase keys)
-├── next.config.js          # Next.js configuration
-├── tsconfig.json           # TypeScript configuration
-└── README.md               # This file
-```
-
-## 🔌 API Documentation
-
-### Base URL
-```
-http://localhost:3000/api
-```
-
-**Note:** The backend API runs on port 3000 with `/api` prefix, while the Next.js frontend runs on the same port.
-
-### Endpoints
-
-#### 1. Health Check
-```http
-GET /health
-```
-
-**Response:**
-```json
-{
-  "status": "healthy",
-  "model": "gemini-2.0-flash-exp",
-  "timestamp": "2025-11-06T..."
-}
-```
-
-#### 2. Generate Ideas
-```http
-POST /api/social
-Content-Type: application/json
-
-{
-  "action": "ideas",
-  "accountDescription": "fitness coach for busy professionals"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "action": "ideas",
-  "data": {
-    "ideas": [
-      "Why Your Morning Routine Is Sabotaging Your Productivity",
-      "The Five Minute Framework That Doubled My Client Base",
-      ...
-    ],
-    "formatted": "...formatted text..."
-  },
-  "meta": {
-    "count": 10,
-    "generationTime": "2341ms",
-    "model": "gemini-2.0-flash-exp"
-  }
-}
-```
-
-#### 3. Generate Note
-```http
-POST /api/social
-Content-Type: application/json
-
-{
-  "action": "note",
-  "ideaTitle": "Why Your Morning Routine Is Sabotaging Your Productivity",
-  "accountDescription": "productivity coach for remote workers"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "action": "note",
-  "data": {
-    "ideaTitle": "Why Your Morning Routine Is Sabotaging Your Productivity",
-    "slides": [
-      {
-        "title": "Your morning routine is destroying your productivity",
-        "content": "",
-        "kind": "HOOK"
-      },
-      {
-        "title": "The Problem",
-        "content": "Most people pack their mornings with too many rigid tasks...",
-        "kind": "MIDDLE"
-      },
-      ...
-    ],
-    "caption": "Most morning routines fail because...",
-    "formatted": "...markdown formatted output...",
-    "stats": {
-      "totalSlides": 6,
-      "hookWords": 9,
-      "middleSlides": 4,
-      "captionWords": 187
-    }
-  },
-  "meta": {
-    "generationTime": "4521ms",
-    "model": "gemini-2.0-flash-exp"
-  }
-}
-```
-
-## 🎨 Slide Structure
-
-### Hook Slide
-- **Title:** Hook text (max 10 words)
-- **Content:** Empty
-- **Purpose:** Create curiosity and make readers swipe
-
-### Middle Slides (2-7 slides)
-- **Title:** 2-5 words (clear, punchy headline)
-- **Content:** 18-32 words (specific, actionable information)
-- **Purpose:** Deliver value and progress logically
-
-### CTA Slide
-- **Title:** Clear call-to-action
-- **Content:** Imperative action text
-- **Purpose:** Encourage engagement
-
-## 🖼️ Image Generation
-
-The frontend automatically generates downloadable images for each slide:
-
-- **Dimensions:** 1080x1350px (4:5 aspect ratio for Instagram)
-- **Background:** Pure white (#FFFFFF)
-- **Text:** Black (#000000)
-- **Safe Zones:** Margins to avoid Instagram UI overlap
-- **Format:** PNG
-- **Features:**
-  - Vertically centered text
-  - Proper text wrapping
-  - Slide number indicator
-  - Navigation arrow (if not last slide)
-  - Purple accent highlights on hook slides
-
-## 🛠️ Configuration
-
-### Environment Variables
-
-Create `.env` (backend):
-```bash
-GEMINI_API_KEY=your_api_key_here
-PORT=3000
-NODE_ENV=development
-```
-
-Create `.env.local` (frontend):
-```bash
-# Supabase Configuration (REQUIRED)
-NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-
-# Backend API URL (Optional, defaults to http://localhost:3000)
-NEXT_PUBLIC_API_URL=http://localhost:3000
-```
-
-### Model Selection
-
-To change the AI model, edit `server.mjs`:
-```javascript
-const GEMINI_MODEL = 'gemini-2.0-flash-exp'; // Current model
-
-// Available models:
-// - gemini-2.0-flash-exp (experimental, latest features)
-// - gemini-2.0-flash (stable Gemini 2.0)
-// - gemini-2.5-pro (if available)
-```
-
-## 📊 Performance
-
-Typical generation times:
-- **Ideas:** 2-4 seconds
-- **Note:** 4-8 seconds
-- **Image Generation:** Instant (client-side)
-
-## 🧪 Testing
-
-### Test Backend API
-
-```bash
-npm test
-```
-
-This runs an interactive test script that:
-- Checks server health
-- Generates ideas
-- Lets you choose an idea
-- Generates a note
-- Shows formatted output
-
-### Test Full Application
-
-```bash
-npm run dev
-```
-
-Then open `http://localhost:3000` in your browser.
-
-## 🐛 Troubleshooting
-
-### Backend Issues
-
-**"Missing GEMINI_API_KEY"**
-- Make sure `.env` file exists in the root folder
-- Check the API key is valid: `GEMINI_API_KEY=your_key`
-
-**"Port 3000 already in use"**
-- Kill the process: `lsof -ti:3000 | xargs kill -9`
-- Or change port in `.env`: `PORT=3001`
-
-**"Model not found"**
-- Check the model name in `server.mjs`
-- Try: `gemini-2.0-flash` or `gemini-2.0-flash-exp`
-
-### Frontend Issues
-
-**"Failed to fetch"**
-- Make sure both frontend and backend are running (`npm run dev`)
-- Check CORS configuration in `server.mjs`
-- Verify `NEXT_PUBLIC_API_URL` matches backend URL
-
-**Authentication not working**
-- Check Supabase credentials in `.env.local`
-- Verify Supabase project is active
-- Check browser console for errors
-- Enable email authentication in Supabase dashboard:
-  - Go to Authentication → Settings
-  - Enable Email provider
-  - Configure email templates (optional)
-
-**Images not generating**
-- Check browser console for errors
-- Ensure canvas is supported in your browser
-- Make sure background image exists at `public/backgrounds/background.jpg`
-- Verify fonts are loaded correctly
-- Try refreshing the page
-
-## 📝 Development
-
-### Development Mode (Both Frontend + Backend)
-
-```bash
-npm run dev  # Runs both with auto-reload
-```
-
-### Or run separately:
-
-**Backend:**
-```bash
-npm run dev:backend  # Auto-reload on changes
-```
-
-**Frontend:**
-```bash
-npm run dev:frontend  # Next.js dev server with hot reload
-```
-
-### Build for Production
-
-```bash
-# Build frontend
-npm run build
-
-# Start production server
-npm start
-
-# Start backend API (in separate terminal)
-npm run start:backend
-```
-
-## 🎯 Usage Examples
-
-### Generate Ideas
-```bash
-curl -X POST http://localhost:3000/api/social \
-  -H "Content-Type: application/json" \
-  -d '{
-    "action": "ideas",
-    "accountDescription": "productivity coach helping remote workers"
-  }'
-```
-
-### Generate Note
-```bash
-curl -X POST http://localhost:3000/api/social \
-  -H "Content-Type: application/json" \
-  -d '{
-    "action": "note",
-    "ideaTitle": "Why Your Morning Routine Is Sabotaging Your Productivity",
-    "accountDescription": "productivity coach"
-  }'
-```
-
-## 🔒 Security Notes
-
-- Never commit `.env` or `.env.local` files to git
-- Keep your Gemini API key secure
-- Keep your Supabase keys secure (they're already in `.gitignore`)
-- The anon key is safe to use in the frontend
-- For production, configure Supabase Row Level Security (RLS) policies
-- The `.gitignore` file is configured to exclude sensitive files
-
-## 📚 Tech Stack
-
-### Backend
-- **Node.js** - Runtime
-- **Express** - Web framework
-- **@google/generative-ai** - Gemini AI SDK
-- **dotenv** - Environment variables
-
-### Frontend
-- **Next.js 14** - React framework
-- **React** - UI library
-- **TypeScript** - Type safety
-- **Supabase** - Authentication & database
-- **Canvas API** - Image generation
-- **Custom Fonts** - Poppins & DreamingOutloudSans
-
-## 🤝 Contributing
-
-This is a demonstration project showing best practices for:
-- AI API integration
-- Structured output generation
-- Professional formatting
-- Image generation
-- Modern web UI
-
-Feel free to adapt and improve for your needs!
-
-## 📄 License
-
-MIT
-
-## 🙏 Acknowledgments
-
-- Powered by [Google Gemini AI](https://ai.google.dev/)
-- Built with modern web technologies
-- Inspired by best practices in AI content generation
+> **Why the big README?**  
+> The project originally shipped with more than a dozen Markdown docs (PEXELS_SETUP.md, FLEXIBLE_LAYOUT_FIX.md, etc.). Everything is now consolidated here so you only have one reference point.
 
 ---
 
-**Built with ❤️ for content creators**
+## 📦 What You Get
+
+| Area | Highlights |
+|------|------------|
+| **Generation** | Gemini 2.0 Flash for ideas + full notes, automatic underline/highlight extraction, image keywords, Pexels-powered images (unique horizontal 16:9), vertically centered slides that respect Instagram safe zones, editable preview that regenerates emphasis & imagery on save |
+| **Frontend** | Next.js 14, responsive UI, Auth-protected dashboard, slide editor, one-click downloads (single or zip), dynamic font/color themes, Pexels image toggle, debug panel (hidden by default) |
+| **Backend** | Next.js route handlers + Supabase for auth & credits, Stripe subscriptions (Portal + webhook), rate-limit aware Gemini retries, health checks |
+| **Dev Experience** | TypeScript, shared env handling, Supabase tooling, database migrations, detailed troubleshooting guides baked into this README |
+
+---
+
+## 🗺️ Architecture at a Glance
+
+- **app/page.tsx** – Main generator/preview/editor experience
+- **app/api/social/route.ts** – Core Gemini/Pexels orchestration
+- **app/components/SlideImageGenerator.tsx** – Canvas renderer (hook/middle/CTA) with safe-zone aware layout and image compositing
+- **Supabase** – Auth, user credits, saved generations
+- **Stripe** – Subscription checkout & billing portal
+- **Pexels** – Stock imagery for middle slides
+- **Google Gemini** – Idea and slide content generation, underline/highlight extraction
+
+---
+
+## 🛠️ Prerequisites
+
+- Node.js ≥ 18
+- npm (bundled) or yarn
+- Supabase project (auth + database)
+- Stripe account (for subscriptions/credits)
+- Google Gemini API key
+- Pexels API key (optional but recommended for imagery)
+- Vercel account (optional, for hosting)
+
+---
+
+## 🔑 Environment Variables
+
+Create **`.env.local`** (Next.js + API routes):
+
+| Variable | Description |
+|----------|-------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service-role key (server-side only) |
+| `NEXT_PUBLIC_APP_URL` | Base URL for client (e.g. `http://localhost:3000`) |
+| `GEMINI_API_KEY` | Google Gemini key |
+| `PEXELS_API_KEY` | Pexels key (required for images) |
+| `STRIPE_SECRET_KEY` | Stripe secret |
+| `STRIPE_PUBLISHABLE_KEY` | Stripe public key |
+| `STRIPE_WEBHOOK_SECRET` | Webhook signing secret |
+| `STRIPE_PRICE_ID_BASIC` / `STRIPE_PRICE_ID_PRO` | Plan IDs (if using plans) |
+| `NEXT_PUBLIC_STRIPE_BASIC_PRICE_ID` / `NEXT_PUBLIC_STRIPE_PRO_PRICE_ID` | Matching public IDs |
+| `NEXT_PUBLIC_STRIPE_PORTAL_RETURN_URL` | Where users land after portal |
+
+> **Tip:** Keep `.env` + `.env.local` in sync locally and in Vercel environment settings.
+
+---
+
+## 🧱 Database Setup (Supabase)
+
+1. **Create tables**  
+   ```sql
+   -- user_credits table (supabase_migration_user_credits.sql)
+   create table if not exists user_credits (
+     user_id uuid primary key references auth.users on delete cascade,
+     credits_remaining integer default 0,
+     current_plan text,
+     subscription_status text,
+     updated_at timestamptz default now()
+   );
+
+   -- generations table (supabase_migration_generations.sql)
+   create table if not exists generations (
+     id uuid primary key default uuid_generate_v4(),
+     user_id uuid references auth.users on delete cascade,
+     idea_title text,
+     slides jsonb,
+     caption text,
+     created_at timestamptz default now()
+   );
+   ```
+
+2. **RLS policies** – enable row level security and allow users to access only their rows (documentation covered in Supabase dashboard).
+
+3. **Auth** – enable email/password auth and configure the redirect URL:
+   - `Authentication → URL Configuration → Site URL` – `https://postmynote.app` (prod) or `http://localhost:3000`
+   - `Redirect URLs` – add `http://localhost:3000/**` for local testing
+
+---
+
+## 💳 Stripe Setup (Optional but recommended)
+
+1. Create products/prices (e.g., `Basic`, `Pro`) → copy price IDs into the environment vars above.
+2. Configure webhook:
+   ```bash
+   stripe listen --forward-to localhost:3000/api/stripe/webhook
+   ```
+   Use the signing secret in `STRIPE_WEBHOOK_SECRET`.
+3. The app exposes:
+   - `POST /api/stripe/create-checkout`
+   - `POST /api/stripe/create-portal`
+   - `POST /api/stripe/subscription-renewal`
+   - `POST /api/stripe/webhook`
+
+---
+
+## 📸 Pexels Integration
+
+1. Create an account at [pexels.com/api](https://www.pexels.com/api/)  
+2. Generate an API key → set `PEXELS_API_KEY`
+3. The app requests up to 5 landscape images per middle slide, filters by aspect ratio (≥1.2), and avoids reuse within a generation.
+4. Toggle imagery on/off via “Include images in posts” checkbox before generating or editing slides.
+
+---
+
+## ⚙️ Running Locally
+
+```bash
+npm install
+npm run dev         # Runs Next.js + API routes together
+# or
+npm run dev:frontend
+npm run dev:backend
+```
+
+Visit `http://localhost:3000`.
+
+---
+
+## 🧭 User Flow
+
+1. **Describe your business** → generate 10 ideas (free)
+2. **Pick one idea** → consumes 1 credit, generates:
+   - Hook + middle + CTA slides
+   - Instagram-ready caption
+   - Underline/highlight data + image keywords
+   - Pexels image URLs (if enabled)
+3. **Customize**  
+   - Change fonts/themes  
+   - Edit slide text inline → press **Save Slides** to re-run Gemini/Pexels for underline/highlight/images  
+   - Download individual slides or a zipped set
+
+---
+
+## 🖼️ Slide Rendering Notes
+
+- Canvas resolution: **1080 × 1350** (Instagram 4:5)
+- Safe zone: 100 px sides, 150 px top/bottom
+- Hook slides auto-scale font horizontally & vertically (≥ 50% size)
+- Middle slides auto-scale title/content + maintain 20 px spacing
+- Images: 880 × 495 (16:9), center-cropped with rounded corners
+- Highlights always render at 50% opacity regardless of theme
+
+---
+
+## 🧪 Testing Scripts
+
+```bash
+npm run lint
+npm run test        # Optional interactive API test script
+npm run build
+npm start           # Production mode (Next.js)
+```
+
+---
+
+## 🌐 Deployment Checklist
+
+1. Push to GitHub (optional: connect repo to Vercel)
+2. In Vercel project settings set environment vars (see table above)
+3. Add Supabase + Stripe webhook URLs to Vercel dashboard
+4. Update Supabase auth redirect URLs to include production domain
+5. Deploy from Vercel or run `vercel deploy`
+
+---
+
+## 🧭 Troubleshooting Guide
+
+| Issue | Fix |
+|-------|-----|
+| **Gemini 429 / quota** | Implemented retry/backoff (`callGeminiWithRetry`). If you still see warnings, wait for the suggested delay or upgrade limits. |
+| **Pexels returns no image** | Check `PEXELS_API_KEY`, watch the console for “Images disabled” or “NO KEYWORDS.” Gemini falls back to content keywords if needed. |
+| **Slides overflow vertically** | Hook + middle slides auto-scale; if content still breaks safe zones, reduce text or disable imagery. |
+| **Supabase login redirects to production domain** | Add `http://localhost:3000/**` to Supabase redirect allow list and set `NEXT_PUBLIC_APP_URL` per environment. |
+| **Local credits not updating** | Ensure `SUPABASE_SERVICE_ROLE_KEY` is present (used for server mutations). |
+| **Stripe webhook failing** | Verify `STRIPE_WEBHOOK_SECRET` matches the live/cli webhook; check Vercel logs. |
+
+---
+
+## 📝 Maintenance Recipes
+
+| Task | Command |
+|------|---------|
+| Add credits via script | `node scripts/add-credits.js <email> <amount>` (create similar to example used earlier) |
+| Clear cached slides | Delete `postGeneration_canvasImages` / `postGeneration_fullContentHash` from localStorage |
+| Toggle debug panel | In `app/page.tsx`, change `showDebugPanel` to `true` |
+| Update fonts/themes | Edit `app/config/slideThemes.ts` |
+| Adjust image layout | Modify `app/components/SlideImageGenerator.tsx` |
+
+---
+
+## 📚 Changelog Highlights (Previously Separate Docs)
+
+- **CENTERING_FIX_APPLIED / VERTICAL_CENTERING_FIX** – Hook/middle/CTA slides auto-center with dynamic sizing
+- **IMAGE_16_9_CROP** – Pexels images always render 16:9, left-aligned, full width
+- **IMAGE_TOGGLE_FEATURE** – UI checkbox + backend support for opting out of imagery
+- **FLEXIBLE_LAYOUT_FIX** – Middle slides shrink spacing/font down to 50% if required
+- **PEXELS_SETUP / PEXELS_INTEGRATION_SUMMARY** – Combined in Pexels section above
+- **SUPABASE_REDIRECT_CONFIG / QUICK_FIX_LOCALHOST / FIX_LOCALHOST_REDIRECT** – Combined in troubleshooting
+- **STRIPE_SETUP / VERCEL_*** – Covered in Deployment & Stripe sections
+- **DEBUG_PEXELS** – Debug view is still present (hidden via `showDebugPanel`)
+- **JSON_PARSE_FIX / CAROUSEL_FORMAT_FIX** – Code already updated; no further action required
+
+---
+
+## 👥 Credits & License
+
+- Built with ❤️ using **Next.js**, **Supabase**, **Stripe**, **Google Gemini**, **Pexels**
+- Fonts: Poppins, DreamingOutloudSans (licenses in `public/fonts`)
+- Background textures in `public/backgrounds`
+- **License:** MIT – feel free to fork and adapt
+
+---
+
+Need something that used to live in another doc? Everything should now be summarized here. If you notice a missing detail, check git history for the original Markdown file or open an issue. Happy building! 🎉

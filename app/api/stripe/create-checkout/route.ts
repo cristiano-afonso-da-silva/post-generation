@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('[CREATE-CHECKOUT] User found:', { email: userData.user.email })
+    console.log('[CREATE-CHECKOUT] User found:', { email: userData.user?.email })
 
     // Get or create Stripe customer
     console.log('[CREATE-CHECKOUT] Fetching user credits...')
@@ -142,10 +142,10 @@ export async function POST(request: NextRequest) {
 
     if (!customerId || !customerExists) {
       // Create new Stripe customer
-      console.log('[CREATE-CHECKOUT] Creating new Stripe customer...', { email: userData.user.email })
+      console.log('[CREATE-CHECKOUT] Creating new Stripe customer...', { email: userData.user?.email })
       try {
         const customer = await stripe.customers.create({
-          email: userData.user.email,
+          email: userData.user?.email || '',
           metadata: {
             userId: userId,
           },

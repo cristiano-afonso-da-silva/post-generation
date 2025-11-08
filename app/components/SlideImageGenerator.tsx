@@ -5,6 +5,42 @@ import { getFontCombination, getColorTheme } from '../config/slideThemes'
 import { useAuth } from '../context/AuthContext'
 import JSZip from 'jszip'
 
+function ensureColorAlpha(color: string, alpha = 0.5): string {
+  const clamped = Math.max(0, Math.min(1, alpha))
+  if (!color) return `rgba(0, 0, 0, ${clamped})`
+  const trimmed = color.trim()
+
+  if (trimmed.startsWith('rgba')) {
+    const parts = trimmed.slice(5, -1).split(',').map(part => part.trim())
+    const [r = '0', g = '0', b = '0'] = parts
+    return `rgba(${r}, ${g}, ${b}, ${clamped})`
+  }
+
+  if (trimmed.startsWith('rgb(')) {
+    const parts = trimmed.slice(4, -1).split(',').map(part => part.trim())
+    const [r = '0', g = '0', b = '0'] = parts
+    return `rgba(${r}, ${g}, ${b}, ${clamped})`
+  }
+
+  if (trimmed.startsWith('#')) {
+    let hex = trimmed.slice(1)
+    if (hex.length === 3) {
+      hex = hex.split('').map(ch => `${ch}${ch}`).join('')
+    }
+    if (hex.length === 6) {
+      const r = parseInt(hex.slice(0, 2), 16)
+      const g = parseInt(hex.slice(2, 4), 16)
+      const b = parseInt(hex.slice(4, 6), 16)
+      if (!Number.isNaN(r) && !Number.isNaN(g) && !Number.isNaN(b)) {
+        return `rgba(${r}, ${g}, ${b}, ${clamped})`
+      }
+    }
+  }
+
+  // Fallback: return original color (browser will handle)
+  return trimmed
+}
+
 interface Slide {
   title: string
   content: string
@@ -14,7 +50,7 @@ interface Slide {
 interface Props {
   slides: Slide[]
   ideaTitle: string
-  underlineWords?: Record<number, { underline: string; highlight: string }>
+  underlineWords?: Record<number, { underline: string; highlight: string; imageUrl?: string | null }>
   fontCombinationId?: string
   colorThemeId?: string
   accountDescription?: string
@@ -38,6 +74,16 @@ export default function SlideImageGenerator({
   const { user, refreshCredits } = useAuth()
   const hasDeductedCredit = useRef(false)
   const hasAutoSaved = useRef(false)
+  
+  // Use refs for values that should not trigger re-renders when changed
+  const accountDescriptionRef = useRef(accountDescription)
+  const captionRef = useRef(caption)
+  
+  // Update refs when props change
+  useEffect(() => {
+    accountDescriptionRef.current = accountDescription
+    captionRef.current = caption
+  }, [accountDescription, caption])
 
   // Get selected font combination and color theme
   const FONT_CONFIG = getFontCombination(fontCombinationId)
@@ -148,9 +194,9 @@ export default function SlideImageGenerator({
           userId: user.id,
           generationId: generationIdToSend,
           ideaTitle,
-          accountDescription,
+          accountDescription: accountDescriptionRef.current,
           slides,
-          caption,
+          caption: captionRef.current,
           underlineWords,
           fontCombinationId,
           colorThemeId,
@@ -179,7 +225,7 @@ export default function SlideImageGenerator({
     } catch (error: any) {
       console.error('❌ Error auto-saving generation:', error.message || error)
     }
-  }, [ideaTitle, accountDescription, slides, caption, underlineWords, fontCombinationId, colorThemeId, user?.id])
+  }, [ideaTitle, slides, underlineWords, fontCombinationId, colorThemeId, user?.id])
 
   const generateAllSlides = useCallback(async () => {
     setGenerating(true)
@@ -364,6 +410,9 @@ export default function SlideImageGenerator({
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    // Ensure global alpha reset before drawing
+    ctx.globalAlpha = 1
+
     // Remove asterisks from slide content
     const cleanSlide = {
       ...slide,
@@ -404,44 +453,103 @@ export default function SlideImageGenerator({
     // Center content area
     const centerY = safeMarginTop + (safeHeight / 2)
 
+    const highlightFillStyle = ensureColorAlpha(COLOR_THEME.highlightColor, 0.5)
+
     // For HOOK slide - just show the hook text with word highlighting
     if (cleanSlide.kind === 'HOOK') {
       const hookText = cleanSlide.title || cleanSlide.content
-      
-      // Style 1: Hook text
-      ctx.font = FONT_CONFIG.hook.font
-      ctx.fillStyle = COLOR_THEME.textColor
-      ctx.textAlign = 'left'
-      
-      const words = hookText.split(' ')
-      const lines: string[] = []
-      let currentLine = ''
-      
-      // Wrap text to fit width
-      for (const word of words) {
-        const testLine = currentLine ? `${currentLine} ${word}` : word
-        const metrics = ctx.measureText(testLine)
-        
-        if (metrics.width > safeWidth && currentLine) {
-          lines.push(currentLine)
-          currentLine = word
-        } else {
-          currentLine = testLine
+
+      const hookFontMatch = FONT_CONFIG.hook.font.match(/(\d+\.?\d*)px/)
+      const hookBaseFontSize = hookFontMatch ? parseFloat(hookFontMatch[1]) : 130
+      const hookLineHeightRatio = FONT_CONFIG.hook.lineHeight / Math.max(1, hookBaseFontSize)
+      const highlightOffsetRatio = 100 / Math.max(1, hookBaseFontSize)
+      const highlightHeightRatio = 120 / Math.max(1, hookBaseFontSize)
+
+      const buildHookFont = (size: number) =>
+        FONT_CONFIG.hook.font.replace(/(\d+\.?\d*)px/, `${size}px`)
+
+      const wrapHookText = (fontSize: number) => {
+        ctx.font = buildHookFont(fontSize)
+        const words = hookText.split(' ')
+        const wrappedLines: string[] = []
+        let currentLine = ''
+
+        for (const word of words) {
+          const testLine = currentLine ? `${currentLine} ${word}` : word
+          const metrics = ctx.measureText(testLine)
+
+          if (metrics.width > safeWidth && currentLine) {
+            wrappedLines.push(currentLine)
+            currentLine = word
+          } else {
+            currentLine = testLine
+          }
+        }
+        if (currentLine) wrappedLines.push(currentLine)
+
+        const lineHeight = fontSize * hookLineHeightRatio
+        const totalHeight =
+          (wrappedLines.length > 0 ? fontSize : 0) +
+          Math.max(0, wrappedLines.length - 1) * lineHeight +
+          (wrappedLines.length > 0 ? fontSize * 0.2 : 0)
+
+        let maxWidth = 0
+        wrappedLines.forEach(line => {
+          const metrics = ctx.measureText(line)
+          if (metrics.width > maxWidth) maxWidth = metrics.width
+        })
+
+        return {
+          lines: wrappedLines,
+          lineHeight,
+          totalHeight,
+          maxWidth
         }
       }
-      if (currentLine) lines.push(currentLine)
-      
-      // Get highlight word for hook slide
+
+      let hookFontSize = hookBaseFontSize
+      let hookLayout = wrapHookText(hookFontSize)
+
+      for (let i = 0; i < 8; i++) {
+        if (hookLayout.maxWidth <= safeWidth && hookLayout.totalHeight <= safeHeight) {
+          break
+        }
+
+        const widthScale = safeWidth / hookLayout.maxWidth
+        const heightScale = safeHeight / hookLayout.totalHeight
+        const scale = Math.max(0.5, Math.min(0.95, Math.min(widthScale, heightScale)))
+
+        const nextSize = Math.max(hookBaseFontSize * 0.5, Math.floor(hookFontSize * scale))
+        if (Math.abs(nextSize - hookFontSize) < 1) {
+          hookFontSize = Math.max(hookBaseFontSize * 0.5, hookFontSize - 2)
+        } else {
+          hookFontSize = nextSize
+        }
+
+        hookLayout = wrapHookText(hookFontSize)
+      }
+
+      const hookLineHeight = hookLayout.lineHeight
+      const hookLines = hookLayout.lines
+      const hookTotalHeight = hookLayout.totalHeight
+      const highlightOffset = hookFontSize * highlightOffsetRatio
+      const highlightHeight = hookFontSize * highlightHeightRatio
+
+      ctx.font = buildHookFont(hookFontSize)
+      ctx.fillStyle = COLOR_THEME.textColor
+      ctx.textAlign = 'left'
+
+      // Get highlight word
       const emphasisData = underlineWords[index] || { underline: '', highlight: '' }
       const highlightWord = emphasisData.highlight.toLowerCase().replace(/[.,!?;:–—\-'"]/g, '').trim()
-      
-      // Find the last occurrence of highlight word across all lines
+
+      // Find last occurrence of highlight word
       let lastHighlightLineIndex = -1
       let lastHighlightWordIndex = -1
-      
+
       if (highlightWord) {
-        for (let lineIdx = lines.length - 1; lineIdx >= 0; lineIdx--) {
-          const lineWords = lines[lineIdx].split(' ')
+        for (let lineIdx = hookLines.length - 1; lineIdx >= 0; lineIdx--) {
+          const lineWords = hookLines[lineIdx].split(' ')
           for (let wordIdx = lineWords.length - 1; wordIdx >= 0; wordIdx--) {
             const cleanWord = lineWords[wordIdx].toLowerCase().replace(/[.,!?;:–—\-'"]/g, '').trim()
             if (cleanWord === highlightWord) {
@@ -453,68 +561,63 @@ export default function SlideImageGenerator({
           if (lastHighlightLineIndex !== -1) break
         }
       }
-      
-      // Calculate vertical centering
-      const lineHeight = FONT_CONFIG.hook.lineHeight
-      const totalHeight = lines.length * lineHeight
-      let y = centerY - (totalHeight / 2) + 40
+
+      // Start Y position - center the entire text block
+      let y = centerY - (hookTotalHeight / 2) + (hookLines.length > 0 ? hookFontSize : 0)
       const x = safeMarginSides
-      
-      // Draw each line with word-level highlighting
-      lines.forEach((line, lineIndex) => {
+
+      // Draw each line
+      hookLines.forEach((line, lineIndex) => {
         const lineWords = line.split(' ')
-        let currentX = x
-        
-        // First pass: Draw highlight backgrounds (only for last occurrence)
+
+        // First pass: Draw highlight backgrounds
         let tempX = x
         lineWords.forEach((word, wordIndex) => {
           const cleanWord = word.toLowerCase().replace(/[.,!?;:–—\-'"]/g, '').trim()
           const wordMetrics = ctx.measureText(word)
-          
-          // Only highlight if this is the last occurrence
+
           if (cleanWord === highlightWord && lineIndex === lastHighlightLineIndex && wordIndex === lastHighlightWordIndex) {
-            // Strip punctuation for accurate highlight
             const cleanedWord = word.replace(/^[.,!?;:–—\-'"]+|[.,!?;:–—\-'"]+$/g, '')
             const cleanedMetrics = ctx.measureText(cleanedWord)
             const leadingPuncMatch = word.match(/^[.,!?;:–—\-'"]+/)
             const leadingPuncWidth = leadingPuncMatch ? ctx.measureText(leadingPuncMatch[0]).width : 0
-            
+
             const bgX = tempX + leadingPuncWidth
-            const bgY = y - 100
+            const bgY = y - highlightOffset
             const bgWidth = cleanedMetrics.width
-            const bgHeight = 120
-            
-            ctx.fillStyle = COLOR_THEME.highlightColor
-            ctx.fillRect(bgX, bgY, bgWidth, bgHeight)
+
+            ctx.fillStyle = highlightFillStyle
+            ctx.fillRect(bgX, bgY, bgWidth, highlightHeight)
           }
-          
+
           const spaceWidth = ctx.measureText(' ').width
           tempX += wordMetrics.width + spaceWidth
         })
-        
+
         // Second pass: Draw text
+        let currentX = x
         lineWords.forEach((word, wordIndex) => {
           ctx.fillStyle = COLOR_THEME.textColor
           ctx.fillText(word, currentX, y)
-          
+
           const wordMetrics = ctx.measureText(word)
           currentX += wordMetrics.width
           if (wordIndex < lineWords.length - 1) {
             currentX += ctx.measureText(' ').width
           }
         })
-        
-        y += lineHeight
+
+        y += hookLineHeight
       })
-      
+
     } else if (cleanSlide.kind === 'CTA') {
-      // Style 3: CTA content with underlines and line breaks after ! ? and .
+      // CTA content with underlines and line breaks
       ctx.font = FONT_CONFIG.content.font
       ctx.fillStyle = COLOR_THEME.textColor
       ctx.textAlign = 'left'
       const x = safeMarginSides
       
-      // Split by periods, exclamation marks, and question marks
+      // Split by sentences
       const sentences = cleanSlide.content.split(/([.!?])\s+/).filter(s => s.trim())
       const lines: string[] = []
       
@@ -525,10 +628,7 @@ export default function SlideImageGenerator({
         
         if (!sentence) continue
         
-        // Add punctuation back to sentence
         const fullSentence = sentence + punctuation
-        
-        // Wrap each sentence
         const sentenceWords = fullSentence.split(' ')
         let currentLine = ''
         
@@ -545,19 +645,20 @@ export default function SlideImageGenerator({
         }
         if (currentLine) lines.push(currentLine)
         
-        // Add empty line after sentence (except for last sentence)
+        // Add empty line after sentence (except for last)
         if (i + 2 < sentences.length || (i + 1 < sentences.length && punctuation)) {
-          lines.push('') // Empty line
+          lines.push('')
         }
       }
       
-      // Get underline words for CTA
+      // Get underline words
       const emphasisData = underlineWords[index] || { underline: '', highlight: '' }
       const underlinePhrases = emphasisData.underline.split(',').map(p => p.trim()).filter(p => p)
       
+      // Calculate true vertical center
       const lineHeight = FONT_CONFIG.content.lineHeight
-      const totalHeight = lines.length * lineHeight
-      let y = centerY - (totalHeight / 2) + 35
+      const totalHeight = (lines.length - 1) * lineHeight  // Height between lines
+      let y = centerY - (totalHeight / 2)
       
       // Draw CTA text with underlines
       lines.forEach(line => {
@@ -569,15 +670,13 @@ export default function SlideImageGenerator({
         
         const words = line.split(' ')
         
-        // Build underline map for this line
+        // Build underline map
         const underlineMap: boolean[] = new Array(words.length).fill(false)
         
-        // Mark words that should be underlined
         for (const phrase of underlinePhrases) {
           const phraseWords = phrase.toLowerCase().split(/\s+/).map(w => w.replace(/[.,!?;:–—\-'"]/g, '').trim())
           const cleanLineWords = words.map(w => w.toLowerCase().replace(/[.,!?;:–—\-'"]/g, '').trim())
           
-          // Find consecutive matching sequences
           for (let i = 0; i <= cleanLineWords.length - phraseWords.length; i++) {
             let matches = true
             for (let j = 0; j < phraseWords.length; j++) {
@@ -597,18 +696,17 @@ export default function SlideImageGenerator({
         // Draw text
         let currentX = x
         words.forEach((word, wordIndex) => {
-          const wordMetrics = ctx.measureText(word)
-          
           ctx.fillStyle = COLOR_THEME.textColor
           ctx.fillText(word, currentX, y)
           
+          const wordMetrics = ctx.measureText(word)
           currentX += wordMetrics.width
           if (wordIndex < words.length - 1) {
             currentX += ctx.measureText(' ').width
           }
         })
         
-        // Draw continuous underlines
+        // Draw underlines
         let underlineStart = -1
         let underlineX = x
         let currentXPos = x
@@ -638,7 +736,7 @@ export default function SlideImageGenerator({
           currentXPos += wordMetrics.width + (wordIndex < words.length - 1 ? spaceWidth : 0)
         })
         
-        // Draw final underline if line ends with underlined word
+        // Draw final underline
         if (underlineStart !== -1) {
           const underlineY = y + 8
           ctx.strokeStyle = COLOR_THEME.underlineColor
@@ -657,13 +755,47 @@ export default function SlideImageGenerator({
       ctx.textAlign = 'left'
       const x = safeMarginSides
       
-      // Style 2: Title
-      if (cleanSlide.title) {
-        ctx.font = FONT_CONFIG.title.font
-        ctx.fillStyle = COLOR_THEME.textColor
-        
-        const titleWords = cleanSlide.title.split(' ')
-        const titleLines: string[] = []
+      // Parse emphasis words to check for image
+      const emphasisData = underlineWords[index] || { underline: '', highlight: '', imageUrl: null }
+      
+      // Pre-load image if available to include in height calculation
+      let imageHeight = 0
+      let imageWidth = 0
+      let loadedImage: HTMLImageElement | null = null
+      
+      if (emphasisData.imageUrl) {
+        try {
+          loadedImage = await loadImage(emphasisData.imageUrl)
+          imageWidth = safeWidth
+          imageHeight = Math.round(safeWidth * 9 / 16)
+        } catch (error) {
+          console.error(`Failed to pre-load image for centering:`, error)
+        }
+      }
+      
+      // Minimum spacing requirements (20px minimum)
+      const minTitleContentGap = 20
+      const minImageGap = 20
+      
+      // Try to fit content with flexible sizing
+      let titleFontSize = 75  // From FONT_CONFIG
+      let titleLineHeight = 90
+      let contentFontSize = 55
+      let contentLineHeight = 70
+      let titleContentGap = Math.max(70, minTitleContentGap)
+      let imageGap = imageHeight > 0 ? Math.max(40, minImageGap) : 0
+      
+      let titleLines: string[] = []
+      let contentLines: string[] = []
+      let totalHeight = 0
+      let scaleFactor = 1.0
+      
+      // Function to calculate layout with given font sizes
+      const calculateLayout = (titleSize: number, contentSize: number) => {
+        // Title wrapping
+        ctx.font = `bold ${titleSize}px Poppins, sans-serif`
+        const titleWords = cleanSlide.title ? cleanSlide.title.split(' ') : []
+        const wrappedTitle: string[] = []
         let currentLine = ''
         
         for (const word of titleWords) {
@@ -671,18 +803,18 @@ export default function SlideImageGenerator({
           const metrics = ctx.measureText(testLine)
           
           if (metrics.width > safeWidth && currentLine) {
-            titleLines.push(currentLine)
+            wrappedTitle.push(currentLine)
             currentLine = word
           } else {
             currentLine = testLine
           }
         }
-        if (currentLine) titleLines.push(currentLine)
+        if (currentLine) wrappedTitle.push(currentLine)
         
-        // Style 3: Content
-        ctx.font = FONT_CONFIG.content.font
+        // Content wrapping
+        ctx.font = `${contentSize}px DreamingOutloudSans, sans-serif`
         const contentWords = cleanSlide.content.split(' ')
-        const contentLines: string[] = []
+        const wrappedContent: string[] = []
         currentLine = ''
         
         for (const word of contentWords) {
@@ -690,37 +822,99 @@ export default function SlideImageGenerator({
           const metrics = ctx.measureText(testLine)
           
           if (metrics.width > safeWidth && currentLine) {
-            contentLines.push(currentLine)
+            wrappedContent.push(currentLine)
             currentLine = word
           } else {
             currentLine = testLine
           }
         }
-        if (currentLine) contentLines.push(currentLine)
+        if (currentLine) wrappedContent.push(currentLine)
         
-        // Calculate total height
-        const titleLineHeight = FONT_CONFIG.title.lineHeight
-        const contentLineHeight = FONT_CONFIG.content.lineHeight
-        const gap = 70
-        const totalHeight = (titleLines.length * titleLineHeight) + gap + (contentLines.length * contentLineHeight)
+        // Calculate heights based on baseline-to-baseline distance
+        // Plus add font size for the visual height of text
+        const titleLH = titleSize * 1.2  // Proportional line height
+        const contentLH = contentSize * 1.27
         
-        let y = centerY - (totalHeight / 2) + 30
+        // Height = first line font size + spacing between lines + last line descender space
+        const titleH = wrappedTitle.length > 0 
+          ? titleSize + (wrappedTitle.length - 1) * titleLH + (titleSize * 0.2)  // font + spacing + descender
+          : 0
+        const contentH = wrappedContent.length > 0
+          ? contentSize + (wrappedContent.length - 1) * contentLH + (contentSize * 0.2)  // font + spacing + descender  
+          : 0
+        const total = titleH + titleContentGap + contentH + imageGap + imageHeight
         
-        // Draw title - Style 2
-        ctx.font = FONT_CONFIG.title.font
+        return {
+          titleLines: wrappedTitle,
+          contentLines: wrappedContent,
+          titleLineHeight: titleLH,
+          contentLineHeight: contentLH,
+          totalHeight: total
+        }
+      }
+      
+      // Calculate initial layout
+      let layout = calculateLayout(titleFontSize, contentFontSize)
+      
+      // If content exceeds safe height, scale down
+      if (layout.totalHeight > safeHeight) {
+        console.log(`⚠️  Content too long (${layout.totalHeight}px > ${safeHeight}px), scaling down...`)
+        
+        // Reduce gaps to minimum first
+        titleContentGap = minTitleContentGap
+        imageGap = imageHeight > 0 ? minImageGap : 0
+        
+        // Recalculate with minimum gaps
+        layout = calculateLayout(titleFontSize, contentFontSize)
+        
+        // If still too long, scale down font sizes
+        if (layout.totalHeight > safeHeight) {
+          scaleFactor = safeHeight / layout.totalHeight
+          scaleFactor = Math.max(0.5, Math.min(0.95, scaleFactor))  // Between 50% and 95%
+          
+          titleFontSize = Math.floor(75 * scaleFactor)  // Always scale from original
+          contentFontSize = Math.floor(55 * scaleFactor)
+          
+          console.log(`   Scaling fonts: title ${titleFontSize}px, content ${contentFontSize}px (${Math.round(scaleFactor * 100)}%)`)
+          
+          layout = calculateLayout(titleFontSize, contentFontSize)
+          
+          // Final warning if still doesn't fit after scaling
+          if (layout.totalHeight > safeHeight) {
+            console.warn(`⚠️  WARNING: Content still exceeds safe height even at minimum scale!`)
+            console.warn(`   Total: ${Math.round(layout.totalHeight)}px, Safe: ${safeHeight}px`)
+            console.warn(`   Consider reducing content length or removing image`)
+          }
+        }
+      }
+      
+      titleLines = layout.titleLines
+      contentLines = layout.contentLines
+      titleLineHeight = layout.titleLineHeight
+      contentLineHeight = layout.contentLineHeight
+      totalHeight = layout.totalHeight
+      
+      console.log(`📏 Layout: ${titleLines.length} title lines, ${contentLines.length} content lines, total: ${Math.round(totalHeight)}px, safe: ${safeHeight}px`)
+      
+      // Start Y at center minus half total height, plus first line's font size (for baseline)
+      const firstLineFontSize = titleLines.length > 0 ? titleFontSize : contentFontSize
+      let y = centerY - (totalHeight / 2) + firstLineFontSize
+        
+        // Draw title with calculated font size
+        ctx.font = `bold ${titleFontSize}px Poppins, sans-serif`
+        ctx.fillStyle = COLOR_THEME.textColor
         titleLines.forEach(line => {
           ctx.fillText(line, x, y)
           y += titleLineHeight
         })
         
-        y += gap
+        y += titleContentGap
         
-        // Draw content with underlines and highlights - Style 3
-        ctx.font = FONT_CONFIG.content.font
+        // Draw content with calculated font size
+        ctx.font = `${contentFontSize}px DreamingOutloudSans, sans-serif`
         ctx.fillStyle = COLOR_THEME.textColor
         
-        // Parse emphasis words for this slide
-        const emphasisData = underlineWords[index] || { underline: '', highlight: '' }
+        // Use emphasisData already parsed above (no need to re-parse)
         const underlinePhrases = emphasisData.underline.split(',').map(p => p.trim()).filter(p => p)
         const highlightWord = emphasisData.highlight.toLowerCase().replace(/[.,!?;:–—\-'"]/g, '').trim()
         
@@ -804,15 +998,17 @@ export default function SlideImageGenerator({
               const leadingPuncMatch = word.match(/^[.,!?;:–—\-'"]+/)
               const leadingPuncWidth = leadingPuncMatch ? ctx.measureText(leadingPuncMatch[0]).width : 0
               
-              // No padding - highlight only the word, not punctuation
-              const bgX = tempX + leadingPuncWidth
-              const bgY = y - 50
-              const bgWidth = cleanedMetrics.width
-              const bgHeight = 60
+              // Scale highlight background proportionally to font size
+              const bgOffsetY = contentFontSize * 0.91  // ~91% of font size above baseline
+              const bgHeight = contentFontSize * 1.09  // ~109% of font size for height
               
-              ctx.fillStyle = COLOR_THEME.highlightColor
+              const bgX = tempX + leadingPuncWidth
+              const bgY = y - bgOffsetY
+              const bgWidth = cleanedMetrics.width
+              
+              ctx.fillStyle = highlightFillStyle
               ctx.fillRect(bgX, bgY, bgWidth, bgHeight)
-              console.log(`  ✨ Highlighting word: "${cleanedWord}" (stripped from "${word}")`)
+              console.log(`  ✨ Highlighting word: "${cleanedWord}" (font: ${contentFontSize}px)`)
             }
             
             const spaceWidth = ctx.measureText(' ').width
@@ -880,9 +1076,65 @@ export default function SlideImageGenerator({
           
           y += contentLineHeight
         })
-      }
-    }
-  }
+        
+        // Draw image for MIDDLE slides if available (using pre-loaded image)
+        if (loadedImage && imageWidth > 0 && imageHeight > 0) {
+          try {
+            console.log(`🖼️  Rendering pre-loaded image for slide ${index + 1}`)
+            
+            // Add spacing between content and image
+            y += imageGap
+            
+            // Position image at left margin (same as content)
+            const imageX = safeMarginSides
+            
+            // Calculate source rectangle for 16:9 crop (center crop)
+            const sourceAspect = loadedImage.width / loadedImage.height
+            const targetAspect = 16 / 9
+            
+            let sx = 0, sy = 0, sWidth = loadedImage.width, sHeight = loadedImage.height
+            
+            if (sourceAspect > targetAspect) {
+              // Image is wider than 16:9 - crop width
+              sWidth = loadedImage.height * targetAspect
+              sx = (loadedImage.width - sWidth) / 2  // Center horizontally
+            } else {
+              // Image is taller than 16:9 - crop height
+              sHeight = loadedImage.width / targetAspect
+              sy = (loadedImage.height - sHeight) / 2  // Center vertically
+            }
+            
+            // Draw image with rounded corners and 16:9 crop
+            const borderRadius = 56
+            ctx.save()
+            ctx.beginPath()
+            ctx.moveTo(imageX + borderRadius, y)
+            ctx.lineTo(imageX + imageWidth - borderRadius, y)
+            ctx.quadraticCurveTo(imageX + imageWidth, y, imageX + imageWidth, y + borderRadius)
+            ctx.lineTo(imageX + imageWidth, y + imageHeight - borderRadius)
+            ctx.quadraticCurveTo(imageX + imageWidth, y + imageHeight, imageX + imageWidth - borderRadius, y + imageHeight)
+            ctx.lineTo(imageX + borderRadius, y + imageHeight)
+            ctx.quadraticCurveTo(imageX, y + imageHeight, imageX, y + imageHeight - borderRadius)
+            ctx.lineTo(imageX, y + borderRadius)
+            ctx.quadraticCurveTo(imageX, y, imageX + borderRadius, y)
+            ctx.closePath()
+            ctx.clip()
+            
+            // Draw cropped image using source rectangle
+            ctx.drawImage(
+              loadedImage,
+              sx, sy, sWidth, sHeight,  // Source rectangle (crop)
+              imageX, y, imageWidth, imageHeight  // Destination rectangle (16:9)
+            )
+            ctx.restore()
+            
+            console.log(`✅ Image rendered for slide ${index + 1} (${imageWidth}x${imageHeight}, 16:9 crop from ${Math.round(sx)},${Math.round(sy)} ${Math.round(sWidth)}x${Math.round(sHeight)})`)
+          } catch (error) {
+            console.error(`❌ Failed to render image for slide ${index + 1}:`, error)
+          }
+        }
+    }  // Close else (MIDDLE slide)
+  }  // Close generateSlideImage function
 
   const downloadSlide = (index: number) => {
     const canvas = canvasRefs.current[index]

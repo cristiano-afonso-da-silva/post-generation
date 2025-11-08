@@ -2,13 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 
 // ════════════════════════════════════════════════════════════════════════════
-// Gemini Configuration
+// API Configuration
 // ════════════════════════════════════════════════════════════════════════════
 const GEMINI_MODEL = 'gemini-2.0-flash-exp';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
 
 if (!GEMINI_API_KEY) {
   console.error('❌ Missing GEMINI_API_KEY in environment variables');
+}
+
+if (!PEXELS_API_KEY) {
+  console.error('❌ Missing PEXELS_API_KEY in environment variables');
 }
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY!);
@@ -32,6 +37,48 @@ const wordCount = (text: string): number => {
   if (!text) return 0;
   return text.trim().split(/\s+/).filter(Boolean).length;
 };
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function callGeminiWithRetry(
+  targetModel: ReturnType<GoogleGenerativeAI['getGenerativeModel']>,
+  request: Parameters<typeof targetModel.generateContent>[0],
+  options?: Parameters<typeof targetModel.generateContent>[1],
+  attempt = 0,
+  maxRetries = 3
+) {
+  try {
+    return await targetModel.generateContent(request, options);
+  } catch (error: any) {
+    const message = error?.message || '';
+    const isQuotaError =
+      error?.status === 429 ||
+      message.includes('429') ||
+      message.toLowerCase().includes('quota') ||
+      message.toLowerCase().includes('too many requests');
+
+    if (isQuotaError && attempt < maxRetries) {
+      let delayMs = 4000;
+      const retryMatch = message.match(/"retryDelay":"(\d+)s"/);
+      if (retryMatch && retryMatch[1]) {
+        const seconds = parseInt(retryMatch[1], 10);
+        if (!Number.isNaN(seconds)) {
+          delayMs = Math.max(1000, seconds * 1000);
+        }
+      }
+
+      console.warn(
+        `⚠️  Gemini quota hit (attempt ${attempt + 1}/${maxRetries}). Retrying in ${Math.round(
+          delayMs / 1000
+        )}s...`
+      );
+      await sleep(delayMs);
+      return callGeminiWithRetry(targetModel, request, options, attempt + 1, maxRetries);
+    }
+
+    throw error;
+  }
+}
 
 const safeJsonParse = (text: string) => {
   try {
@@ -97,7 +144,13 @@ const formatToMarkdown = (note: any, underlineWords: any = {}) => {
       if (emphasis.highlight) {
         lines.push(`│ ✨ Highlight: ${emphasis.highlight}`);
       }
-      if (emphasis.underline || emphasis.highlight) {
+      if (emphasis.imageSearch) {
+        lines.push(`│ 🔍 Image Search: ${emphasis.imageSearch}`);
+      }
+      if (emphasis.imageUrl) {
+        lines.push(`│ 🖼️  Image URL: ${emphasis.imageUrl}`);
+      }
+      if (emphasis.underline || emphasis.highlight || emphasis.imageSearch || emphasis.imageUrl) {
         lines.push(`│`);
       }
     }
@@ -144,7 +197,7 @@ const formatToMarkdown = (note: any, underlineWords: any = {}) => {
   
   Object.keys(underlineWords).forEach(key => {
     const data = underlineWords[key];
-    if (data && (data.underline || data.highlight)) {
+    if (data && (data.underline || data.highlight || data.imageSearch || data.imageUrl)) {
       const slideNum = parseInt(key) + 1;
       lines.push(`Slide ${slideNum}:`);
       if (data.underline) {
@@ -152,6 +205,12 @@ const formatToMarkdown = (note: any, underlineWords: any = {}) => {
       }
       if (data.highlight) {
         lines.push(`  ✨ Highlight: ${data.highlight}`);
+      }
+      if (data.imageSearch) {
+        lines.push(`  🔍 Image Search: ${data.imageSearch}`);
+      }
+      if (data.imageUrl) {
+        lines.push(`  🖼️  Image URL: ${data.imageUrl}`);
       }
       lines.push('');
     }
@@ -378,17 +437,124 @@ const UNDERLINE_SCHEMA = {
   properties: {
     underline: {
       type: SchemaType.STRING,
-      description: "Comma-separated phrases to underline (2-4 phrases max)",
-      nullable: false,
+      description: "Comma-separated phrases to underline (2-4 phrases max). Can be empty string if not applicable.",
     },
     highlight: {
       type: SchemaType.STRING,
-      description: "Single most important word to highlight with background color (1 word only, no punctuation)",
-      nullable: false,
+      description: "Single most important word to highlight with background color (1 word only, no punctuation). Can be empty string if not applicable.",
+    },
+    imageSearch: {
+      type: SchemaType.STRING,
+      description: "REQUIRED for MIDDLE slides: 2-4 keywords for image search (e.g., 'person working laptop', 'mountain sunrise'). Must be descriptive visual terms. Empty string for HOOK and CTA slides.",
     },
   },
-  required: ["underline", "highlight"],
+  required: ["underline", "highlight", "imageSearch"],
 };
+
+// ════════════════════════════════════════════════════════════════════════════
+// Pexels API Integration
+// ════════════════════════════════════════════════════════════════════════════
+
+type PexelsImageResult = {
+  url: string | null;
+  id: number | null;
+};
+
+async function searchPexelsImage(query: string, usedPhotoIds: Set<number>): Promise<PexelsImageResult | null> {
+  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('🖼️  PEXELS IMAGE SEARCH INITIATED');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  
+  if (!PEXELS_API_KEY) {
+    console.error('❌ CRITICAL: Pexels API key not configured!');
+    console.error('   Please add PEXELS_API_KEY to your .env.local file');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    return null;
+  }
+
+  console.log(`✓ API Key present: ${PEXELS_API_KEY.substring(0, 10)}...`);
+  console.log(`📝 Search Query: "${query}"`);
+  console.log(`🔗 Encoded Query: "${encodeURIComponent(query)}"`);
+
+  try {
+    const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=5&orientation=landscape&size=large`;
+    console.log(`🌐 Request URL: ${url}`);
+    
+    const response = await fetch(url, {
+      headers: {
+        Authorization: PEXELS_API_KEY,
+      },
+    });
+
+    console.log(`📡 Response Status: ${response.status} ${response.statusText}`);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ Pexels API error: ${response.status} ${response.statusText}`);
+      console.error(`📄 Error details: ${errorText}`);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+      return null;
+    }
+
+    const data = await response.json();
+    console.log(`📊 API Response:`, JSON.stringify(data, null, 2));
+    
+    if (data.photos && data.photos.length > 0) {
+      // Ensure we return strictly horizontal images and avoid duplicates
+      const HORIZONTAL_RATIO_THRESHOLD = 1.2; // width must be at least 20% wider than height
+
+      const horizontalPhotos = data.photos.filter((photo: any) => {
+        if (!photo || typeof photo.width !== 'number' || typeof photo.height !== 'number') {
+          return false;
+        }
+        const ratio = photo.width / photo.height;
+        return ratio >= HORIZONTAL_RATIO_THRESHOLD;
+      });
+
+      const unusedHorizontal = horizontalPhotos.find((photo: any) => !usedPhotoIds.has(photo.id));
+      const fallbackHorizontal = horizontalPhotos[0];
+      const unusedAny = data.photos.find((photo: any) => !usedPhotoIds.has(photo.id));
+      const fallbackAny = data.photos[0];
+
+      const selectedPhoto = unusedHorizontal || fallbackHorizontal || unusedAny || fallbackAny;
+
+      if (!selectedPhoto) {
+        console.warn(`⚠️  Pexels returned photos, but none could be selected (unexpected)`);
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+        return null;
+      }
+
+      if (usedPhotoIds.has(selectedPhoto.id)) {
+        console.log(`ℹ️  All returned photos already used previously. Re-using photo ID ${selectedPhoto.id}`);
+      }
+
+      const imageUrl = selectedPhoto.src?.large2x || selectedPhoto.src?.landscape || selectedPhoto.src?.large;
+
+      console.log(`✅ SUCCESS: Found horizontal image!`);
+      console.log(`📸 Image URL: ${imageUrl}`);
+      console.log(`👤 Photographer: ${selectedPhoto.photographer}`);
+      console.log(`🆔 Photo ID: ${selectedPhoto.id}`);
+      console.log(`📐 Dimensions: ${selectedPhoto.width}x${selectedPhoto.height}`);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+      if (!imageUrl) {
+        return null;
+      }
+      return { url: imageUrl, id: selectedPhoto.id ?? null };
+    }
+
+    console.warn(`⚠️  No images found for query: "${query}"`);
+    console.warn(`   This might mean no matching images in Pexels database`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    return null;
+  } catch (error: any) {
+    console.error(`❌ EXCEPTION during Pexels fetch:`);
+    console.error(`   Error Type: ${error.constructor.name}`);
+    console.error(`   Error Message: ${error.message}`);
+    console.error(`   Stack Trace:`, error.stack);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    return null;
+  }
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // API Functions
@@ -398,7 +564,7 @@ async function generateIdeas(accountDescription: string) {
   const startTime = Date.now();
   
   try {
-    const result = await model.generateContent({
+    const result = await callGeminiWithRetry(model, {
       contents: [{
         role: 'user',
         parts: [{ text: IDEAS_PROMPT(accountDescription) }]
@@ -442,7 +608,9 @@ async function generateIdeas(accountDescription: string) {
   }
 }
 
-async function extractUnderlineWords(slides: any[]) {
+async function extractUnderlineWords(slides: any[], includeImages: boolean = true) {
+  console.log(`\n🎨 Extracting emphasis words and ${includeImages ? '🖼️ images (enabled)' : '📝 NO images (disabled)'}`);
+  
   const underlineModel = genAI.getGenerativeModel({
     model: GEMINI_MODEL,
     generationConfig: {
@@ -453,6 +621,7 @@ async function extractUnderlineWords(slides: any[]) {
   });
 
   const results: Record<number, any> = {};
+  const usedImageIds = new Set<number>();
 
   for (let i = 0; i < slides.length; i++) {
     const slide = slides[i];
@@ -470,11 +639,12 @@ Instructions:
 - Extract 1 single word that is most important for emphasis
 - The highlight word should be a KEY word that captures attention
 - Return the word without any punctuation
-- For underline, return empty string (no underlines on hook slides)
+- For underline and imageSearch, return empty string (no underlines or images on hook slides)
 
 Return JSON with:
 - underline: "" (empty string for hook slides)
-- highlight: "word" (single most important word, no punctuation)`;
+- highlight: "word" (single most important word, no punctuation)
+- imageSearch: "" (empty string for hook slides)`;
     } else if (slide.kind === 'CTA') {
       if (!slide.content) continue;
       
@@ -486,35 +656,50 @@ Instructions:
 - Extract 2-3 short phrases (2-4 words each) that are most important for emphasis
 - These phrases should be ACTION-ORIENTED and impactful
 - Return them comma-separated
-- For highlight, return empty string (no highlights on CTA slides)
+- For highlight and imageSearch, return empty string (no highlights or images on CTA slides)
 
 Return JSON with:
 - underline: "phrase 1, phrase 2, phrase 3" (2-3 phrases)
-- highlight: "" (empty string for CTA slides)`;
+- highlight: "" (empty string for CTA slides)
+- imageSearch: "" (empty string for CTA slides)`;
     } else if (slide.kind === 'MIDDLE') {
       if (!slide.content) continue;
       
-      prompt = `Analyze this middle slide content and extract emphasis words:
+      prompt = `Analyze this middle slide content and extract emphasis words and image search keywords:
 
 Title: "${slide.title}"
 Content: "${slide.content}"
 
-Instructions:
-- Extract 2-4 short phrases (2-4 words each) that are most important for emphasis
-- These phrases should be KEY CONCEPTS or insights
+CRITICAL INSTRUCTIONS:
+1. UNDERLINE: Extract 2-4 short phrases (2-4 words each) that are KEY CONCEPTS
 - Return them comma-separated
-- Also extract 1 single word that is THE MOST important word in the content
-- The highlight word should be without any punctuation
+   - Example: "breathable fabric, everyday comfort, lightweight design"
 
-Return JSON with:
-- underline: "phrase 1, phrase 2, phrase 3, phrase 4" (2-4 phrases)
-- highlight: "word" (single most important word, no punctuation)`;
+2. HIGHLIGHT: Extract THE MOST important single word
+   - Must be without punctuation
+   - Example: "comfort"
+
+3. IMAGE SEARCH: Extract 2-4 visual keywords for stock photo search
+   - MUST be descriptive, concrete visual terms
+   - Think about what IMAGE would represent this content
+   - Good examples: "person wearing hoodie", "cotton fabric texture", "winter clothing"
+   - Bad examples: "feeling", "concept", "idea" (too abstract)
+   - Focus on objects, people, activities that can be photographed
+
+REQUIRED JSON FORMAT (ALL FIELDS MUST BE PRESENT):
+{
+  "underline": "phrase 1, phrase 2, phrase 3",
+  "highlight": "word",
+  "imageSearch": "visual keyword1 keyword2 keyword3"
+}
+
+The imageSearch field is MANDATORY. Always provide visual search terms.`;
     }
     
     if (!prompt) continue;
     
     try {
-      const result = await underlineModel.generateContent(prompt);
+      const result = await callGeminiWithRetry(underlineModel, prompt);
       const responseText = result.response.text();
       
       console.log(`\n🎨 Slide ${i + 1} (${slide.kind}) - Raw Gemini Response:`);
@@ -522,29 +707,71 @@ Return JSON with:
       
       const parsed = safeJsonParse(responseText);
       
+      console.log(`🔍 Parsed response for slide ${i + 1}:`, JSON.stringify(parsed, null, 2));
+      
+      // Ensure imageSearch exists for MIDDLE slides
+      let imageSearchKeywords = parsed.imageSearch || '';
+      
+      // If Gemini didn't provide imageSearch for MIDDLE slide, generate basic keywords from content
+      if (slide.kind === 'MIDDLE' && !imageSearchKeywords) {
+        console.warn(`⚠️  Gemini did not provide imageSearch for MIDDLE slide ${i + 1}, generating fallback...`);
+        // Extract first few meaningful words from content as fallback
+        const words = slide.content.toLowerCase()
+          .replace(/[.,!?;:'"]/g, '')
+          .split(' ')
+          .filter((w: string) => w.length > 3 && !['that', 'this', 'with', 'from', 'have', 'been', 'they', 'their'].includes(w))
+          .slice(0, 4)
+          .join(' ');
+        imageSearchKeywords = words || 'lifestyle product';
+        console.log(`   Generated fallback keywords: "${imageSearchKeywords}"`);
+      }
+      
       results[i] = {
         underline: parsed.underline || '',
         highlight: parsed.highlight || '',
+        imageSearch: imageSearchKeywords,
+        imageUrl: null, // Will be populated next
       };
       
-      console.log(`📝 Extracted:`, results[i]);
+      // For MIDDLE slides, fetch image from Pexels if enabled and we have search keywords
+      if (includeImages && slide.kind === 'MIDDLE' && imageSearchKeywords && imageSearchKeywords.trim()) {
+        console.log(`\n🖼️  MIDDLE SLIDE ${i + 1}: Attempting to fetch image...`);
+        console.log(`   Keywords: "${imageSearchKeywords}"`);
+        const imageResult = await searchPexelsImage(imageSearchKeywords, usedImageIds);
+        results[i].imageUrl = imageResult?.url || null;
+        if (imageResult?.id) {
+          usedImageIds.add(imageResult.id);
+        }
+        if (imageResult?.url) {
+          console.log(`✅ SUCCESS: Image added to slide ${i + 1}`);
+        } else {
+          console.error(`❌ FAILED: No image URL returned for slide ${i + 1}`);
+        }
+      } else if (!includeImages && slide.kind === 'MIDDLE') {
+        console.log(`\n📝 MIDDLE SLIDE ${i + 1}: Images disabled by user - skipping image fetch`);
+      } else if (slide.kind === 'MIDDLE') {
+        console.log(`\n⚠️  MIDDLE SLIDE ${i + 1}: NO imageSearch keywords!`);
+        console.log(`   This should not happen with the fallback in place.`);
+      }
+      
+      console.log(`\n📝 Final extraction result for slide ${i + 1}:`, JSON.stringify(results[i], null, 2));
       
     } catch (error: any) {
       console.error(`❌ Error extracting emphasis for slide ${i + 1}:`, error.message);
-      results[i] = { underline: '', highlight: '' };
+      results[i] = { underline: '', highlight: '', imageSearch: '', imageUrl: null };
     }
   }
   
   return results;
 }
 
-async function generateNote(ideaTitle: string, accountDescription: string) {
+async function generateNote(ideaTitle: string, accountDescription: string, includeImages: boolean = true) {
   const startTime = Date.now();
   
   try {
     console.log(`🚀 Generating note for: "${ideaTitle}"`);
     
-    const result = await model.generateContent({
+    const result = await callGeminiWithRetry(model, {
       contents: [{
         role: 'user',
         parts: [{ text: NOTE_PROMPT(ideaTitle, accountDescription) }]
@@ -599,7 +826,7 @@ async function generateNote(ideaTitle: string, accountDescription: string) {
       data.caption = data.caption.replace(/\*/g, '');
     }
     
-    const underlineWords = await extractUnderlineWords(data.slides);
+    const underlineWords = await extractUnderlineWords(data.slides, includeImages);
     
     // Calculate stats before formatting
     const hookWords = data.slides[0]?.title ? wordCount(data.slides[0].title) : 0;
@@ -656,7 +883,7 @@ async function generateNote(ideaTitle: string, accountDescription: string) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { action, accountDescription, ideaTitle } = body;
+    const { action, accountDescription, ideaTitle, includeImages } = body;
     
     if (!action) {
       return NextResponse.json(
@@ -685,8 +912,49 @@ export async function POST(request: NextRequest) {
         );
       }
       
-      const result = await generateNote(ideaTitle.trim(), accountDescription?.trim() || '');
+      // Default to true if not specified for backward compatibility
+      const shouldIncludeImages = includeImages !== undefined ? includeImages : true;
+      
+      const result = await generateNote(ideaTitle.trim(), accountDescription?.trim() || '', shouldIncludeImages);
       return NextResponse.json(result);
+    }
+
+    if (action === 'refreshSlides') {
+      const slidesInput = body.slides;
+      const shouldIncludeImages = includeImages !== undefined ? includeImages : true;
+
+      if (!Array.isArray(slidesInput) || slidesInput.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'Missing or invalid slides array' },
+          { status: 400 }
+        );
+      }
+
+      const sanitizedSlides = slidesInput.map((slide: any, index: number) => ({
+        title: typeof slide?.title === 'string' ? slide.title : '',
+        content: typeof slide?.content === 'string' ? slide.content : '',
+        kind: ['HOOK', 'CTA', 'MIDDLE'].includes(slide?.kind) ? slide.kind : 'MIDDLE',
+        index
+      })).map(({ index: _, ...rest }) => rest);
+
+      try {
+        const underlineWords = await extractUnderlineWords(sanitizedSlides, shouldIncludeImages);
+
+        return NextResponse.json({
+          success: true,
+          action: 'refreshSlides',
+          data: {
+            slides: sanitizedSlides,
+            underlineWords
+          }
+        });
+      } catch (error: any) {
+        console.error('Error refreshing slides:', error);
+        return NextResponse.json(
+          { success: false, error: error.message || 'Failed to refresh slides' },
+          { status: 500 }
+        );
+      }
     }
     
     return NextResponse.json(

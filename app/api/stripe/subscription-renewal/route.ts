@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
       console.log('[SUBSCRIPTION-RENEWAL] Subscription fetched:', {
         id: subscription.id,
         status: subscription.status,
-        currentPeriodEnd: subscription.current_period_end
+        currentPeriodEnd: (subscription as any).current_period_end
       })
     } catch (error: any) {
       console.error('[SUBSCRIPTION-RENEWAL] ERROR fetching subscription from Stripe:', {
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Return current_period_end as renewal date
-    const renewalDate = subscription.current_period_end
+    const renewalDate = (subscription as any).current_period_end
     console.log('[SUBSCRIPTION-RENEWAL] Success! Returning renewal date:', renewalDate)
     return NextResponse.json({
       renewalDate: renewalDate
