@@ -92,10 +92,41 @@ export async function POST(request: NextRequest) {
       // Continue without configuration - Stripe will use default if available
     }
 
+    // Get origin dynamically - try multiple methods
+    const getOrigin = () => {
+      // Try origin header first
+      const origin = request.headers.get('origin')
+      if (origin) return origin
+      
+      // Try host header with protocol
+      const host = request.headers.get('host')
+      if (host) {
+        const protocol = request.headers.get('x-forwarded-proto') || 'https'
+        return `${protocol}://${host}`
+      }
+      
+      // Try to extract from request URL
+      try {
+        const url = new URL(request.url)
+        return `${url.protocol}//${url.host}`
+      } catch {
+        // Fallback to environment variable or default
+        if (process.env.NEXT_PUBLIC_APP_URL) {
+          return process.env.NEXT_PUBLIC_APP_URL
+        }
+        if (process.env.VERCEL_URL) {
+          return `https://${process.env.VERCEL_URL}`
+        }
+        return 'http://localhost:3000'
+      }
+    }
+    
+    const baseUrl = getOrigin()
+
     // Create Customer Portal session
     const sessionParams: Stripe.BillingPortal.SessionCreateParams = {
       customer: creditData.stripe_customer_id,
-      return_url: `${request.headers.get('origin') || 'http://localhost:3000'}/`,
+      return_url: `${baseUrl}/`,
     }
 
     // Add configuration if we have one
