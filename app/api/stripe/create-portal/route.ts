@@ -75,9 +75,6 @@ export async function POST(request: NextRequest) {
                 ],
               },
             },
-            subscription_pause: {
-              enabled: false,
-            },
             subscription_update: {
               enabled: true,
               default_allowed_updates: ['price', 'promotion_code', 'quantity'],
