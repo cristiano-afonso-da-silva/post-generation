@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { History } from 'lucide-react'
@@ -25,9 +25,30 @@ interface Note {
   underlineWords?: Record<number, { underline: string; highlight: string }>
 }
 
+// Component to handle search params with Suspense
+function SearchParamsHandler({ refreshCredits, router }: { refreshCredits: () => void; router: ReturnType<typeof useRouter> }) {
+  const searchParams = useSearchParams()
+  
+  useEffect(() => {
+    const success = searchParams.get('success')
+    const canceled = searchParams.get('canceled')
+    
+    if (success === 'true') {
+      // Refresh credits after successful subscription
+      refreshCredits()
+      // Clean URL
+      router.replace('/')
+    } else if (canceled === 'true') {
+      // Clean URL
+      router.replace('/')
+    }
+  }, [searchParams, refreshCredits, router])
+  
+  return null
+}
+
 export default function Home() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { user, loading: authLoading, credits, refreshCredits } = useAuth()
   
   const [accountDescription, setAccountDescription] = useState('')
@@ -62,22 +83,6 @@ export default function Home() {
       router.push('/landing')
     }
   }, [user, authLoading, router])
-
-  // Handle Stripe checkout success/cancel
-  useEffect(() => {
-    const success = searchParams.get('success')
-    const canceled = searchParams.get('canceled')
-    
-    if (success === 'true') {
-      // Refresh credits after successful subscription
-      refreshCredits()
-      // Clean URL
-      router.replace('/')
-    } else if (canceled === 'true') {
-      // Clean URL
-      router.replace('/')
-    }
-  }, [searchParams, refreshCredits, router])
 
   // Load note from localStorage on mount
   useEffect(() => {
@@ -287,6 +292,11 @@ export default function Home() {
 
   return (
     <div style={{ background: '#ffffff', minHeight: '100vh' }}>
+      {/* Handle search params with Suspense */}
+      <Suspense fallback={null}>
+        <SearchParamsHandler refreshCredits={refreshCredits} router={router} />
+      </Suspense>
+      
       {/* Header */}
       <header style={{
         borderBottom: '2px solid #e5e5e5',
