@@ -121,3 +121,4 @@ temp/
 # test-results/
 # coverage/
 
+.vercel
