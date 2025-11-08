@@ -96,18 +96,26 @@ export default function SubscriptionModal({
         }),
       })
 
-      const { url } = await response.json()
-
-      if (url) {
-        const stripe = await stripePromise
-        if (stripe) {
-          window.location.href = url
-        }
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        console.error('Checkout error:', errorData)
+        alert(`Failed to start checkout: ${errorData.error || 'Please try again'}`)
+        setLoading(null)
+        return
       }
-    } catch (error) {
+
+      const data = await response.json()
+
+      if (data.url) {
+        window.location.href = data.url
+      } else {
+        console.error('No checkout URL returned:', data)
+        alert('Failed to start checkout. Please try again.')
+        setLoading(null)
+      }
+    } catch (error: any) {
       console.error('Error creating checkout session:', error)
-      alert('Failed to start checkout. Please try again.')
-    } finally {
+      alert(`Failed to start checkout: ${error.message || 'Please try again'}`)
       setLoading(null)
     }
   }

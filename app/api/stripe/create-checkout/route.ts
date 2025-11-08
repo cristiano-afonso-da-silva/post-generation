@@ -3,11 +3,28 @@ import Stripe from 'stripe'
 import { createServerClient } from '@/app/lib/supabase'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-10-29.clover',
+  apiVersion: '2024-11-20.acacia',
 })
 
 export async function POST(request: NextRequest) {
   try {
+    // Check for required environment variables
+    if (!process.env.STRIPE_SECRET_KEY) {
+      console.error('STRIPE_SECRET_KEY is not set')
+      return NextResponse.json(
+        { error: 'Stripe configuration error' },
+        { status: 500 }
+      )
+    }
+
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error('SUPABASE_SERVICE_ROLE_KEY is not set')
+      return NextResponse.json(
+        { error: 'Supabase configuration error' },
+        { status: 500 }
+      )
+    }
+
     const { priceId, userId } = await request.json()
 
     if (!priceId || !userId) {
@@ -18,22 +35,57 @@ export async function POST(request: NextRequest) {
     }
 
     // Get user email from Supabase
-    const serverClient = createServerClient()
-    const { data: userData, error: userError } = await serverClient.auth.admin.getUserById(userId)
+    let serverClient
+    try {
+      serverClient = createServerClient()
+    } catch (error: any) {
+      console.error('Error creating Supabase server client:', error)
+      return NextResponse.json(
+        { error: 'Failed to initialize Supabase client' },
+        { status: 500 }
+      )
+    }
+
+    let userData, userError
+    try {
+      const result = await serverClient.auth.admin.getUserById(userId)
+      userData = result.data
+      userError = result.error
+    } catch (error: any) {
+      console.error('Error fetching user from Supabase:', error)
+      return NextResponse.json(
+        { error: 'Failed to fetch user data', details: error.message },
+        { status: 500 }
+      )
+    }
     
     if (userError || !userData) {
+      console.error('User not found:', userError)
       return NextResponse.json(
-        { error: 'User not found' },
+        { error: 'User not found', details: userError?.message },
         { status: 404 }
       )
     }
 
     // Get or create Stripe customer
-    const { data: creditData } = await serverClient
-      .from('user_credits')
-      .select('stripe_customer_id')
-      .eq('user_id', userId)
-      .single()
+    let creditData
+    try {
+      const result = await serverClient
+        .from('user_credits')
+        .select('stripe_customer_id')
+        .eq('user_id', userId)
+        .single()
+      creditData = result.data
+      if (result.error && result.error.code !== 'PGRST116') {
+        console.error('Error fetching credit data:', result.error)
+      }
+    } catch (error: any) {
+      console.error('Error querying user_credits:', error)
+      return NextResponse.json(
+        { error: 'Failed to fetch credit data', details: error.message },
+        { status: 500 }
+      )
+    }
 
     let customerId = creditData?.stripe_customer_id
 
@@ -103,23 +155,40 @@ export async function POST(request: NextRequest) {
     const baseUrl = getOrigin()
 
     // Create Checkout Session
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      mode: 'subscription',
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
+    let session
+    try {
+      session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        mode: 'subscription',
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price: priceId,
+            quantity: 1,
+          },
+        ],
+        success_url: `${baseUrl}/?success=true&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${baseUrl}/?canceled=true`,
+        client_reference_id: userId,
+        metadata: {
+          userId: userId,
         },
-      ],
-      success_url: `${baseUrl}/?success=true&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/?canceled=true`,
-      client_reference_id: userId,
-      metadata: {
-        userId: userId,
-      },
-    })
+      })
+    } catch (error: any) {
+      console.error('Error creating Stripe checkout session:', error)
+      return NextResponse.json(
+        { error: 'Failed to create checkout session', details: error.message },
+        { status: 500 }
+      )
+    }
+
+    if (!session.url) {
+      console.error('Stripe session created but no URL returned:', session)
+      return NextResponse.json(
+        { error: 'Checkout session created but no URL available' },
+        { status: 500 }
+      )
+    }
 
     return NextResponse.json({
       sessionId: session.id,
