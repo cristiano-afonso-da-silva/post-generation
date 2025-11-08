@@ -37,3 +37,4 @@ To make sure sign-in uses 6-digit OTP codes instead of magic links:
 
 If you're still receiving magic links instead of OTP codes, check your Supabase email template configuration.
 
+

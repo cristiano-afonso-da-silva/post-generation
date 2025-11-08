@@ -92,3 +92,4 @@ After creating all products, you should have:
 | Enterprise Plan ($100/month) | `price_...` | `prod_...` |
 
 **Note**: The Price ID and Product ID will be different for test mode vs live mode. Make sure you're copying from the **test mode** dashboard!
+

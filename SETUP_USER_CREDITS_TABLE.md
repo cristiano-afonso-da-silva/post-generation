@@ -46,3 +46,4 @@ If you get errors:
 - Make sure you're in the correct Supabase project
 - Check that `auth.users` table exists (it should by default)
 - Verify you have the correct permissions
+

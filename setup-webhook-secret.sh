@@ -52,3 +52,4 @@ echo "📝 Current value: $webhook_secret"
 echo ""
 echo "⚠️  Don't forget to restart your Next.js dev server if it's running!"
 
+
