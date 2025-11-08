@@ -335,8 +335,8 @@ export default function Home() {
           throw new Error(data.error || 'Failed to refresh slide enhancements')
         }
 
-        const updatedUnderline = data.data?.underlineWords || {}
-        const sanitizedSlides = data.data?.slides || cleanedSlides
+        const updatedUnderline: Note['underlineWords'] = data.data?.underlineWords || {}
+        const sanitizedSlides: Note['slides'] = (data.data?.slides || cleanedSlides) as Note['slides']
 
         const updatedNote: Note = {
           ...note,
