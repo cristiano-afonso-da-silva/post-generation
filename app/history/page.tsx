@@ -61,9 +61,10 @@ export default function HistoryPage() {
       const gen = data.generation
 
       // Store in localStorage to load in main page
+      // Note: API returns 'slides' but we map to 'carousels' for our Note interface
       localStorage.setItem('postGeneration_note', JSON.stringify({
         ideaTitle: gen.idea_title,
-        slides: gen.slides,
+        carousels: gen.slides,
         caption: gen.caption,
         underlineWords: gen.underline_words
       }))
@@ -71,13 +72,15 @@ export default function HistoryPage() {
       localStorage.setItem('postGeneration_fontCombinationId', gen.font_combination_id)
       localStorage.setItem('postGeneration_colorThemeId', gen.color_theme_id)
       
-      // Store generation_id and content hash (ideaTitle + slides only, excludes theme/font)
+      // Store generation_id and content hash (ideaTitle + carousels only, excludes theme/font)
       localStorage.setItem('postGeneration_generationId', gen.id)
       const contentHash = JSON.stringify({
         ideaTitle: gen.idea_title,
-        slides: gen.slides
+        carousels: gen.slides
       })
       localStorage.setItem('postGeneration_contentHash', contentHash)
+      // Store ideaTitle to track that credits were already deducted for this idea
+      localStorage.setItem('postGeneration_ideaTitle', gen.idea_title)
       
       // Store images
       if (gen.imageUrls && gen.imageUrls.length > 0) {
@@ -85,7 +88,7 @@ export default function HistoryPage() {
         // Also store full content hash for image matching (includes theme/font)
         const fullContentHash = JSON.stringify({
           ideaTitle: gen.idea_title,
-          slides: gen.slides,
+          carousels: gen.slides,
           underlineWords: gen.underline_words,
           fontCombinationId: gen.font_combination_id,
           colorThemeId: gen.color_theme_id

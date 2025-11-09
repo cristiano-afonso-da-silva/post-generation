@@ -121,22 +121,22 @@ const formatToMarkdown = (note: any, underlineWords: any = {}) => {
   lines.push('═'.repeat(80));
   lines.push('');
   
-  note.slides.forEach((slide: any, index: number) => {
-    const slideNum = index + 1;
-    const emoji = slide.kind === 'HOOK' ? '🎣' : slide.kind === 'CTA' ? '📢' : '📄';
+  note.slides.forEach((carousel: any, index: number) => {
+    const carouselNum = index + 1;
+    const emoji = carousel.kind === 'HOOK' ? '🎣' : carousel.kind === 'CTA' ? '📢' : '📄';
     
-    lines.push(`┌─ Slide ${slideNum}/${note.slides.length} ${emoji} ${slide.kind} ${'─'.repeat(Math.max(0, 50 - slideNum.toString().length - slide.kind.length))}`);
+    lines.push(`┌─ Carousel ${carouselNum}/${note.slides.length} ${emoji} ${carousel.kind} ${'─'.repeat(Math.max(0, 50 - carouselNum.toString().length - carousel.kind.length))}`);
     lines.push('│');
     
-    if (slide.title) {
-      lines.push(`│ 🏷️  ${slide.title}`);
+    if (carousel.title) {
+      lines.push(`│ 🏷️  ${carousel.title}`);
     }
     
-    if (slide.content) {
-      lines.push(`│ 💬  ${slide.content}`);
+    if (carousel.content) {
+      lines.push(`│ 💬  ${carousel.content}`);
     }
     
-    if (slide.kind === 'MIDDLE' && underlineWords[index]) {
+    if (carousel.kind === 'MIDDLE' && underlineWords[index]) {
       const emphasis = underlineWords[index];
       if (emphasis.underline) {
         lines.push(`│ ━ Underline: ${emphasis.underline}`);
@@ -155,7 +155,7 @@ const formatToMarkdown = (note: any, underlineWords: any = {}) => {
       }
     }
     
-    if (slide.kind === 'HOOK' && underlineWords[index]) {
+    if (carousel.kind === 'HOOK' && underlineWords[index]) {
       const emphasis = underlineWords[index];
       if (emphasis.highlight) {
         lines.push(`│ ✨ Highlight: ${emphasis.highlight}`);
@@ -163,7 +163,7 @@ const formatToMarkdown = (note: any, underlineWords: any = {}) => {
       }
     }
     
-    if (slide.kind === 'CTA' && underlineWords[index]) {
+    if (carousel.kind === 'CTA' && underlineWords[index]) {
       const emphasis = underlineWords[index];
       if (emphasis.underline) {
         lines.push(`│ ━ Underline: ${emphasis.underline}`);
@@ -184,9 +184,9 @@ const formatToMarkdown = (note: any, underlineWords: any = {}) => {
   lines.push('═'.repeat(80));
   lines.push('📊 STATISTICS');
   lines.push('═'.repeat(80));
-  lines.push(`Total Slides: ${note.stats.totalSlides}`);
+  lines.push(`Total Carousels: ${note.stats.totalSlides}`);
   lines.push(`Hook Words: ${note.stats.hookWords}`);
-  lines.push(`Middle Slides: ${note.stats.middleSlides}`);
+  lines.push(`Content carousels: ${note.stats.middleSlides}`);
   lines.push(`Caption Words: ${note.stats.captionWords}`);
   lines.push('═'.repeat(80));
   
@@ -198,8 +198,8 @@ const formatToMarkdown = (note: any, underlineWords: any = {}) => {
   Object.keys(underlineWords).forEach(key => {
     const data = underlineWords[key];
     if (data && (data.underline || data.highlight || data.imageSearch || data.imageUrl)) {
-      const slideNum = parseInt(key) + 1;
-      lines.push(`Slide ${slideNum}:`);
+      const carouselNum = parseInt(key) + 1;
+      lines.push(`Carousel ${carouselNum}:`);
       if (data.underline) {
         lines.push(`  ━ Underline: ${data.underline}`);
       }
@@ -282,10 +282,10 @@ Account: ${accountDescription || 'General audience'}
 Post Idea: "${ideaTitle}"
 
 TASK
-Create a complete note with slides and caption that follows these EXACT specifications:
+Create a complete note with carousels and caption that follows these EXACT specifications:
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SLIDE 1: HOOK (FIRST SLIDE)
+CAROUSEL 1: HOOK (FIRST CAROUSEL)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - title: The hook text itself (maximum 10 words)
   * Use simple English - easy to understand, clear, and direct
@@ -295,9 +295,9 @@ SLIDE 1: HOOK (FIRST SLIDE)
 - kind: "HOOK"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SLIDES 2-N: MIDDLE CONTENT (2-7 slides)
+CAROUSELS 2-N: MIDDLE CONTENT (2-7 carousels)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Each middle slide needs:
+Each middle carousel needs:
 
 TITLE: 2-5 words (clear, punchy)
 GOOD: "The Problem", "What Actually Works", "Mistake Three", "Try This Instead"
@@ -317,7 +317,7 @@ BAD EXAMPLE (too long - 45 words):
 "The problem with morning routines is that most people try to do too many things at once, which creates unnecessary stress and pressure that ends up being counterproductive to what they're trying to achieve in the first place with their morning routine."
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-LAST SLIDE: CALL TO ACTION (CTA)
+LAST CAROUSEL: CALL TO ACTION (CTA)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - title: Clear call-to-action (2-5 words)
   GOOD: "Try This Today", "Start Here", "Your Next Step"
@@ -366,12 +366,12 @@ Required JSON structure:
   "caption": "string (full Instagram caption with hashtags)"
 }
 
-The "slides" array is REQUIRED and MUST contain at least 3 slides.
-Each slide MUST have: title, content, and kind properties.
+The "slides" array is REQUIRED and MUST contain at least 3 carousels.
+Each carousel MUST have: title, content, and kind properties.
 
 QUALITY CHECKLIST
-✓ Hook slide has compelling title (max 10 words), empty content
-✓ Middle slides have 2-5 word titles and 18-32 word content
+✓ Hook carousel has compelling title (max 10 words), empty content
+✓ Middle carousels have 2-5 word titles and 18-32 word content
 ✓ Content flows logically and tells a story
 ✓ CTA is specific and actionable
 ✓ Caption is 150-250 words
@@ -395,16 +395,16 @@ const NOTE_SCHEMA = {
         properties: {
           title: {
             type: SchemaType.STRING,
-            description: "Slide title (2-5 words for MIDDLE, ≤10 words for HOOK)"
+            description: "Carousel title (2-5 words for MIDDLE, ≤10 words for HOOK)"
           },
           content: {
             type: SchemaType.STRING,
-            description: "Slide content (18-32 words for MIDDLE slides, empty for HOOK)"
+            description: "Carousel content (18-32 words for MIDDLE carousels, empty for HOOK)"
           },
           kind: {
             type: SchemaType.STRING,
             enum: ['HOOK', 'MIDDLE', 'CTA'],
-            description: "Slide type"
+            description: "Carousel type"
           }
         },
         required: ['title', 'content', 'kind']
@@ -445,7 +445,7 @@ const UNDERLINE_SCHEMA = {
     },
     imageSearch: {
       type: SchemaType.STRING,
-      description: "REQUIRED for MIDDLE slides: 2-4 keywords for image search (e.g., 'person working laptop', 'mountain sunrise'). Must be descriptive visual terms. Empty string for HOOK and CTA slides.",
+      description: "REQUIRED for MIDDLE carousels: 2-4 keywords for image search (e.g., 'person working laptop', 'mountain sunrise'). Must be descriptive visual terms. Empty string for HOOK and CTA carousels.",
     },
   },
   required: ["underline", "highlight", "imageSearch"],
@@ -608,7 +608,7 @@ async function generateIdeas(accountDescription: string) {
   }
 }
 
-async function extractUnderlineWords(slides: any[], includeImages: boolean = true) {
+async function extractUnderlineWords(carousels: any[], includeImages: boolean = true) {
   console.log(`\n🎨 Extracting emphasis words and ${includeImages ? '🖼️ images (enabled)' : '📝 NO images (disabled)'}`);
   
   const underlineModel = genAI.getGenerativeModel({
@@ -623,52 +623,52 @@ async function extractUnderlineWords(slides: any[], includeImages: boolean = tru
   const results: Record<number, any> = {};
   const usedImageIds = new Set<number>();
 
-  for (let i = 0; i < slides.length; i++) {
-    const slide = slides[i];
+  for (let i = 0; i < carousels.length; i++) {
+    const carousel = carousels[i];
     
     let prompt = '';
     
-    if (slide.kind === 'HOOK') {
-      if (!slide.title) continue;
+    if (carousel.kind === 'HOOK') {
+      if (!carousel.title) continue;
       
-      prompt = `Analyze this hook slide title and extract emphasis words:
+      prompt = `Analyze this hook carousel title and extract emphasis words:
 
-Title: "${slide.title}"
+Title: "${carousel.title}"
 
 Instructions:
 - Extract 1 single word that is most important for emphasis
 - The highlight word should be a KEY word that captures attention
 - Return the word without any punctuation
-- For underline and imageSearch, return empty string (no underlines or images on hook slides)
+- For underline and imageSearch, return empty string (no underlines or images on hook carousels)
 
 Return JSON with:
-- underline: "" (empty string for hook slides)
+- underline: "" (empty string for hook carousels)
 - highlight: "word" (single most important word, no punctuation)
-- imageSearch: "" (empty string for hook slides)`;
-    } else if (slide.kind === 'CTA') {
-      if (!slide.content) continue;
+- imageSearch: "" (empty string for hook carousels)`;
+    } else if (carousel.kind === 'CTA') {
+      if (!carousel.content) continue;
       
-      prompt = `Analyze this CTA slide content and extract emphasis words:
+      prompt = `Analyze this CTA carousel content and extract emphasis words:
 
-Content: "${slide.content}"
+Content: "${carousel.content}"
 
 Instructions:
 - Extract 2-3 short phrases (2-4 words each) that are most important for emphasis
 - These phrases should be ACTION-ORIENTED and impactful
 - Return them comma-separated
-- For highlight and imageSearch, return empty string (no highlights or images on CTA slides)
+- For highlight and imageSearch, return empty string (no highlights or images on CTA carousels)
 
 Return JSON with:
 - underline: "phrase 1, phrase 2, phrase 3" (2-3 phrases)
-- highlight: "" (empty string for CTA slides)
-- imageSearch: "" (empty string for CTA slides)`;
-    } else if (slide.kind === 'MIDDLE') {
-      if (!slide.content) continue;
+- highlight: "" (empty string for CTA carousels)
+- imageSearch: "" (empty string for CTA carousels)`;
+    } else if (carousel.kind === 'MIDDLE') {
+      if (!carousel.content) continue;
       
-      prompt = `Analyze this middle slide content and extract emphasis words and image search keywords:
+      prompt = `Analyze this middle carousel content and extract emphasis words and image search keywords:
 
-Title: "${slide.title}"
-Content: "${slide.content}"
+Title: "${carousel.title}"
+Content: "${carousel.content}"
 
 CRITICAL INSTRUCTIONS:
 1. UNDERLINE: Extract 2-4 short phrases (2-4 words each) that are KEY CONCEPTS
@@ -702,21 +702,21 @@ The imageSearch field is MANDATORY. Always provide visual search terms.`;
       const result = await callGeminiWithRetry(underlineModel, prompt);
       const responseText = result.response.text();
       
-      console.log(`\n🎨 Slide ${i + 1} (${slide.kind}) - Raw Gemini Response:`);
+      console.log(`\n🎨 Carousel ${i + 1} (${carousel.kind}) - Raw Gemini Response:`);
       console.log(responseText);
       
       const parsed = safeJsonParse(responseText);
       
-      console.log(`🔍 Parsed response for slide ${i + 1}:`, JSON.stringify(parsed, null, 2));
+      console.log(`🔍 Parsed response for carousel ${i + 1}:`, JSON.stringify(parsed, null, 2));
       
-      // Ensure imageSearch exists for MIDDLE slides
+      // Ensure imageSearch exists for MIDDLE carousels
       let imageSearchKeywords = parsed.imageSearch || '';
       
-      // If Gemini didn't provide imageSearch for MIDDLE slide, generate basic keywords from content
-      if (slide.kind === 'MIDDLE' && !imageSearchKeywords) {
-        console.warn(`⚠️  Gemini did not provide imageSearch for MIDDLE slide ${i + 1}, generating fallback...`);
+      // If Gemini didn't provide imageSearch for MIDDLE carousel, generate basic keywords from content
+      if (carousel.kind === 'MIDDLE' && !imageSearchKeywords) {
+        console.warn(`⚠️  Gemini did not provide imageSearch for MIDDLE carousel ${i + 1}, generating fallback...`);
         // Extract first few meaningful words from content as fallback
-        const words = slide.content.toLowerCase()
+        const words = carousel.content.toLowerCase()
           .replace(/[.,!?;:'"]/g, '')
           .split(' ')
           .filter((w: string) => w.length > 3 && !['that', 'this', 'with', 'from', 'have', 'been', 'they', 'their'].includes(w))
@@ -733,9 +733,9 @@ The imageSearch field is MANDATORY. Always provide visual search terms.`;
         imageUrl: null, // Will be populated next
       };
       
-      // For MIDDLE slides, fetch image from Pexels if enabled and we have search keywords
-      if (includeImages && slide.kind === 'MIDDLE' && imageSearchKeywords && imageSearchKeywords.trim()) {
-        console.log(`\n🖼️  MIDDLE SLIDE ${i + 1}: Attempting to fetch image...`);
+      // For MIDDLE carousels, fetch image from Pexels if enabled and we have search keywords
+      if (includeImages && carousel.kind === 'MIDDLE' && imageSearchKeywords && imageSearchKeywords.trim()) {
+        console.log(`\n🖼️  MIDDLE CAROUSEL ${i + 1}: Attempting to fetch image...`);
         console.log(`   Keywords: "${imageSearchKeywords}"`);
         const imageResult = await searchPexelsImage(imageSearchKeywords, usedImageIds);
         results[i].imageUrl = imageResult?.url || null;
@@ -743,21 +743,21 @@ The imageSearch field is MANDATORY. Always provide visual search terms.`;
           usedImageIds.add(imageResult.id);
         }
         if (imageResult?.url) {
-          console.log(`✅ SUCCESS: Image added to slide ${i + 1}`);
+          console.log(`✅ SUCCESS: Image added to carousel ${i + 1}`);
         } else {
-          console.error(`❌ FAILED: No image URL returned for slide ${i + 1}`);
+          console.error(`❌ FAILED: No image URL returned for carousel ${i + 1}`);
         }
-      } else if (!includeImages && slide.kind === 'MIDDLE') {
-        console.log(`\n📝 MIDDLE SLIDE ${i + 1}: Images disabled by user - skipping image fetch`);
-      } else if (slide.kind === 'MIDDLE') {
-        console.log(`\n⚠️  MIDDLE SLIDE ${i + 1}: NO imageSearch keywords!`);
+      } else if (!includeImages && carousel.kind === 'MIDDLE') {
+        console.log(`\n📝 MIDDLE CAROUSEL ${i + 1}: Images disabled by user - skipping image fetch`);
+      } else if (carousel.kind === 'MIDDLE') {
+        console.log(`\n⚠️  MIDDLE CAROUSEL ${i + 1}: NO imageSearch keywords!`);
         console.log(`   This should not happen with the fallback in place.`);
       }
       
-      console.log(`\n📝 Final extraction result for slide ${i + 1}:`, JSON.stringify(results[i], null, 2));
+      console.log(`\n📝 Final extraction result for carousel ${i + 1}:`, JSON.stringify(results[i], null, 2));
       
     } catch (error: any) {
-      console.error(`❌ Error extracting emphasis for slide ${i + 1}:`, error.message);
+      console.error(`❌ Error extracting emphasis for carousel ${i + 1}:`, error.message);
       results[i] = { underline: '', highlight: '', imageSearch: '', imageUrl: null };
     }
   }
@@ -792,7 +792,7 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
     try {
       data = safeJsonParse(responseText);
       console.log('✅ JSON parsed successfully');
-      console.log('📊 Slides count:', data.slides?.length || 0);
+      console.log('📊 Carousels count:', data.slides?.length || 0);
     } catch (parseError: any) {
       console.error('❌ JSON Parse Error:', parseError.message);
       console.error('📄 Problematic JSON (first 500 chars):', responseText.substring(0, 500));
@@ -802,22 +802,22 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
     if (!data.slides || !Array.isArray(data.slides) || data.slides.length < 4) {
       console.error('❌ Invalid note structure!');
       console.error('📊 Received data:', JSON.stringify(data, null, 2));
-      throw new Error(`Invalid note format: must have at least 4 slides, got ${data.slides?.length || 0}`);
+      throw new Error(`Invalid note format: must have at least 4 carousels, got ${data.slides?.length || 0}`);
     }
     
     if (data.slides.length > 9) {
-      console.warn(`⚠️  Note has ${data.slides.length} slides (max 9), trimming...`);
+      console.warn(`⚠️  Note has ${data.slides.length} carousels (max 9), trimming...`);
       data.slides = data.slides.slice(0, 9);
     }
     
-    // Remove asterisks from all slide content
+    // Remove asterisks from all carousel content
     if (data.slides && Array.isArray(data.slides)) {
-      data.slides.forEach((slide: any) => {
-        if (slide.title) {
-          slide.title = slide.title.replace(/\*/g, '');
+      data.slides.forEach((carousel: any) => {
+        if (carousel.title) {
+          carousel.title = carousel.title.replace(/\*/g, '');
         }
-        if (slide.content) {
-          slide.content = slide.content.replace(/\*/g, '');
+        if (carousel.content) {
+          carousel.content = carousel.content.replace(/\*/g, '');
         }
       });
     }
@@ -830,7 +830,7 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
     
     // Calculate stats before formatting
     const hookWords = data.slides[0]?.title ? wordCount(data.slides[0].title) : 0;
-    const middleSlides = data.slides.filter((s: any) => s.kind === 'MIDDLE').length;
+    const middleCarousels = data.slides.filter((c: any) => c.kind === 'MIDDLE').length;
     const captionWords = wordCount(data.caption);
     
     // Add stats to data object so formatToMarkdown can use them
@@ -839,7 +839,7 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
       stats: {
         totalSlides: data.slides.length,
         hookWords,
-        middleSlides,
+        middleSlides: middleCarousels,
         captionWords,
       }
     };
@@ -858,7 +858,7 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
         stats: {
           totalSlides: data.slides.length,
           hookWords,
-          middleSlides,
+          middleSlides: middleCarousels,
           captionWords,
         }
       },
@@ -920,38 +920,38 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'refreshSlides') {
-      const slidesInput = body.slides;
+      const carouselsInput = body.slides;
       const shouldIncludeImages = includeImages !== undefined ? includeImages : true;
 
-      if (!Array.isArray(slidesInput) || slidesInput.length === 0) {
+      if (!Array.isArray(carouselsInput) || carouselsInput.length === 0) {
         return NextResponse.json(
-          { success: false, error: 'Missing or invalid slides array' },
+          { success: false, error: 'Missing or invalid carousels array' },
           { status: 400 }
         );
       }
 
-      const sanitizedSlides = slidesInput.map((slide: any, index: number) => ({
-        title: typeof slide?.title === 'string' ? slide.title : '',
-        content: typeof slide?.content === 'string' ? slide.content : '',
-        kind: ['HOOK', 'CTA', 'MIDDLE'].includes(slide?.kind) ? slide.kind : 'MIDDLE',
+      const sanitizedCarousels = carouselsInput.map((carousel: any, index: number) => ({
+        title: typeof carousel?.title === 'string' ? carousel.title : '',
+        content: typeof carousel?.content === 'string' ? carousel.content : '',
+        kind: ['HOOK', 'CTA', 'MIDDLE'].includes(carousel?.kind) ? carousel.kind : 'MIDDLE',
         index
       })).map(({ index: _, ...rest }) => rest);
 
       try {
-        const underlineWords = await extractUnderlineWords(sanitizedSlides, shouldIncludeImages);
+        const underlineWords = await extractUnderlineWords(sanitizedCarousels, shouldIncludeImages);
 
         return NextResponse.json({
           success: true,
           action: 'refreshSlides',
           data: {
-            slides: sanitizedSlides,
+            slides: sanitizedCarousels,
             underlineWords
           }
         });
       } catch (error: any) {
-        console.error('Error refreshing slides:', error);
+        console.error('Error refreshing carousels:', error);
         return NextResponse.json(
-          { success: false, error: error.message || 'Failed to refresh slides' },
+          { success: false, error: error.message || 'Failed to refresh carousels' },
           { status: 500 }
         );
       }

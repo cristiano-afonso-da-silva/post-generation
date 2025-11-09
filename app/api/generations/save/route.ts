@@ -26,9 +26,25 @@ export async function POST(request: NextRequest) {
     let isUpdate = false
     let generationId = providedGenerationId // Use let so we can reassign if needed
 
-    // Check if we're updating an existing generation
-    if (generationId) {
-      // Verify the generation exists and belongs to the user
+    // First, check if a generation with the same ideaTitle already exists for this user
+    // This ensures that updates to the same idea replace the existing entry instead of creating duplicates
+    const { data: existingByTitle, error: titleCheckError } = await supabase
+      .from('generations')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('idea_title', ideaTitle)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (!titleCheckError && existingByTitle) {
+      // Found an existing generation with the same ideaTitle - we'll update it
+      generationId = existingByTitle.id
+      generation = existingByTitle
+      isUpdate = true
+      console.log(`Found existing generation for ideaTitle "${ideaTitle}", will update instead of creating new`)
+    } else if (generationId) {
+      // If no match by title, but generationId was provided, verify it exists and belongs to the user
       const { data: existingGen, error: fetchError } = await supabase
         .from('generations')
         .select('*')
@@ -36,12 +52,12 @@ export async function POST(request: NextRequest) {
         .eq('user_id', userId)
         .single()
 
-      if (fetchError || !existingGen) {
-        // Generation doesn't exist or doesn't belong to user, create new one
-        generationId = undefined
-      } else {
+      if (!fetchError && existingGen) {
         generation = existingGen
         isUpdate = true
+      } else {
+        // Generation doesn't exist or doesn't belong to user, will create new one
+        generationId = undefined
       }
     }
 
@@ -113,7 +129,7 @@ export async function POST(request: NextRequest) {
       const base64Data = images[i].replace(/^data:image\/\w+;base64,/, '')
       const buffer = Buffer.from(base64Data, 'base64')
       
-      const filePath = `${userId}/${generation.id}/slide-${i}.png`
+      const filePath = `${userId}/${generation.id}/carousel-${i}.png`
       
       const { error: uploadError } = await supabase.storage
         .from('carousel-images')
@@ -123,7 +139,7 @@ export async function POST(request: NextRequest) {
         })
 
       if (uploadError) {
-        console.error(`Error uploading slide ${i}:`, uploadError)
+        console.error(`Error uploading carousel ${i}:`, uploadError)
         throw uploadError
       }
 

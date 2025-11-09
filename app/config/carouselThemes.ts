@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// SLIDE THEME CONFIGURATION
+// CAROUSEL THEME CONFIGURATION
 // ═══════════════════════════════════════════════════════════════════════════
 // Add new font combinations and color themes here
 

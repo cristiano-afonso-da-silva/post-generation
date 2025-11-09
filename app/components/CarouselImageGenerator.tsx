@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { getFontCombination, getColorTheme } from '../config/slideThemes'
+import { getFontCombination, getColorTheme } from '../config/carouselThemes'
 import { useAuth } from '../context/AuthContext'
 import JSZip from 'jszip'
 
@@ -41,14 +41,14 @@ function ensureColorAlpha(color: string, alpha = 0.5): string {
   return trimmed
 }
 
-interface Slide {
+interface Carousel {
   title: string
   content: string
   kind: 'HOOK' | 'MIDDLE' | 'CTA'
 }
 
 interface Props {
-  slides: Slide[]
+  carousels: Carousel[]
   ideaTitle: string
   underlineWords?: Record<number, { underline: string; highlight: string; imageUrl?: string | null }>
   fontCombinationId?: string
@@ -60,7 +60,7 @@ interface Props {
 }
 
 // Initialize images from localStorage before rendering
-const getInitialImages = (slides: Slide[], ideaTitle: string, underlineWords: Record<number, any>, fontCombinationId: string, colorThemeId: string, backgroundImageUrl: string | null): string[] => {
+const getInitialImages = (carousels: Carousel[], ideaTitle: string, underlineWords: Record<number, any>, fontCombinationId: string, colorThemeId: string, backgroundImageUrl: string | null): string[] => {
   try {
     const savedImages = localStorage.getItem('postGeneration_canvasImages')
     const savedFullContentHash = localStorage.getItem('postGeneration_fullContentHash')
@@ -70,7 +70,7 @@ const getInitialImages = (slides: Slide[], ideaTitle: string, underlineWords: Re
     // Create deterministic hash with consistent property order
     const currentFullContentHash = JSON.stringify({ 
       ideaTitle, 
-      slides, 
+      carousels, 
       underlineWords, 
       fontCombinationId, 
       colorThemeId, 
@@ -80,7 +80,7 @@ const getInitialImages = (slides: Slide[], ideaTitle: string, underlineWords: Re
     if (savedImages && savedHash && savedHash === currentFullContentHash) {
       const imageDataUrls = JSON.parse(savedImages)
       // Verify all images are present and valid data URLs
-      if (imageDataUrls.length === slides.length && 
+      if (imageDataUrls.length === carousels.length && 
           imageDataUrls.every((img: string) => img && typeof img === 'string' && img.startsWith('data:image/'))) {
         console.log('✅ Loaded all', imageDataUrls.length, 'images from cache')
         return imageDataUrls
@@ -94,8 +94,8 @@ const getInitialImages = (slides: Slide[], ideaTitle: string, underlineWords: Re
   return []
 }
 
-export default function SlideImageGenerator({ 
-  slides, 
+export default function CarouselImageGenerator({ 
+  carousels, 
   ideaTitle, 
   underlineWords = {},
   fontCombinationId = 'combination-1',
@@ -107,11 +107,31 @@ export default function SlideImageGenerator({
 }: Props) {
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([])
   const [generating, setGenerating] = useState(false)
-  const [slideImages, setSlideImages] = useState<string[]>(() => 
-    getInitialImages(slides, ideaTitle, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl)
+  const [carouselImages, setCarouselImages] = useState<string[]>(() => 
+    getInitialImages(carousels, ideaTitle, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl)
   )
+  // Keep previous images visible during regeneration to prevent layout shifts
+  const initialImages = getInitialImages(carousels, ideaTitle, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl)
+  const previousImagesRef = useRef<string[]>(initialImages)
   const { user, refreshCredits } = useAuth()
-  const hasDeductedCredit = useRef(false)
+  // Initialize hasDeductedCredit from localStorage - check by ideaTitle, not content hash
+  // Credits should be deducted once per ideaTitle, not once per content version
+  const getInitialCreditDeductionStatus = (): boolean => {
+    try {
+      const storedGenerationId = localStorage.getItem('postGeneration_generationId')
+      const storedIdeaTitle = localStorage.getItem('postGeneration_ideaTitle')
+      // If generationId exists and ideaTitle matches, credits were already deducted for this idea
+      // (regardless of content edits)
+      if (storedGenerationId && storedIdeaTitle === ideaTitle) {
+        console.log('✅ Credits already deducted for this ideaTitle (found generationId)', ideaTitle)
+        return true
+      }
+    } catch (error) {
+      console.error('Error checking credit deduction status:', error)
+    }
+    return false
+  }
+  const hasDeductedCredit = useRef<boolean>(getInitialCreditDeductionStatus())
   const isInitialMount = useRef(true)
   // Initialize prevDesignSettings immediately with initial prop values
   const prevDesignSettings = useRef<{ fontCombinationId: string; colorThemeId: string; backgroundImageUrl: string | null }>({
@@ -120,6 +140,8 @@ export default function SlideImageGenerator({
     backgroundImageUrl
   })
   const hasInitialized = useRef(false)
+  // Track previous carousel content for detecting edits
+  const prevCarouselsContent = useRef<string>(JSON.stringify(carousels))
   
   // Debug: Log background image URL
   useEffect(() => {
@@ -154,32 +176,29 @@ export default function SlideImageGenerator({
     }
 
     try {
-      // Calculate content hash (only ideaTitle + slides, excludes theme/font)
-      const currentContentHash = JSON.stringify({ ideaTitle, slides })
+      // Calculate content hash (only ideaTitle + carousels, excludes theme/font)
+      // Used for localStorage caching, but backend handles deduplication by ideaTitle
+      const currentContentHash = JSON.stringify({ ideaTitle, carousels })
       
-      // Check localStorage for existing generation_id and content hash
+      // Check localStorage for existing generation_id
+      // Backend will automatically find and update existing generation by ideaTitle if it exists
       const storedGenerationId = localStorage.getItem('postGeneration_generationId')
-      const storedContentHash = localStorage.getItem('postGeneration_contentHash')
+      const storedIdeaTitle = localStorage.getItem('postGeneration_ideaTitle')
       
-      // Determine if we should update or create new
+      // Send generationId if we have it and it's for the same ideaTitle
+      // Backend will verify and use ideaTitle matching as the primary deduplication method
       let generationIdToSend: string | undefined = undefined
-      const shouldUpdate = storedGenerationId && storedContentHash === currentContentHash
-      
-      if (shouldUpdate) {
+      if (storedGenerationId && storedIdeaTitle === ideaTitle) {
         generationIdToSend = storedGenerationId
-        console.log('💾 Updating existing generation in database...', {
-          generationId: generationIdToSend,
-          ideaTitle,
-          slidesCount: slides.length,
-          imagesCount: imageDataUrls.length
-        })
-      } else {
-        console.log('💾 Creating new generation in database...', {
-          ideaTitle,
-          slidesCount: slides.length,
-          imagesCount: imageDataUrls.length
-        })
       }
+      
+      console.log('💾 Saving generation to database...', {
+        ideaTitle,
+        generationId: generationIdToSend || 'new',
+        carouselsCount: carousels.length,
+        imagesCount: imageDataUrls.length,
+        note: 'Backend will update existing entry if same ideaTitle exists'
+      })
 
       const response = await fetch('/api/generations/save', {
         method: 'POST',
@@ -189,7 +208,7 @@ export default function SlideImageGenerator({
           generationId: generationIdToSend,
           ideaTitle,
           accountDescription: accountDescriptionRef.current,
-          slides,
+          slides: carousels,
           caption: captionRef.current,
           underlineWords,
           fontCombinationId,
@@ -206,22 +225,23 @@ export default function SlideImageGenerator({
         const result = await response.json()
         const returnedGenerationId = result.generationId
         
-        // Store generation_id and content hash in localStorage
+        // Store generation_id, content hash, and ideaTitle in localStorage
         localStorage.setItem('postGeneration_generationId', returnedGenerationId)
         localStorage.setItem('postGeneration_contentHash', currentContentHash)
+        localStorage.setItem('postGeneration_ideaTitle', ideaTitle)
         
         if (result.isUpdate) {
-          console.log('✅ Generation updated in history:', returnedGenerationId)
+          console.log('✅ Generation updated in history (same ideaTitle):', returnedGenerationId)
         } else {
-          console.log('✅ Generation auto-saved to history:', returnedGenerationId)
+          console.log('✅ Generation auto-saved to history (new ideaTitle):', returnedGenerationId)
         }
       }
     } catch (error: any) {
       console.error('❌ Error auto-saving generation:', error.message || error)
     }
-  }, [ideaTitle, slides, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl, user?.id])
+  }, [ideaTitle, carousels, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl, user?.id])
 
-  const generateAllSlides = useCallback(async (overrideFontId?: string, overrideColorId?: string, overrideBgUrl?: string | null) => {
+  const generateAllCarousels = useCallback(async (overrideFontId?: string, overrideColorId?: string, overrideBgUrl?: string | null) => {
     setGenerating(true)
     
     // Use override values if provided (for design changes), otherwise use current props
@@ -234,29 +254,24 @@ export default function SlideImageGenerator({
     const currentColorTheme = getColorTheme(currentColorId)
     
     // Ensure canvasRefs array has correct length
-    if (canvasRefs.current.length !== slides.length) {
-      canvasRefs.current = new Array(slides.length).fill(null)
+    if (canvasRefs.current.length !== carousels.length) {
+      canvasRefs.current = new Array(carousels.length).fill(null)
     }
     
     // Initialize array with correct length to maintain order
-    const imageDataUrls: string[] = new Array(slides.length).fill('')
+    const imageDataUrls: string[] = new Array(carousels.length).fill('')
     
-    for (let i = 0; i < slides.length; i++) {
-      await generateSlideImage(i, currentFontConfig, currentColorTheme, currentBgUrl)
+    // Generate all carousels first without updating state (prevents layout shifts)
+    for (let i = 0; i < carousels.length; i++) {
+      await generateCarouselImage(i, currentFontConfig, currentColorTheme, currentBgUrl)
       // Save canvas to data URL at the specific index to maintain order
       const canvas = canvasRefs.current[i]
       if (canvas) {
         const dataUrl = canvas.toDataURL('image/png')
         imageDataUrls[i] = dataUrl
-        console.log(`✅ Generated slide ${i + 1}/${slides.length}`)
-        // Incrementally update UI for instant feedback
-        setSlideImages(prev => {
-          const next = prev.length === slides.length ? [...prev] : Array.from({ length: slides.length }, (_, idx) => prev[idx] || '')
-          next[i] = dataUrl
-          return next
-        })
+        console.log(`✅ Generated carousel ${i + 1}/${carousels.length}`)
       } else {
-        console.warn(`⚠️ Canvas not found for slide ${i + 1}`)
+        console.warn(`⚠️ Canvas not found for carousel ${i + 1}`)
       }
     }
     
@@ -265,23 +280,27 @@ export default function SlideImageGenerator({
     if (!allImagesValid) {
       console.error('❌ Some images failed to generate')
     } else {
-      console.log('✅ All', imageDataUrls.length, 'slides generated successfully')
+      console.log('✅ All', imageDataUrls.length, 'carousels generated successfully')
     }
     
-    // Set images immediately for display
-    setSlideImages(imageDataUrls)
+    // Batch update all images at once to prevent layout shifts
+    // Preserve old images in ref before updating
+    setCarouselImages(prev => {
+      previousImagesRef.current = prev.length > 0 ? [...prev] : []
+      return imageDataUrls
+    })
     
     // Create full content hash (includes theme/font) for image matching - deterministic order
     const fullContentHash = JSON.stringify({ 
       ideaTitle, 
-      slides, 
+      carousels, 
       underlineWords, 
       fontCombinationId: currentFontId, 
       colorThemeId: currentColorId, 
       backgroundImageUrl: currentBgUrl || null 
     })
-    // Create content hash (only ideaTitle + slides) for generation update detection
-    const contentHash = JSON.stringify({ ideaTitle, slides })
+    // Create content hash (only ideaTitle + carousels) for generation update detection
+    const contentHash = JSON.stringify({ ideaTitle, carousels })
     
     // Save all images to localStorage with content hashes
     try {
@@ -297,7 +316,7 @@ export default function SlideImageGenerator({
       console.error('Error saving images to localStorage:', error)
     }
     
-    // Deduct credit when slides are generated (only once per note generation)
+    // Deduct credit when carousels are generated (only once per note generation)
     if (user?.id && !hasDeductedCredit.current) {
       try {
         const deductResponse = await fetch('/api/credits/deduct', {
@@ -310,6 +329,12 @@ export default function SlideImageGenerator({
           // Refresh credits in context to update UI immediately
           await refreshCredits()
           hasDeductedCredit.current = true
+          // Store ideaTitle in localStorage to track that credits were deducted for this idea
+          try {
+            localStorage.setItem('postGeneration_ideaTitle', ideaTitle)
+          } catch (error) {
+            console.error('Error storing ideaTitle:', error)
+          }
         } else {
           // If deduction fails, log the error but don't block generation
           const errorData = await deductResponse.json().catch(() => ({ error: 'Unknown error' }))
@@ -344,24 +369,24 @@ export default function SlideImageGenerator({
     if (onGenerationComplete) {
       onGenerationComplete()
     }
-  }, [slides, ideaTitle, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl, user?.id, refreshCredits, onGenerationComplete, saveToDatabase])
+  }, [carousels, ideaTitle, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl, user?.id, refreshCredits, onGenerationComplete, saveToDatabase])
 
-  // Generate slides if not loaded from storage
+  // Generate carousels if not loaded from storage
   useEffect(() => {
-    if (slides.length > 0 && slideImages.length === 0) {
+    if (carousels.length > 0 && carouselImages.length === 0) {
       // Only generate if we don't have cached images
       console.log('Initial generation triggered')
-      generateAllSlides().then(() => {
+      generateAllCarousels().then(() => {
         // Mark as not initial mount after first generation completes
         isInitialMount.current = false
         console.log('Initial mount flag set to false')
       })
-    } else if (slides.length > 0 && slideImages.length > 0 && isInitialMount.current) {
+    } else if (carousels.length > 0 && carouselImages.length > 0 && isInitialMount.current) {
       // If we have images from cache, mark as not initial mount
       isInitialMount.current = false
       console.log('Initial mount flag set to false (cached images)')
     }
-  }, [slides.length, slideImages.length, generateAllSlides])
+  }, [carousels.length, carouselImages.length, generateAllCarousels])
 
   // Regenerate when design settings change (post initial mount)
   useEffect(() => {
@@ -394,7 +419,7 @@ export default function SlideImageGenerator({
         'postGeneration_fullContentHash',
         JSON.stringify({
           ideaTitle,
-          slides,
+          carousels,
           underlineWords,
           fontCombinationId: currentFontId,
           colorThemeId: currentColorId,
@@ -407,7 +432,7 @@ export default function SlideImageGenerator({
 
     const run = async () => {
       try {
-        await generateAllSlides(currentFontId, currentColorId, currentBgUrl)
+        await generateAllCarousels(currentFontId, currentColorId, currentBgUrl)
         prevDesignSettings.current = {
           fontCombinationId: currentFontId,
           colorThemeId: currentColorId,
@@ -423,15 +448,107 @@ export default function SlideImageGenerator({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fontCombinationId, colorThemeId, backgroundImageUrl])
   
-  // Reset credit deduction flag when slides change (new note)
+  // Regenerate when carousel content changes (edits) - without deducting credits
   useEffect(() => {
-    hasDeductedCredit.current = false
+    // Skip during initial mount; initial generation handles first render
+    if (isInitialMount.current) {
+      prevCarouselsContent.current = JSON.stringify(carousels)
+      return
+    }
+
+    const currentCarouselsContent = JSON.stringify(carousels)
+    const prevContent = prevCarouselsContent.current
+    
+    // Only regenerate if content changed but ideaTitle and length are the same (meaning it's an edit, not new note)
+    if (currentCarouselsContent !== prevContent && carousels.length > 0) {
+      // Check if this is a content edit (same ideaTitle, same length) vs new note
+      const prevCarousels = JSON.parse(prevContent)
+      const isContentEdit = prevCarousels.length === carousels.length && prevCarousels.length > 0
+      
+      if (isContentEdit) {
+        console.log('📝 Carousel content edit detected → regenerating without deducting credits')
+        
+        // Preserve credit deduction state (don't deduct for edits)
+        const wasDeducted = hasDeductedCredit.current
+        hasDeductedCredit.current = true
+        
+        // Update hash for new content
+        try {
+          const fullContentHash = JSON.stringify({ 
+            ideaTitle, 
+            carousels, 
+            underlineWords, 
+            fontCombinationId, 
+            colorThemeId, 
+            backgroundImageUrl: backgroundImageUrl || null 
+          })
+          localStorage.setItem('postGeneration_fullContentHash', fullContentHash)
+        } catch (error) {
+          console.error('Error updating localStorage hash:', error)
+        }
+        
+        // Debounce regeneration to avoid regenerating on every keystroke
+        const timeoutId = setTimeout(async () => {
+          try {
+            await generateAllCarousels()
+            // Only update prevCarouselsContent after successful regeneration
+            prevCarouselsContent.current = JSON.stringify(carousels)
+          } catch (error) {
+            console.error('❌ Regeneration failed:', error)
+          } finally {
+            hasDeductedCredit.current = wasDeducted
+          }
+        }, 500) // 500ms debounce
+        
+        return () => clearTimeout(timeoutId)
+      } else {
+        // Not a content edit (length changed or new note) - update immediately
+        prevCarouselsContent.current = currentCarouselsContent
+      }
+    } else {
+      // No content change - keep prevCarouselsContent in sync
+      prevCarouselsContent.current = currentCarouselsContent
+    }
+  }, [carousels, ideaTitle, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl, generateAllCarousels])
+  
+  // Reset credit deduction flag when carousels change (new note)
+  // Note: Design settings (fontCombinationId, colorThemeId, backgroundImageUrl) are NOT in dependencies
+  // because changing styles should NOT reset credits - credits should only reset for new content
+  useEffect(() => {
+    // Check if credits were already deducted for this ideaTitle (not content hash)
+    // Credits should be deducted once per ideaTitle, not once per content version
+    try {
+      const storedGenerationId = localStorage.getItem('postGeneration_generationId')
+      const storedIdeaTitle = localStorage.getItem('postGeneration_ideaTitle')
+      // If generationId exists and ideaTitle matches, credits were already deducted for this idea
+      // (regardless of content edits)
+      if (storedGenerationId && storedIdeaTitle === ideaTitle) {
+        console.log('✅ Credits already deducted for this ideaTitle (found generationId on reset)', ideaTitle)
+        hasDeductedCredit.current = true
+      } else {
+        // New ideaTitle - reset credit deduction flag
+        hasDeductedCredit.current = false
+        // Clear stored ideaTitle if it's a new idea
+        if (storedIdeaTitle !== ideaTitle) {
+          try {
+            localStorage.removeItem('postGeneration_ideaTitle')
+          } catch (error) {
+            console.error('Error clearing ideaTitle:', error)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking credit deduction status on reset:', error)
+      hasDeductedCredit.current = false
+    }
     isInitialMount.current = true
     hasInitialized.current = false
     // Reset design settings tracking with current values
     prevDesignSettings.current = { fontCombinationId, colorThemeId, backgroundImageUrl }
+    // Reset carousel content tracking
+    prevCarouselsContent.current = JSON.stringify(carousels)
     console.log('🔄 Reset for new note, prevDesignSettings:', prevDesignSettings.current)
-  }, [ideaTitle, slides.length, fontCombinationId, colorThemeId, backgroundImageUrl])
+  }, [ideaTitle, carousels.length])
 
   const loadImage = (src: string): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
@@ -476,7 +593,7 @@ export default function SlideImageGenerator({
     }
   }
 
-  const generateSlideImage = async (
+  const generateCarouselImage = async (
     index: number, 
     fontConfig = FONT_CONFIG, 
     colorTheme = COLOR_THEME, 
@@ -485,18 +602,18 @@ export default function SlideImageGenerator({
     const canvas = canvasRefs.current[index]
     if (!canvas) return
 
-    const slide = slides[index]
+    const carousel = carousels[index]
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
     // Ensure global alpha reset before drawing
     ctx.globalAlpha = 1
 
-    // Remove asterisks from slide content
-    const cleanSlide = {
-      ...slide,
-      title: slide.title ? slide.title.replace(/\*/g, '') : slide.title,
-      content: slide.content ? slide.content.replace(/\*/g, '') : slide.content
+    // Remove asterisks from carousel content
+    const cleanCarousel = {
+      ...carousel,
+      title: carousel.title ? carousel.title.replace(/\*/g, '') : carousel.title,
+      content: carousel.content ? carousel.content.replace(/\*/g, '') : carousel.content
     }
 
     // Load fonts before rendering
@@ -551,9 +668,9 @@ export default function SlideImageGenerator({
 
     const highlightFillStyle = ensureColorAlpha(colorTheme.highlightColor, 0.5)
 
-    // For HOOK slide - just show the hook text with word highlighting
-    if (cleanSlide.kind === 'HOOK') {
-      const hookText = cleanSlide.title || cleanSlide.content
+    // For HOOK carousel - just show the hook text with word highlighting
+    if (cleanCarousel.kind === 'HOOK') {
+      const hookText = cleanCarousel.title || cleanCarousel.content
       
       const hookFontMatch = fontConfig.hook.font.match(/(\d+\.?\d*)px/)
       const hookBaseFontSize = hookFontMatch ? parseFloat(hookFontMatch[1]) : 130
@@ -706,7 +823,7 @@ export default function SlideImageGenerator({
         y += hookLineHeight
       })
       
-    } else if (cleanSlide.kind === 'CTA') {
+    } else if (cleanCarousel.kind === 'CTA') {
       // CTA content with underlines and line breaks
       ctx.font = fontConfig.content.font
       ctx.fillStyle = colorTheme.textColor
@@ -714,7 +831,7 @@ export default function SlideImageGenerator({
       const x = safeMarginSides
       
       // Split by sentences
-      const sentences = cleanSlide.content.split(/([.!?])\s+/).filter(s => s.trim())
+      const sentences = cleanCarousel.content.split(/([.!?])\s+/).filter(s => s.trim())
       const lines: string[] = []
       
       // Process sentences and add empty lines between them
@@ -847,7 +964,7 @@ export default function SlideImageGenerator({
       })
       
     } else {
-      // MIDDLE slide - title + content, left-aligned
+      // MIDDLE carousel - title + content, left-aligned
       ctx.textAlign = 'left'
       const x = safeMarginSides
       
@@ -890,7 +1007,7 @@ export default function SlideImageGenerator({
       const calculateLayout = (titleSize: number, contentSize: number) => {
         // Title wrapping
         ctx.font = `bold ${titleSize}px Poppins, sans-serif`
-        const titleWords = cleanSlide.title ? cleanSlide.title.split(' ') : []
+        const titleWords = cleanCarousel.title ? cleanCarousel.title.split(' ') : []
         const wrappedTitle: string[] = []
         let currentLine = ''
         
@@ -909,7 +1026,7 @@ export default function SlideImageGenerator({
         
         // Content wrapping
         ctx.font = `${contentSize}px DreamingOutloudSans, sans-serif`
-        const contentWords = cleanSlide.content.split(' ')
+        const contentWords = cleanCarousel.content.split(' ')
         const wrappedContent: string[] = []
         currentLine = ''
         
@@ -1015,12 +1132,12 @@ export default function SlideImageGenerator({
         const highlightWord = emphasisData.highlight.toLowerCase().replace(/[.,!?;:–—\-'"]/g, '').trim()
         
         // Debug logging
-        if (cleanSlide.kind === 'MIDDLE') {
-          console.log(`\n━━━ Slide ${index + 1} Debug ━━━`)
+        if (cleanCarousel.kind === 'MIDDLE') {
+          console.log(`\n━━━ Carousel ${index + 1} Debug ━━━`)
           console.log('Emphasis data:', emphasisData)
           console.log('Underline phrases:', underlinePhrases)
           console.log('Highlight word:', highlightWord)
-          console.log('Slide content:', cleanSlide.content)
+          console.log('Carousel content:', cleanCarousel.content)
         }
         
         // Find the last occurrence of highlight word across ALL content lines
@@ -1173,10 +1290,10 @@ export default function SlideImageGenerator({
           y += contentLineHeight
         })
         
-        // Draw image for MIDDLE slides if available (using pre-loaded image)
+        // Draw image for MIDDLE carousels if available (using pre-loaded image)
         if (loadedImage && imageWidth > 0 && imageHeight > 0) {
           try {
-            console.log(`🖼️  Rendering pre-loaded image for slide ${index + 1}`)
+            console.log(`🖼️  Rendering pre-loaded image for carousel ${index + 1}`)
             
             // Add spacing between content and image
             y += imageGap
@@ -1224,38 +1341,66 @@ export default function SlideImageGenerator({
             )
             ctx.restore()
             
-            console.log(`✅ Image rendered for slide ${index + 1} (${imageWidth}x${imageHeight}, 16:9 crop from ${Math.round(sx)},${Math.round(sy)} ${Math.round(sWidth)}x${Math.round(sHeight)})`)
+            console.log(`✅ Image rendered for carousel ${index + 1} (${imageWidth}x${imageHeight}, 16:9 crop from ${Math.round(sx)},${Math.round(sy)} ${Math.round(sWidth)}x${Math.round(sHeight)})`)
           } catch (error) {
-            console.error(`❌ Failed to render image for slide ${index + 1}:`, error)
+            console.error(`❌ Failed to render image for carousel ${index + 1}:`, error)
           }
         }
-    }  // Close else (MIDDLE slide)
-  }  // Close generateSlideImage function
+    }  // Close else (MIDDLE carousel)
+  }  // Close generateCarouselImage function
 
-  const downloadSlide = (index: number) => {
-    const imageDataUrl = slideImages[index]
+  const downloadCarousel = (index: number) => {
+    const imageDataUrl = carouselImages[index]
     if (!imageDataUrl) return
 
     const link = document.createElement('a')
-    const slide = slides[index]
-    const fileName = `slide-${index + 1}-${slide.kind.toLowerCase()}.png`
+    const carousel = carousels[index]
+    const fileName = `carousel-${index + 1}-${carousel.kind.toLowerCase()}.png`
     
     link.download = fileName
     link.href = imageDataUrl
     link.click()
   }
 
-  const downloadAllSlides = async () => {
+  const isMobileDevice = (): boolean => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+           (typeof window !== 'undefined' && window.innerWidth <= 768)
+  }
+
+  const downloadAllCarousels = async () => {
+    const isMobile = isMobileDevice()
+    
+    // On mobile devices, download images individually to save to photo album
+    if (isMobile) {
+      try {
+        // Download each image individually with a small delay between downloads
+        // This allows mobile browsers to save each image to the photo album
+        for (let i = 0; i < carousels.length; i++) {
+          const imageDataUrl = carouselImages[i]
+          if (!imageDataUrl) continue
+          
+          // Use setTimeout to stagger downloads and avoid browser blocking
+          setTimeout(() => {
+            downloadCarousel(i)
+          }, i * 300) // 300ms delay between each download
+        }
+      } catch (error) {
+        console.error('Error downloading images on mobile:', error)
+      }
+      return
+    }
+    
+    // On desktop, use ZIP file (original behavior)
     try {
       const zip = new JSZip()
       
-      // Process all slides and add them to the zip
-      for (let i = 0; i < slides.length; i++) {
-        const imageDataUrl = slideImages[i]
+      // Process all carousels and add them to the zip
+      for (let i = 0; i < carousels.length; i++) {
+        const imageDataUrl = carouselImages[i]
         if (!imageDataUrl) continue
         
-        const slide = slides[i]
-        const fileName = `slide-${i + 1}-${slide.kind.toLowerCase()}.png`
+        const carousel = carousels[i]
+        const fileName = `carousel-${i + 1}-${carousel.kind.toLowerCase()}.png`
         
         // Convert data URL to base64
         const base64Data = imageDataUrl.split(',')[1]
@@ -1268,7 +1413,7 @@ export default function SlideImageGenerator({
       const zipBlob = await zip.generateAsync({ type: 'blob' })
       const link = document.createElement('a')
       link.href = URL.createObjectURL(zipBlob)
-      link.download = 'all-slides.zip'
+      link.download = 'all-carousels.zip'
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -1278,8 +1423,8 @@ export default function SlideImageGenerator({
     } catch (error) {
       console.error('Error creating zip file:', error)
       // Fallback to individual downloads if zip fails
-      slides.forEach((_, index) => {
-        setTimeout(() => downloadSlide(index), index * 200)
+      carousels.forEach((_, index) => {
+        setTimeout(() => downloadCarousel(index), index * 200)
       })
     }
   }
@@ -1298,22 +1443,12 @@ export default function SlideImageGenerator({
       }}
     >
       <h3 style={{ 
-        marginBottom: '24px', 
+        marginBottom: '0px', 
         fontSize: '24px',
         fontWeight: '700'
       }}>
-        Your slides
+        Your carousel
       </h3>
-      
-      {generating && (
-        <div style={{ 
-          textAlign: 'center', 
-          padding: '20px',
-          color: 'rgba(255,255,255,0.6)'
-        }}>
-          Generating images...
-        </div>
-      )}
 
       <div
         style={{
@@ -1327,8 +1462,8 @@ export default function SlideImageGenerator({
           minHeight: 0
         }}
       >
-        {slides.map((slide, index) => (
-          <div key={`slide-${index}-${slide.kind}-${slide.title?.substring(0, 20)}`} style={{
+        {carousels.map((carousel, index) => (
+          <div key={`carousel-${index}-${carousel.kind}-${carousel.title?.substring(0, 20)}`} style={{
             background: 'rgba(255,255,255,0.02)',
             border: '1px solid rgba(255,255,255,0.1)',
             borderRadius: '16px',
@@ -1342,10 +1477,10 @@ export default function SlideImageGenerator({
               fontSize: '12px',
               fontWeight: '600',
               color: 'rgba(255,255,255,0.5)',
-              textTransform: 'uppercase',
-              letterSpacing: '1px'
+              textTransform: 'none',
+              letterSpacing: '0px'
             }}>
-              {slide.kind} • Slide {index + 1}
+              {carousel.kind === 'MIDDLE' ? 'Content' : carousel.kind === 'HOOK' ? 'Hook' : carousel.kind === 'CTA' ? 'CTA' : carousel.kind} • Carousel {index + 1}
             </div>
             
             <div style={{ 
@@ -1372,10 +1507,12 @@ export default function SlideImageGenerator({
                 }}
               />
               {/* If we already have an image, show it above the canvas */}
-              {slideImages[index] && (
+              {/* Use current image if available, otherwise fall back to previous to prevent layout shifts */}
+              {(carouselImages[index] || previousImagesRef.current[index]) && (
                 <img
-                  src={slideImages[index]}
-                  alt={`Slide ${index + 1}`}
+                  key={`carousel-img-${index}-${carouselImages[index] ? 'current' : 'prev'}`}
+                  src={carouselImages[index] || previousImagesRef.current[index]}
+                  alt={`Carousel ${index + 1}`}
                   style={{
                     position: 'absolute',
                     top: 0,
@@ -1383,14 +1520,15 @@ export default function SlideImageGenerator({
                     width: '100%',
                     height: '100%',
                     objectFit: 'contain',
-                    zIndex: 1
+                    zIndex: 1,
+                    transition: 'opacity 0.2s ease'
                   }}
                 />
               )}
             </div>
             
             <button
-              onClick={() => downloadSlide(index)}
+              onClick={() => downloadCarousel(index)}
               className="button"
               style={{ 
                 width: '100%',
@@ -1398,20 +1536,21 @@ export default function SlideImageGenerator({
                 fontSize: '14px'
               }}
             >
-              Download Slide {index + 1}
+              Download Carousel {index + 1}
             </button>
           </div>
         ))}
       </div>
 
       <button
-        onClick={downloadAllSlides}
+        onClick={downloadAllCarousels}
         className="button"
         style={{ width: '100%' }}
       >
-        Download All Slides
+        Download All Carousels
       </button>
     </div>
   )
 }
+
 

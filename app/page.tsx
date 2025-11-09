@@ -6,8 +6,8 @@ import Link from 'next/link'
 import { History, Palette, Edit3, MessageSquare, ChevronLeft } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import './globals.css'
-import SlideImageGenerator from './components/SlideImageGenerator'
-import { FONT_COMBINATIONS, COLOR_THEMES } from './config/slideThemes'
+import CarouselImageGenerator from './components/CarouselImageGenerator'
+import { FONT_COMBINATIONS, COLOR_THEMES } from './config/carouselThemes'
 import { useAuth } from './context/AuthContext'
 import AccountButton from './components/AccountButton'
 import UpgradePrompt from './components/UpgradePrompt'
@@ -23,7 +23,7 @@ type BackgroundOption = {
 
 interface Note {
   ideaTitle: string
-  slides: Array<{
+  carousels: Array<{
     title: string
     content: string
     kind: 'HOOK' | 'MIDDLE' | 'CTA'
@@ -69,16 +69,17 @@ export default function Home() {
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
   const [includeImages, setIncludeImages] = useState(false)
-  const [editedSlides, setEditedSlides] = useState<Note['slides']>([])
-  const [slidesDirty, setSlidesDirty] = useState(false)
-  const [savingSlides, setSavingSlides] = useState(false)
+  const [editedCarousels, setEditedCarousels] = useState<Note['carousels']>([])
+  const [carouselsDirty, setCarouselsDirty] = useState(false)
+  const [savingCarousels, setSavingCarousels] = useState(false)
   const [editedCaption, setEditedCaption] = useState<string>('')
-  const [activeLeftTab, setActiveLeftTab] = useState<'design' | 'slides' | 'caption'>('design')
-  const [expandedSlideIndexes, setExpandedSlideIndexes] = useState<number[]>([])
+  const [captionCopied, setCaptionCopied] = useState(false)
+  const [activeLeftTab, setActiveLeftTab] = useState<'design' | 'carousels' | 'caption'>('design')
+  const [expandedCarouselIndexes, setExpandedCarouselIndexes] = useState<number[]>([])
   const [showCustomisation, setShowCustomisation] = useState(false)
 const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] = [
   { id: 'design', label: 'Customize Design', icon: Palette },
-  { id: 'slides', label: 'Edit Slides', icon: Edit3 },
+  { id: 'carousels', label: 'Edit Carousel', icon: Edit3 },
   { id: 'caption', label: 'Post Caption', icon: MessageSquare }
 ]
 
@@ -108,26 +109,45 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     }
   }, [user, authLoading, router])
 
-  // Sync editable slides with generated note
+  // Sync editable carousels with generated note
   useEffect(() => {
     if (note) {
-      setEditedSlides(note.slides.map(slide => ({ ...slide })))
+      setEditedCarousels(note.carousels.map(carousel => ({ ...carousel })))
       setEditedCaption(note.caption || '')
-      setSlidesDirty(false)
-      setExpandedSlideIndexes([])
+      setCarouselsDirty(false)
+      setExpandedCarouselIndexes([])
       // Auto-show customisation when note exists
       setShowCustomisation(true)
     } else {
-      setEditedSlides([])
+      setEditedCarousels([])
       setEditedCaption('')
-      setSlidesDirty(false)
-      setExpandedSlideIndexes([])
+      setCarouselsDirty(false)
+      setExpandedCarouselIndexes([])
       setShowCustomisation(false)
     }
   }, [note])
 
-  const toggleSlideExpansion = (index: number) => {
-    setExpandedSlideIndexes(prev => {
+  // Warn user before leaving page if there are unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (carouselsDirty) {
+        // Standard way to trigger browser's unsaved changes warning
+        e.preventDefault()
+        // Modern browsers ignore custom messages and show their own
+        e.returnValue = '' // Required for Chrome
+        return '' // Required for some browsers
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [carouselsDirty])
+
+  const toggleCarouselExpansion = (index: number) => {
+    setExpandedCarouselIndexes(prev => {
       if (prev.includes(index)) {
         return prev.filter(i => i !== index)
       }
@@ -191,7 +211,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     try {
       localStorage.setItem('postGeneration_backgroundId', backgroundId)
       // If note exists, trigger regeneration by updating a dependency
-      // The SlideImageGenerator will detect the backgroundImageUrl change
+      // The CarouselImageGenerator will detect the backgroundImageUrl change
     } catch (error) {
       console.warn('Unable to persist background preference to localStorage:', error)
     }
@@ -208,9 +228,14 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
         
         if (savedNote) {
           const parsedNote = JSON.parse(savedNote)
-          // Verify note structure and slides array integrity
-          if (parsedNote && Array.isArray(parsedNote.slides) && parsedNote.slides.length > 0) {
-            console.log('✅ Loaded note with', parsedNote.slides.length, 'slides from localStorage')
+          // Handle backward compatibility: migrate 'slides' to 'carousels' if needed
+          if (parsedNote && Array.isArray(parsedNote.slides) && !parsedNote.carousels) {
+            parsedNote.carousels = parsedNote.slides
+            delete parsedNote.slides
+          }
+          // Verify note structure and carousels array integrity
+          if (parsedNote && Array.isArray(parsedNote.carousels) && parsedNote.carousels.length > 0) {
+            console.log('✅ Loaded note with', parsedNote.carousels.length, 'carousels from localStorage')
             setNote(parsedNote)
           } else {
             console.warn('⚠️ Invalid note structure in localStorage, skipping')
@@ -365,16 +390,23 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
       const result = await response.json()
 
       if (result.success) {
-        // Credit will be deducted when slides are actually generated in SlideImageGenerator
+        // Credit will be deducted when carousels are actually generated in CarouselImageGenerator
         // Verify result data structure before saving
+        // Note: API still returns 'slides' but we map it to 'carousels' in our Note interface
         if (result.data && Array.isArray(result.data.slides) && result.data.slides.length > 0) {
-          console.log('✅ Received note with', result.data.slides.length, 'slides from API')
-          setNote(result.data)
+          console.log('✅ Received note with', result.data.slides.length, 'carousels from API')
+          // Map API response 'slides' to 'carousels' for our Note interface
+          const noteData = {
+            ...result.data,
+            carousels: result.data.slides
+          }
+          setNote(noteData)
           // Clear generation_id to force new generation creation (new ideaTitle = new generation)
           try {
             localStorage.removeItem('postGeneration_generationId')
             localStorage.removeItem('postGeneration_contentHash')
-            localStorage.setItem('postGeneration_note', JSON.stringify(result.data))
+            localStorage.removeItem('postGeneration_ideaTitle') // Clear ideaTitle for new note
+            localStorage.setItem('postGeneration_note', JSON.stringify(noteData))
             localStorage.setItem('postGeneration_accountDescription', accountDescription.trim())
             localStorage.setItem('postGeneration_fontCombinationId', fontCombinationId)
             localStorage.setItem('postGeneration_colorThemeId', colorThemeId)
@@ -402,8 +434,8 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     }
   }
 
-  const handleSlideFieldChange = (index: number, field: 'title' | 'content', value: string) => {
-    setEditedSlides(prev => {
+  const handleCarouselFieldChange = (index: number, field: 'title' | 'content', value: string) => {
+    setEditedCarousels(prev => {
       if (!prev[index]) return prev
       const next = [...prev]
       next[index] = {
@@ -412,28 +444,28 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
       }
       return next
     })
-    setSlidesDirty(true)
+    setCarouselsDirty(true)
   }
 
-  const resetEditedSlides = () => {
+  const resetEditedCarousels = () => {
     if (note) {
-      setEditedSlides(note.slides.map(slide => ({ ...slide })))
+      setEditedCarousels(note.carousels.map(carousel => ({ ...carousel })))
     } else {
-      setEditedSlides([])
+      setEditedCarousels([])
     }
-    setSlidesDirty(false)
+    setCarouselsDirty(false)
   }
 
-  const saveEditedSlides = () => {
-    if (!note || savingSlides) return
+  const saveEditedCarousels = () => {
+    if (!note || savingCarousels) return
 
-    const cleanedSlides = editedSlides.map(slide => ({
-      ...slide,
-      title: (slide.title ?? '').trim(),
-      content: (slide.content ?? '').trim()
+    const cleanedCarousels = editedCarousels.map(carousel => ({
+      ...carousel,
+      title: (carousel.title ?? '').trim(),
+      content: (carousel.content ?? '').trim()
     }))
 
-    setSavingSlides(true)
+    setSavingCarousels(true)
     setError('')
 
     fetch(`${API_URL}/api/social`, {
@@ -441,28 +473,28 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'refreshSlides',
-        slides: cleanedSlides,
+        slides: cleanedCarousels,
         includeImages
       })
     })
       .then(async (response) => {
         const data = await response.json()
         if (!response.ok || !data.success) {
-          throw new Error(data.error || 'Failed to refresh slide enhancements')
+          throw new Error(data.error || 'Failed to refresh carousel enhancements')
         }
 
         const updatedUnderline: Note['underlineWords'] = data.data?.underlineWords || {}
-        const sanitizedSlides: Note['slides'] = (data.data?.slides || cleanedSlides) as Note['slides']
+        const sanitizedCarousels: Note['carousels'] = (data.data?.slides || cleanedCarousels) as Note['carousels']
 
         const updatedNote: Note = {
           ...note,
-          slides: sanitizedSlides,
+          carousels: sanitizedCarousels,
           underlineWords: updatedUnderline
         }
 
         setNote(updatedNote)
-        setEditedSlides(sanitizedSlides.map(slide => ({ ...slide })))
-        setSlidesDirty(false)
+        setEditedCarousels(sanitizedCarousels.map(carousel => ({ ...carousel })))
+        setCarouselsDirty(false)
 
         try {
           localStorage.setItem('postGeneration_note', JSON.stringify(updatedNote))
@@ -470,15 +502,15 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
           localStorage.removeItem('postGeneration_fullContentHash')
           localStorage.removeItem('postGeneration_contentHash')
         } catch (storageError) {
-          console.warn('Could not persist edited slides to localStorage:', storageError)
+          console.warn('Could not persist edited carousels to localStorage:', storageError)
         }
       })
       .catch((err: any) => {
-        console.error('Error refreshing slides:', err)
-        setError(err.message || 'Failed to refresh slides. Please try again.')
+        console.error('Error refreshing carousels:', err)
+        setError(err.message || 'Failed to refresh carousels. Please try again.')
       })
       .finally(() => {
-        setSavingSlides(false)
+        setSavingCarousels(false)
       })
   }
 
@@ -696,7 +728,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                       Customisation
                     </h3>
                   
-                  {/* Tab buttons for Design / Slides / Caption */}
+                  {/* Tab buttons for Design / Carousels / Caption */}
                   <div 
                     style={{ 
                       display: 'flex', 
@@ -744,11 +776,11 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                 {activeLeftTab === 'design' && (
                   <div style={{ opacity: !note ? 0.5 : 1, pointerEvents: !note ? 'none' : 'auto', marginBottom: '24px' }}>
                     <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
-                      Slides Style
+                      Carousel Style
                     </h4>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
                       <div>
-                        <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000000' }}>
+                        <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
                           Font Combination
                         </label>
                         <select
@@ -765,7 +797,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                         </select>
                       </div>
                       <div>
-                        <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000000' }}>
+                        <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
                           Color Theme
                         </label>
                         <select
@@ -783,7 +815,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                       </div>
                       {backgroundOptions.length > 0 && (
                         <div>
-                          <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000000' }}>
+                          <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
                             Background Texture
                           </label>
                           <select
@@ -804,27 +836,24 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                   </div>
                 )}
 
-                {activeLeftTab === 'slides' && (
+                {activeLeftTab === 'carousels' && (
                   <div style={{ opacity: !note ? 0.5 : 1, pointerEvents: !note ? 'none' : 'auto', marginBottom: '24px' }}>
                     <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
-                      Slides Content
+                      Carousel Content
                     </h3>
-                    <p style={{ fontSize: '14px', color: '#4b5563', marginBottom: '16px' }}>
-                      {!note ? 'Generate a post to edit slides here' : 'Edit any slide text below. Save to refresh the preview and generated assets.'}
-                    </p>
                     {note && (
-                      <div style={{ display: 'grid', gap: '12px' }}>
-                    {editedSlides.map((slide, index) => {
-                      const kind = note.slides[index]?.kind ?? 'MIDDLE'
-                      const isExpanded = expandedSlideIndexes.includes(index)
+                      <div style={{ display: 'grid', gap: '16px' }}>
+                    {editedCarousels.map((carousel, index) => {
+                      const kind = note.carousels[index]?.kind ?? 'MIDDLE'
+                      const isExpanded = expandedCarouselIndexes.includes(index)
                       return (
                         <div 
                           key={index}
-                          className={`slide-card ${kind === 'HOOK' ? 'hook' : kind === 'CTA' ? 'cta' : 'middle'}`}
-                          style={{ padding: '16px' }}
+                          className={`carousel-card ${kind === 'HOOK' ? 'hook' : kind === 'CTA' ? 'cta' : 'content'}`}
+                          style={{ padding: '0px' }}
                         >
                           <button
-                            onClick={() => toggleSlideExpansion(index)}
+                            onClick={() => toggleCarouselExpansion(index)}
                             style={{
                               display: 'flex',
                               alignItems: 'center',
@@ -832,37 +861,37 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                               width: '100%',
                               background: 'none',
                               border: 'none',
-                              padding: 0,
+                              padding: '6px 0',
                               margin: 0,
                               cursor: 'pointer',
                               textAlign: 'left'
                             }}
                           >
                             <div style={{ 
-                              fontSize: '11px', 
-                              fontWeight: '700', 
-                              color: '#999999', 
-                              textTransform: 'uppercase',
-                              letterSpacing: '1px'
+                              fontSize: '14px', 
+                              fontWeight: '500', 
+                              color: '#000000', 
+                              textTransform: 'none',
+                              letterSpacing: '0px'
                             }}>
-                              Slide {index + 1} • {kind}
+                              Carousel {index + 1} • {kind === 'MIDDLE' ? 'Content' : kind === 'HOOK' ? 'Hook' : kind === 'CTA' ? 'CTA' : kind}
                             </div>
-                            <span style={{ fontSize: '18px', color: '#999999', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
+                            <span style={{ fontSize: '14px', color: '#000000', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
                               ▾
                             </span>
                           </button>
 
                           {isExpanded && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px', paddingTop: '12px' }}>
                             <div>
                               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7280', marginBottom: '6px' }}>
                                 Title
                               </label>
                               <input
                                 className="input"
-                                value={slide.title ?? ''}
-                                onChange={(e) => handleSlideFieldChange(index, 'title', e.target.value)}
-                                placeholder="Enter slide title"
+                                value={carousel.title ?? ''}
+                                onChange={(e) => handleCarouselFieldChange(index, 'title', e.target.value)}
+                                placeholder="Enter carousel title"
                                 style={{ width: '100%' }}
                               />
                             </div>
@@ -872,9 +901,9 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                               </label>
                               <textarea
                                 className="input"
-                                value={slide.content ?? ''}
-                                onChange={(e) => handleSlideFieldChange(index, 'content', e.target.value)}
-                                placeholder="Enter slide content"
+                                value={carousel.content ?? ''}
+                                onChange={(e) => handleCarouselFieldChange(index, 'content', e.target.value)}
+                                placeholder="Enter carousel content"
                                 rows={kind === 'CTA' ? 5 : 6}
                                 style={{ width: '100%', resize: 'vertical', minHeight: '120px' }}
                               />
@@ -895,19 +924,19 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                   }}>
                     <button
                       className="button secondary"
-                      onClick={resetEditedSlides}
-                      disabled={!slidesDirty || savingSlides}
+                      onClick={resetEditedCarousels}
+                      disabled={!carouselsDirty || savingCarousels}
                       style={{ width: '100%' }}
                     >
                       Reset
                     </button>
                     <button
                       className="button"
-                      onClick={saveEditedSlides}
-                      disabled={!slidesDirty || savingSlides}
+                      onClick={saveEditedCarousels}
+                      disabled={!carouselsDirty || savingCarousels}
                       style={{ width: '100%' }}
                     >
-                      {savingSlides ? 'Saving...' : 'Save'}
+                      {savingCarousels ? 'Saving...' : 'Save'}
                     </button>
                       </div>
                     )}
@@ -945,14 +974,18 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                         onClick={async () => {
                           try {
                             await navigator.clipboard.writeText(editedCaption)
-                            // You could add a toast notification here if desired
+                            setCaptionCopied(true)
+                            // Reset to "Copy" after 2 seconds
+                            setTimeout(() => {
+                              setCaptionCopied(false)
+                            }, 2000)
                           } catch (err) {
                             console.error('Failed to copy caption:', err)
                           }
                         }}
                         style={{ width: '100%', marginTop: '12px' }}
                       >
-                        Copy
+                        {captionCopied ? 'Copied' : 'Copy'}
                       </button>
                     )}
                   </div>
@@ -1110,11 +1143,11 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
           </div>
         )}
 
-              {/* Show Generated Slides if note exists */}
+              {/* Show Generated Carousels if note exists */}
         {note && !loadingNote && (
                 <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
-            <SlideImageGenerator 
-              slides={note.slides}
+            <CarouselImageGenerator 
+              carousels={carouselsDirty && editedCarousels.length > 0 ? editedCarousels : note.carousels}
               ideaTitle={note.ideaTitle}
               underlineWords={note.underlineWords || {}}
               fontCombinationId={fontCombinationId}
@@ -1139,7 +1172,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                     fontWeight: '700',
                     color: '#000000'
                   }}>
-                    Your slides
+                    Your carousel
               </h3>
                   <p style={{ fontSize: '15px', color: '#666' }}>
                     Generate ideas to get started
@@ -1172,21 +1205,21 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                 whiteSpace: 'pre-wrap',
                 overflowX: 'auto'
               }}>
-                {note.slides.map((slide, index) => {
+                {note.carousels.map((carousel, index) => {
                   const emphasis = (note as any).underlineWords?.[index];
                   return (
-                    <div key={index} style={{ marginBottom: '30px', paddingBottom: '20px', borderBottom: index < note.slides.length - 1 ? '1px solid #333' : 'none' }}>
+                    <div key={index} style={{ marginBottom: '30px', paddingBottom: '20px', borderBottom: index < note.carousels.length - 1 ? '1px solid #333' : 'none' }}>
                       <div style={{ color: '#ffbd59', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
-                        ━━━ SLIDE {index + 1}/{note.slides.length} • {slide.kind} ━━━
+                        ━━━ CAROUSEL {index + 1}/{note.carousels.length} • {carousel.kind} ━━━
                     </div>
                       
                       <div style={{ marginLeft: '20px' }}>
                         <div style={{ marginBottom: '8px' }}>
-                          <span style={{ color: '#888' }}>Title:</span> <span style={{ color: '#fff' }}>{slide.title || '(empty)'}</span>
+                          <span style={{ color: '#888' }}>Title:</span> <span style={{ color: '#fff' }}>{carousel.title || '(empty)'}</span>
                         </div>
                         
                         <div style={{ marginBottom: '8px' }}>
-                          <span style={{ color: '#888' }}>Content:</span> <span style={{ color: '#fff' }}>{slide.content || '(empty)'}</span>
+                          <span style={{ color: '#888' }}>Content:</span> <span style={{ color: '#fff' }}>{carousel.content || '(empty)'}</span>
                         </div>
                         
                         {emphasis && (
@@ -1212,7 +1245,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                                 <>
                                   <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed #444' }}>
                                     <div style={{ color: '#a78bfa', fontWeight: 'bold', marginBottom: '8px' }}>
-                                      🖼️  IMAGE DATA (MIDDLE SLIDE ONLY):
+                                      🖼️  Image data (content carousel only):
                                     </div>
                                     
                                     <div style={{ marginLeft: '15px' }}>
@@ -1289,9 +1322,9 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                                 </>
                               )}
                               
-                              {slide.kind !== 'MIDDLE' && (
+                              {carousel.kind !== 'MIDDLE' && (
                                 <div style={{ marginTop: '8px', color: '#888', fontSize: '12px' }}>
-                                  ℹ️  Images only available for MIDDLE slides
+                                  ℹ️  Images only available for content carousels
             </div>
                               )}
                             </div>
@@ -1325,10 +1358,10 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                     📊 SUMMARY:
                   </div>
                   <div style={{ marginLeft: '15px' }}>
-                    <div>Total Slides: {note.slides.length}</div>
-                    <div>Middle Slides: {note.slides.filter(s => s.kind === 'MIDDLE').length}</div>
+                    <div>Total Carousels: {note.carousels.length}</div>
+                    <div>Content carousels: {note.carousels.filter(c => c.kind === 'MIDDLE').length}</div>
                     <div>
-                      Images Found: {note.slides.filter((s, i) => s.kind === 'MIDDLE' && (note as any).underlineWords?.[i]?.imageUrl).length} / {note.slides.filter(s => s.kind === 'MIDDLE').length}
+                      Images Found: {note.carousels.filter((c, i) => c.kind === 'MIDDLE' && (note as any).underlineWords?.[i]?.imageUrl).length} / {note.carousels.filter(c => c.kind === 'MIDDLE').length}
                     </div>
                     <div style={{ marginTop: '10px', color: '#fff' }}>
                       Raw underlineWords data:

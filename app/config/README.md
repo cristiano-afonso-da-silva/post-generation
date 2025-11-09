@@ -1,10 +1,10 @@
-# Slide Theme Configuration Guide
+# Carousel Theme Configuration Guide
 
-This folder contains the theme configuration system for slide generation.
+This folder contains the theme configuration system for carousel generation.
 
 ## How to Add New Font Combinations
 
-1. Open `slideThemes.ts`
+1. Open `carouselThemes.ts`
 2. Add a new object to the `FONT_COMBINATIONS` array:
 
 ```typescript
@@ -12,11 +12,11 @@ This folder contains the theme configuration system for slide generation.
   id: 'combination-2',  // Unique ID
   name: 'Combination 2 (Your Font Names)',  // Display name
   hook: {
-    font: 'bold 130px YourFont, sans-serif',  // Hook slide font
+    font: 'bold 130px YourFont, sans-serif',  // Hook carousel font
     lineHeight: 155
   },
   title: {
-    font: 'bold 75px YourFont, sans-serif',  // Middle slide title font
+    font: 'bold 75px YourFont, sans-serif',  // Middle carousel title font
     lineHeight: 90
   },
   content: {
@@ -26,12 +26,12 @@ This folder contains the theme configuration system for slide generation.
 }
 ```
 
-3. Make sure your fonts are loaded in `/mobile/public/fonts/`
-4. Update the font loading in `SlideImageGenerator.tsx` if needed
+3. Make sure your fonts are loaded in `/public/fonts/`
+4. Update the font loading in `CarouselImageGenerator.tsx` if needed
 
 ## How to Add New Color Themes
 
-1. Open `slideThemes.ts`
+1. Open `carouselThemes.ts`
 2. Add a new object to the `COLOR_THEMES` array:
 
 ```typescript
