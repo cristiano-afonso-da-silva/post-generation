@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS public.user_credits (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  credits_remaining INTEGER NOT NULL DEFAULT 1,
+  credits_remaining INTEGER NOT NULL DEFAULT 5,
   total_credits_used INTEGER NOT NULL DEFAULT 0,
   stripe_customer_id TEXT,
   stripe_subscription_id TEXT,

@@ -16,21 +16,66 @@ export default function CreditDisplay({ credits, subscriptionStatus, currentPlan
   const { user } = useAuth()
 
   const handleManageSubscription = async () => {
-    if (!user?.id) return
+    if (!user?.id) {
+      console.error('[Manage Subscription] Error: No user ID found', { user })
+      return
+    }
     
     try {
+      console.log('[Manage Subscription] Starting request', { userId: user.id })
+      
       const response = await fetch('/api/stripe/create-portal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id }),
       })
 
-      const { url } = await response.json()
-      if (url) {
-        window.location.href = url
+      console.log('[Manage Subscription] Response received', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries()),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        let errorData
+        try {
+          errorData = JSON.parse(errorText)
+        } catch {
+          errorData = { raw: errorText }
+        }
+        
+        console.error('[Manage Subscription] API Error Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData,
+          url: response.url,
+        })
+        
+        alert(`Failed to open customer portal: ${errorData.error || response.statusText || 'Unknown error'}`)
+        return
       }
-    } catch (error) {
-      console.error('Error opening customer portal:', error)
+
+      const data = await response.json()
+      console.log('[Manage Subscription] Success response:', { data })
+      
+      if (data.url) {
+        console.log('[Manage Subscription] Redirecting to:', data.url)
+        window.location.href = data.url
+      } else {
+        console.error('[Manage Subscription] No URL in response:', { data })
+        alert('Failed to open customer portal: No URL returned')
+      }
+    } catch (error: any) {
+      console.error('[Manage Subscription] Network/Parse Error:', {
+        message: error?.message,
+        stack: error?.stack,
+        name: error?.name,
+        cause: error?.cause,
+        error: error,
+      })
+      alert(`Failed to open customer portal: ${error?.message || 'Network error'}`)
     }
   }
 

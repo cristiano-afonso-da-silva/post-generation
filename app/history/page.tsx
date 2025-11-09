@@ -82,6 +82,11 @@ export default function HistoryPage() {
       // Store ideaTitle to track that credits were already deducted for this idea
       localStorage.setItem('postGeneration_ideaTitle', gen.idea_title)
       
+      // Store user ID to ensure localStorage is user-specific
+      if (user?.id) {
+        localStorage.setItem('postGeneration_userId', user.id)
+      }
+      
       // Store images
       if (gen.imageUrls && gen.imageUrls.length > 0) {
         localStorage.setItem('postGeneration_canvasImages', JSON.stringify(gen.imageUrls))

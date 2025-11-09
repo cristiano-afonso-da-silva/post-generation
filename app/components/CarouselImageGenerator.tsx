@@ -105,6 +105,25 @@ export default function CarouselImageGenerator({
   backgroundImageUrl = null,
   onGenerationComplete
 }: Props) {
+  // Debug: Log underlineWords on component mount/update
+  useEffect(() => {
+    console.log('\n📦 CarouselImageGenerator: Received underlineWords:')
+    console.log(JSON.stringify(underlineWords, null, 2))
+    
+    // Check for image URLs in MIDDLE carousels
+    carousels.forEach((carousel, index) => {
+      if (carousel.kind === 'MIDDLE') {
+        const emphasis = underlineWords[index]
+        if (emphasis?.imageUrl) {
+          console.log(`✅ Carousel ${index + 1} (MIDDLE): Has imageUrl =`, emphasis.imageUrl)
+        } else {
+          console.warn(`⚠️ Carousel ${index + 1} (MIDDLE): No imageUrl found!`)
+          console.warn(`   Emphasis data:`, emphasis)
+        }
+      }
+    })
+  }, [underlineWords, carousels])
+  
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([])
   const [generating, setGenerating] = useState(false)
   const [carouselImages, setCarouselImages] = useState<string[]>(() => 
@@ -229,6 +248,9 @@ export default function CarouselImageGenerator({
         localStorage.setItem('postGeneration_generationId', returnedGenerationId)
         localStorage.setItem('postGeneration_contentHash', currentContentHash)
         localStorage.setItem('postGeneration_ideaTitle', ideaTitle)
+        if (user?.id) {
+          localStorage.setItem('postGeneration_userId', user.id)
+        }
         
         if (result.isUpdate) {
           console.log('✅ Generation updated in history (same ideaTitle):', returnedGenerationId)
@@ -304,7 +326,11 @@ export default function CarouselImageGenerator({
     
     // Save all images to localStorage with content hashes
     try {
-      localStorage.setItem('postGeneration_canvasImages', JSON.stringify(imageDataUrls))
+      const imagesJson = JSON.stringify(imageDataUrls)
+      const imagesSizeMB = (new Blob([imagesJson]).size / (1024 * 1024)).toFixed(2)
+      console.log(`💾 Attempting to save ${imagesSizeMB}MB of image data to localStorage...`)
+      
+      localStorage.setItem('postGeneration_canvasImages', imagesJson)
       // Always update fullContentHash (includes design settings)
       localStorage.setItem('postGeneration_fullContentHash', fullContentHash)
       // Only update contentHash if generation_id doesn't exist (new generation)
@@ -312,8 +338,33 @@ export default function CarouselImageGenerator({
       if (!localStorage.getItem('postGeneration_generationId')) {
         localStorage.setItem('postGeneration_contentHash', contentHash)
       }
-    } catch (error) {
-      console.error('Error saving images to localStorage:', error)
+      // Store user ID to ensure localStorage is user-specific
+      if (user?.id) {
+        localStorage.setItem('postGeneration_userId', user.id)
+      }
+      console.log(`✅ Successfully saved ${imagesSizeMB}MB to localStorage`)
+    } catch (error: any) {
+      if (error.name === 'QuotaExceededError' || error.code === 22) {
+        console.warn('⚠️ localStorage quota exceeded - images too large to cache locally')
+        console.warn('   Images will still be displayed, but won\'t be cached for next visit')
+        console.warn('   Consider clearing old localStorage data or using fewer carousels')
+        
+        // Try to save just the hash (for validation) without the images
+        try {
+          localStorage.setItem('postGeneration_fullContentHash', fullContentHash)
+          if (!localStorage.getItem('postGeneration_generationId')) {
+            localStorage.setItem('postGeneration_contentHash', contentHash)
+          }
+          if (user?.id) {
+            localStorage.setItem('postGeneration_userId', user.id)
+          }
+          console.log('✅ Saved content hashes (without images) to localStorage')
+        } catch (hashError) {
+          console.error('❌ Could not save even content hashes:', hashError)
+        }
+      } else {
+        console.error('❌ Error saving images to localStorage:', error)
+      }
     }
     
     // Deduct credit when carousels are generated (only once per note generation)
@@ -426,6 +477,10 @@ export default function CarouselImageGenerator({
           backgroundImageUrl: currentBgUrl || null
         })
       )
+      // Store user ID to ensure localStorage is user-specific
+      if (user?.id) {
+        localStorage.setItem('postGeneration_userId', user.id)
+      }
     } catch (error) {
       console.error('Error updating localStorage hash:', error)
     }
@@ -483,6 +538,10 @@ export default function CarouselImageGenerator({
             backgroundImageUrl: backgroundImageUrl || null 
           })
           localStorage.setItem('postGeneration_fullContentHash', fullContentHash)
+          // Store user ID to ensure localStorage is user-specific
+          if (user?.id) {
+            localStorage.setItem('postGeneration_userId', user.id)
+          }
         } catch (error) {
           console.error('Error updating localStorage hash:', error)
         }
@@ -971,6 +1030,14 @@ export default function CarouselImageGenerator({
       // Parse emphasis words to check for image
       const emphasisData = underlineWords[index] || { underline: '', highlight: '', imageUrl: null }
       
+      // Debug: Log image data for MIDDLE carousels
+      if (cleanCarousel.kind === 'MIDDLE') {
+        console.log(`\n🖼️ Carousel ${index + 1} Image Check:`)
+        console.log('  Emphasis data:', emphasisData)
+        console.log('  imageUrl present?', !!emphasisData.imageUrl)
+        console.log('  imageUrl value:', emphasisData.imageUrl)
+      }
+      
       // Pre-load image if available to include in height calculation
       let imageHeight = 0
       let imageWidth = 0
@@ -978,12 +1045,18 @@ export default function CarouselImageGenerator({
       
       if (emphasisData.imageUrl) {
         try {
+          console.log(`🖼️ Carousel ${index + 1}: Attempting to load image from:`, emphasisData.imageUrl)
           loadedImage = await loadImage(emphasisData.imageUrl)
           imageWidth = safeWidth
           imageHeight = Math.round(safeWidth * 9 / 16)
+          console.log(`✅ Carousel ${index + 1}: Image loaded successfully! Dimensions: ${loadedImage.width}x${loadedImage.height}`)
         } catch (error) {
-          console.error(`Failed to pre-load image for centering:`, error)
+          console.error(`❌ Carousel ${index + 1}: Failed to pre-load image:`, error)
+          console.error(`   Image URL was:`, emphasisData.imageUrl)
         }
+      } else if (cleanCarousel.kind === 'MIDDLE') {
+        console.warn(`⚠️ Carousel ${index + 1}: No imageUrl in emphasisData for MIDDLE carousel!`)
+        console.warn(`   This might mean images weren't fetched from Pexels or includeImages was false`)
       }
       
       // Minimum spacing requirements (20px minimum)
@@ -1293,7 +1366,10 @@ export default function CarouselImageGenerator({
         // Draw image for MIDDLE carousels if available (using pre-loaded image)
         if (loadedImage && imageWidth > 0 && imageHeight > 0) {
           try {
-            console.log(`🖼️  Rendering pre-loaded image for carousel ${index + 1}`)
+            console.log(`\n🖼️  Rendering pre-loaded image for carousel ${index + 1}`)
+            console.log(`   Image dimensions: ${loadedImage.width}x${loadedImage.height}`)
+            console.log(`   Target size: ${imageWidth}x${imageHeight}`)
+            console.log(`   Y position: ${y}`)
             
             // Add spacing between content and image
             y += imageGap
@@ -1316,6 +1392,8 @@ export default function CarouselImageGenerator({
               sHeight = loadedImage.width / targetAspect
               sy = (loadedImage.height - sHeight) / 2  // Center vertically
             }
+            
+            console.log(`   Crop: source (${Math.round(sx)},${Math.round(sy)} ${Math.round(sWidth)}x${Math.round(sHeight)}) → dest (${imageX},${y} ${imageWidth}x${imageHeight})`)
             
             // Draw image with rounded corners and 16:9 crop
             const borderRadius = 56
@@ -1341,9 +1419,16 @@ export default function CarouselImageGenerator({
             )
             ctx.restore()
             
-            console.log(`✅ Image rendered for carousel ${index + 1} (${imageWidth}x${imageHeight}, 16:9 crop from ${Math.round(sx)},${Math.round(sy)} ${Math.round(sWidth)}x${Math.round(sHeight)})`)
+            console.log(`✅ Image successfully drawn on canvas for carousel ${index + 1}!`)
+            console.log(`   Final position: (${imageX}, ${y}), Size: ${imageWidth}x${imageHeight}`)
           } catch (error) {
             console.error(`❌ Failed to render image for carousel ${index + 1}:`, error)
+            console.error(`   Error details:`, error)
+          }
+        } else if (cleanCarousel.kind === 'MIDDLE') {
+          console.warn(`⚠️ Carousel ${index + 1}: Image not drawn - loadedImage=${!!loadedImage}, imageWidth=${imageWidth}, imageHeight=${imageHeight}`)
+          if (!loadedImage && emphasisData.imageUrl) {
+            console.warn(`   Image URL exists but failed to load:`, emphasisData.imageUrl)
           }
         }
     }  // Close else (MIDDLE carousel)

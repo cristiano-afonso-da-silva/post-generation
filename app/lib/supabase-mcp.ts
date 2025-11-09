@@ -32,7 +32,7 @@ export async function getUserCreditsServerSQL(userId: string): Promise<any> {
 }
 
 // Create initial credit record (server-side)
-// MCP Test SQL: INSERT INTO user_credits (user_id, credits_remaining, total_credits_used) VALUES ('user-id-here', 1, 0) RETURNING *;
+// MCP Test SQL: INSERT INTO user_credits (user_id, credits_remaining, total_credits_used) VALUES ('user-id-here', 5, 0) RETURNING *;
 export async function createInitialCreditRecordServerSQL(userId: string): Promise<any> {
   const serverClient = createServerClient()
   
@@ -40,7 +40,7 @@ export async function createInitialCreditRecordServerSQL(userId: string): Promis
     .from('user_credits')
     .insert({
       user_id: userId,
-      credits_remaining: 1,
+      credits_remaining: 5,
       total_credits_used: 0,
     })
     .select()

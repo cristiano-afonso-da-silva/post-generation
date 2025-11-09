@@ -14,6 +14,10 @@ if (!GEMINI_API_KEY) {
 
 if (!PEXELS_API_KEY) {
   console.error('❌ Missing PEXELS_API_KEY in environment variables');
+  console.error('   Please add PEXELS_API_KEY to your .env.local file');
+} else {
+  console.log('✅ PEXELS_API_KEY loaded successfully');
+  console.log(`   Key preview: ${PEXELS_API_KEY.substring(0, 10)}...`);
 }
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY!);
@@ -737,21 +741,50 @@ The imageSearch field is MANDATORY. Always provide visual search terms.`;
       if (includeImages && carousel.kind === 'MIDDLE' && imageSearchKeywords && imageSearchKeywords.trim()) {
         console.log(`\n🖼️  MIDDLE CAROUSEL ${i + 1}: Attempting to fetch image...`);
         console.log(`   Keywords: "${imageSearchKeywords}"`);
-        const imageResult = await searchPexelsImage(imageSearchKeywords, usedImageIds);
-        results[i].imageUrl = imageResult?.url || null;
-        if (imageResult?.id) {
-          usedImageIds.add(imageResult.id);
+        console.log(`   includeImages flag: ${includeImages}`);
+        console.log(`   carousel.kind: ${carousel.kind}`);
+        console.log(`   imageSearchKeywords.trim(): "${imageSearchKeywords.trim()}"`);
+        
+        try {
+          const imageResult = await searchPexelsImage(imageSearchKeywords, usedImageIds);
+          results[i].imageUrl = imageResult?.url || null;
+          if (imageResult?.id) {
+            usedImageIds.add(imageResult.id);
+          }
+          if (imageResult?.url) {
+            console.log(`✅ SUCCESS: Image added to carousel ${i + 1}`);
+            console.log(`   Image URL: ${imageResult.url}`);
+          } else {
+            console.error(`❌ FAILED: No image URL returned for carousel ${i + 1}`);
+            console.error(`   Pexels API returned:`, imageResult);
+            console.error(`   This could mean: API key issue, rate limit, or no matching images`);
+            // Ensure imageUrl is explicitly set to null
+            results[i].imageUrl = null;
+          }
+        } catch (pexelsError: any) {
+          console.error(`❌ EXCEPTION during Pexels fetch for carousel ${i + 1}:`);
+          console.error(`   Error:`, pexelsError);
+          console.error(`   Error message:`, pexelsError?.message);
+          console.error(`   Stack:`, pexelsError?.stack);
+          results[i].imageUrl = null;
         }
-        if (imageResult?.url) {
-          console.log(`✅ SUCCESS: Image added to carousel ${i + 1}`);
-        } else {
-          console.error(`❌ FAILED: No image URL returned for carousel ${i + 1}`);
+      } else {
+        // Log why image fetch was skipped
+        if (carousel.kind === 'MIDDLE') {
+          if (!includeImages) {
+            console.log(`\n📝 MIDDLE CAROUSEL ${i + 1}: Images disabled by user (includeImages=${includeImages}) - skipping image fetch`);
+          } else if (!imageSearchKeywords || !imageSearchKeywords.trim()) {
+            console.log(`\n⚠️  MIDDLE CAROUSEL ${i + 1}: NO imageSearch keywords!`);
+            console.log(`   includeImages: ${includeImages}`);
+            console.log(`   imageSearchKeywords: "${imageSearchKeywords}"`);
+            console.log(`   This should not happen with the fallback in place.`);
+          } else {
+            console.log(`\n⚠️  MIDDLE CAROUSEL ${i + 1}: Unexpected condition - image fetch skipped`);
+            console.log(`   includeImages: ${includeImages}`);
+            console.log(`   carousel.kind: ${carousel.kind}`);
+            console.log(`   imageSearchKeywords: "${imageSearchKeywords}"`);
+          }
         }
-      } else if (!includeImages && carousel.kind === 'MIDDLE') {
-        console.log(`\n📝 MIDDLE CAROUSEL ${i + 1}: Images disabled by user - skipping image fetch`);
-      } else if (carousel.kind === 'MIDDLE') {
-        console.log(`\n⚠️  MIDDLE CAROUSEL ${i + 1}: NO imageSearch keywords!`);
-        console.log(`   This should not happen with the fallback in place.`);
       }
       
       console.log(`\n📝 Final extraction result for carousel ${i + 1}:`, JSON.stringify(results[i], null, 2));
@@ -770,6 +803,7 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
   
   try {
     console.log(`🚀 Generating note for: "${ideaTitle}"`);
+    console.log(`🖼️ generateNote: includeImages parameter =`, includeImages);
     
     const result = await callGeminiWithRetry(model, {
       contents: [{
@@ -826,6 +860,7 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
       data.caption = data.caption.replace(/\*/g, '');
     }
     
+    console.log(`🖼️ generateNote: Calling extractUnderlineWords with includeImages =`, includeImages);
     const underlineWords = await extractUnderlineWords(data.slides, includeImages);
     
     // Calculate stats before formatting
@@ -914,6 +949,7 @@ export async function POST(request: NextRequest) {
       
       // Default to true if not specified for backward compatibility
       const shouldIncludeImages = includeImages !== undefined ? includeImages : true;
+      console.log('🖼️ Backend: Received includeImages =', includeImages, '→ Using shouldIncludeImages =', shouldIncludeImages);
       
       const result = await generateNote(ideaTitle.trim(), accountDescription?.trim() || '', shouldIncludeImages);
       return NextResponse.json(result);
@@ -922,6 +958,7 @@ export async function POST(request: NextRequest) {
     if (action === 'refreshSlides') {
       const carouselsInput = body.slides;
       const shouldIncludeImages = includeImages !== undefined ? includeImages : true;
+      console.log('🖼️ Backend: Received includeImages for refreshSlides =', includeImages, '→ Using shouldIncludeImages =', shouldIncludeImages);
 
       if (!Array.isArray(carouselsInput) || carouselsInput.length === 0) {
         return NextResponse.json(
@@ -938,6 +975,7 @@ export async function POST(request: NextRequest) {
       })).map(({ index: _, ...rest }) => rest);
 
       try {
+        console.log('🖼️ refreshSlides: Calling extractUnderlineWords with shouldIncludeImages =', shouldIncludeImages);
         const underlineWords = await extractUnderlineWords(sanitizedCarousels, shouldIncludeImages);
 
         return NextResponse.json({

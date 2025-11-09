@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { History, Palette, Edit3, MessageSquare, ChevronLeft } from 'lucide-react'
@@ -77,6 +77,7 @@ export default function Home() {
   const [activeLeftTab, setActiveLeftTab] = useState<'design' | 'carousels' | 'caption'>('design')
   const [expandedCarouselIndexes, setExpandedCarouselIndexes] = useState<number[]>([])
   const [showCustomisation, setShowCustomisation] = useState(false)
+  const hasLoadedFromStorage = useRef(false)
 const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] = [
   { id: 'design', label: 'Customize Design', icon: Palette },
   { id: 'carousels', label: 'Edit Carousel', icon: Edit3 },
@@ -217,10 +218,36 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     }
   }, [backgroundId])
 
-  // Load note from localStorage on mount
+  // Reset hasLoadedFromStorage when user changes
   useEffect(() => {
-    if (user && !authLoading) {
+    hasLoadedFromStorage.current = false
+  }, [user?.id])
+
+  // Load note from localStorage on initial mount only (not during generation)
+  useEffect(() => {
+    // Only load from localStorage once per user session, not when generating
+    // This allows reloading the page to restore the previous carousel
+    if (user && !authLoading && !hasLoadedFromStorage.current && !loadingNote && !loadingIdeas && !selectedIdea) {
+      hasLoadedFromStorage.current = true
       try {
+        // Check if localStorage belongs to current user
+        const storedUserId = localStorage.getItem('postGeneration_userId')
+        if (storedUserId !== user.id) {
+          // User changed, clear localStorage
+          console.log('User changed, clearing localStorage')
+          localStorage.removeItem('postGeneration_note')
+          localStorage.removeItem('postGeneration_accountDescription')
+          localStorage.removeItem('postGeneration_fontCombinationId')
+          localStorage.removeItem('postGeneration_colorThemeId')
+          localStorage.removeItem('postGeneration_canvasImages')
+          localStorage.removeItem('postGeneration_contentHash')
+          localStorage.removeItem('postGeneration_generationId')
+          localStorage.removeItem('postGeneration_fullContentHash')
+          localStorage.removeItem('postGeneration_ideaTitle')
+          localStorage.setItem('postGeneration_userId', user.id)
+          return
+        }
+        
         const savedNote = localStorage.getItem('postGeneration_note')
         const savedAccountDescription = localStorage.getItem('postGeneration_accountDescription')
         const savedFontCombination = localStorage.getItem('postGeneration_fontCombinationId')
@@ -261,7 +288,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
         localStorage.removeItem('postGeneration_fullContentHash')
       }
     }
-  }, [user, authLoading])
+  }, [user, authLoading, loadingNote, loadingIdeas, selectedIdea])
 
   if (authLoading) {
     return (
@@ -370,10 +397,23 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     setError('')
     setNote(null)
     setCurrentStep('generating')
+    // Clear localStorage note temporarily to prevent it from loading during generation
+    // We'll save the new note once it's generated
+    try {
+      localStorage.removeItem('postGeneration_note')
+      localStorage.removeItem('postGeneration_canvasImages')
+      localStorage.removeItem('postGeneration_fullContentHash')
+      localStorage.removeItem('postGeneration_contentHash')
+    } catch (error) {
+      console.error('Error clearing localStorage during generation:', error)
+    }
 
     // Simulate step progression
     setTimeout(() => setCurrentStep('analysing'), 1000)
     setTimeout(() => setCurrentStep('rendering'), 2000)
+
+    // Log the includeImages value being sent to API
+    console.log('🖼️ Frontend: Sending includeImages =', includeImages)
 
     try {
       const response = await fetch(`${API_URL}/api/social`, {
@@ -410,6 +450,9 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
             localStorage.setItem('postGeneration_accountDescription', accountDescription.trim())
             localStorage.setItem('postGeneration_fontCombinationId', fontCombinationId)
             localStorage.setItem('postGeneration_colorThemeId', colorThemeId)
+            if (user?.id) {
+              localStorage.setItem('postGeneration_userId', user.id)
+            }
             console.log('✅ Saved note to localStorage')
           } catch (error) {
             console.error('Error saving to localStorage:', error)
@@ -467,6 +510,8 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
 
     setSavingCarousels(true)
     setError('')
+
+    console.log('🖼️ Frontend: Refreshing slides with includeImages =', includeImages)
 
     fetch(`${API_URL}/api/social`, {
       method: 'POST',
@@ -648,13 +693,13 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                 <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {/* Business details heading */}
                   <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '8px', color: '#000000' }}>
-                    Business details
+                    Idea
                   </h3>
                   
                   {/* Textarea for business description */}
                   <textarea
                     className="input mobile-prompt"
-                    placeholder="Describe your business: e.g., productivity coach helping remote workers overcome procrastination"
+                    placeholder="Describe what you want to create"
                     value={accountDescription}
                     onChange={(e) => setAccountDescription(e.target.value)}
                     rows={4}
@@ -1005,7 +1050,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                     Generating ideas...
                   </h3>
                   <p style={{ fontSize: '15px', color: '#666666' }}>
-                    Sit tight—Gemini is crafting 10 fresh angles for you.
+                    Post my Note is crafting 10 fresh angles for you.
                   </p>
                 </div>
               )}

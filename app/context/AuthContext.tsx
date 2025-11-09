@@ -61,9 +61,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // Helper function to clear all localStorage data
+  const clearLocalStorageData = () => {
+    try {
+      localStorage.removeItem('postGeneration_note')
+      localStorage.removeItem('postGeneration_accountDescription')
+      localStorage.removeItem('postGeneration_fontCombinationId')
+      localStorage.removeItem('postGeneration_colorThemeId')
+      localStorage.removeItem('postGeneration_canvasImages')
+      localStorage.removeItem('postGeneration_contentHash')
+      localStorage.removeItem('postGeneration_generationId')
+      localStorage.removeItem('postGeneration_fullContentHash')
+      localStorage.removeItem('postGeneration_ideaTitle')
+      localStorage.removeItem('postGeneration_userId')
+      localStorage.removeItem('postGeneration_backgroundId')
+    } catch (error) {
+      console.error('Error clearing localStorage:', error)
+    }
+  }
+
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      const previousUserId = localStorage.getItem('postGeneration_userId')
+      const currentUserId = session?.user?.id ?? null
+      
+      // If user changed, clear localStorage
+      if (previousUserId && previousUserId !== currentUserId) {
+        clearLocalStorageData()
+      }
+      
+      // Store current user ID
+      if (currentUserId) {
+        localStorage.setItem('postGeneration_userId', currentUserId)
+      } else {
+        clearLocalStorageData()
+      }
+      
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
@@ -76,6 +110,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      const previousUserId = localStorage.getItem('postGeneration_userId')
+      const currentUserId = session?.user?.id ?? null
+      
+      // If user changed, clear localStorage
+      if (previousUserId && previousUserId !== currentUserId) {
+        clearLocalStorageData()
+      }
+      
+      // Store current user ID or clear if logged out
+      if (currentUserId) {
+        localStorage.setItem('postGeneration_userId', currentUserId)
+      } else {
+        clearLocalStorageData()
+      }
+      
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
@@ -90,6 +139,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const signOut = async () => {
+    // Clear localStorage on sign out
+    try {
+      localStorage.removeItem('postGeneration_note')
+      localStorage.removeItem('postGeneration_accountDescription')
+      localStorage.removeItem('postGeneration_fontCombinationId')
+      localStorage.removeItem('postGeneration_colorThemeId')
+      localStorage.removeItem('postGeneration_canvasImages')
+      localStorage.removeItem('postGeneration_contentHash')
+      localStorage.removeItem('postGeneration_generationId')
+      localStorage.removeItem('postGeneration_fullContentHash')
+      localStorage.removeItem('postGeneration_ideaTitle')
+      localStorage.removeItem('postGeneration_userId')
+      localStorage.removeItem('postGeneration_backgroundId')
+    } catch (error) {
+      console.error('Error clearing localStorage on sign out:', error)
+    }
+    
     await supabase.auth.signOut()
     setUser(null)
     setSession(null)
