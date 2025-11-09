@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { History, Palette, Edit3, MessageSquare } from 'lucide-react'
+import { History, Palette, Edit3, MessageSquare, ChevronLeft } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import './globals.css'
-import SlideImageGenerator from './components/SlideImageGenerator'
-import { FONT_COMBINATIONS, COLOR_THEMES } from './config/slideThemes'
+import CarouselImageGenerator from './components/CarouselImageGenerator'
+import { FONT_COMBINATIONS, COLOR_THEMES } from './config/carouselThemes'
 import { useAuth } from './context/AuthContext'
 import AccountButton from './components/AccountButton'
 import UpgradePrompt from './components/UpgradePrompt'
@@ -23,7 +23,7 @@ type BackgroundOption = {
 
 interface Note {
   ideaTitle: string
-  slides: Array<{
+  carousels: Array<{
     title: string
     content: string
     kind: 'HOOK' | 'MIDDLE' | 'CTA'
@@ -68,15 +68,19 @@ export default function Home() {
   const [error, setError] = useState('')
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
-  const [includeImages, setIncludeImages] = useState(true)
-  const [editedSlides, setEditedSlides] = useState<Note['slides']>([])
-  const [slidesDirty, setSlidesDirty] = useState(false)
-  const [savingSlides, setSavingSlides] = useState(false)
-  const [activeLeftTab, setActiveLeftTab] = useState<'design' | 'slides' | 'caption'>('design')
-  const [expandedSlideIndexes, setExpandedSlideIndexes] = useState<number[]>([])
+  const [includeImages, setIncludeImages] = useState(false)
+  const [editedCarousels, setEditedCarousels] = useState<Note['carousels']>([])
+  const [carouselsDirty, setCarouselsDirty] = useState(false)
+  const [savingCarousels, setSavingCarousels] = useState(false)
+  const [editedCaption, setEditedCaption] = useState<string>('')
+  const [captionCopied, setCaptionCopied] = useState(false)
+  const [activeLeftTab, setActiveLeftTab] = useState<'design' | 'carousels' | 'caption'>('design')
+  const [expandedCarouselIndexes, setExpandedCarouselIndexes] = useState<number[]>([])
+  const [showCustomisation, setShowCustomisation] = useState(false)
+  const hasLoadedFromStorage = useRef(false)
 const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] = [
   { id: 'design', label: 'Customize Design', icon: Palette },
-  { id: 'slides', label: 'Edit Slides', icon: Edit3 },
+  { id: 'carousels', label: 'Edit Carousel', icon: Edit3 },
   { id: 'caption', label: 'Post Caption', icon: MessageSquare }
 ]
 
@@ -106,21 +110,45 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     }
   }, [user, authLoading, router])
 
-  // Sync editable slides with generated note
+  // Sync editable carousels with generated note
   useEffect(() => {
     if (note) {
-      setEditedSlides(note.slides.map(slide => ({ ...slide })))
-      setSlidesDirty(false)
-      setExpandedSlideIndexes([])
+      setEditedCarousels(note.carousels.map(carousel => ({ ...carousel })))
+      setEditedCaption(note.caption || '')
+      setCarouselsDirty(false)
+      setExpandedCarouselIndexes([])
+      // Auto-show customisation when note exists
+      setShowCustomisation(true)
     } else {
-      setEditedSlides([])
-      setSlidesDirty(false)
-      setExpandedSlideIndexes([])
+      setEditedCarousels([])
+      setEditedCaption('')
+      setCarouselsDirty(false)
+      setExpandedCarouselIndexes([])
+      setShowCustomisation(false)
     }
   }, [note])
 
-  const toggleSlideExpansion = (index: number) => {
-    setExpandedSlideIndexes(prev => {
+  // Warn user before leaving page if there are unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (carouselsDirty) {
+        // Standard way to trigger browser's unsaved changes warning
+        e.preventDefault()
+        // Modern browsers ignore custom messages and show their own
+        e.returnValue = '' // Required for Chrome
+        return '' // Required for some browsers
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [carouselsDirty])
+
+  const toggleCarouselExpansion = (index: number) => {
+    setExpandedCarouselIndexes(prev => {
       if (prev.includes(index)) {
         return prev.filter(i => i !== index)
       }
@@ -183,15 +211,43 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     if (!backgroundId) return
     try {
       localStorage.setItem('postGeneration_backgroundId', backgroundId)
+      // If note exists, trigger regeneration by updating a dependency
+      // The CarouselImageGenerator will detect the backgroundImageUrl change
     } catch (error) {
       console.warn('Unable to persist background preference to localStorage:', error)
     }
   }, [backgroundId])
 
-  // Load note from localStorage on mount
+  // Reset hasLoadedFromStorage when user changes
   useEffect(() => {
-    if (user && !authLoading) {
+    hasLoadedFromStorage.current = false
+  }, [user?.id])
+
+  // Load note from localStorage on initial mount only (not during generation)
+  useEffect(() => {
+    // Only load from localStorage once per user session, not when generating
+    // This allows reloading the page to restore the previous carousel
+    if (user && !authLoading && !hasLoadedFromStorage.current && !loadingNote && !loadingIdeas && !selectedIdea) {
+      hasLoadedFromStorage.current = true
       try {
+        // Check if localStorage belongs to current user
+        const storedUserId = localStorage.getItem('postGeneration_userId')
+        if (storedUserId !== user.id) {
+          // User changed, clear localStorage
+          console.log('User changed, clearing localStorage')
+          localStorage.removeItem('postGeneration_note')
+          localStorage.removeItem('postGeneration_accountDescription')
+          localStorage.removeItem('postGeneration_fontCombinationId')
+          localStorage.removeItem('postGeneration_colorThemeId')
+          localStorage.removeItem('postGeneration_canvasImages')
+          localStorage.removeItem('postGeneration_contentHash')
+          localStorage.removeItem('postGeneration_generationId')
+          localStorage.removeItem('postGeneration_fullContentHash')
+          localStorage.removeItem('postGeneration_ideaTitle')
+          localStorage.setItem('postGeneration_userId', user.id)
+          return
+        }
+        
         const savedNote = localStorage.getItem('postGeneration_note')
         const savedAccountDescription = localStorage.getItem('postGeneration_accountDescription')
         const savedFontCombination = localStorage.getItem('postGeneration_fontCombinationId')
@@ -199,7 +255,18 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
         
         if (savedNote) {
           const parsedNote = JSON.parse(savedNote)
-          setNote(parsedNote)
+          // Handle backward compatibility: migrate 'slides' to 'carousels' if needed
+          if (parsedNote && Array.isArray(parsedNote.slides) && !parsedNote.carousels) {
+            parsedNote.carousels = parsedNote.slides
+            delete parsedNote.slides
+          }
+          // Verify note structure and carousels array integrity
+          if (parsedNote && Array.isArray(parsedNote.carousels) && parsedNote.carousels.length > 0) {
+            console.log('✅ Loaded note with', parsedNote.carousels.length, 'carousels from localStorage')
+            setNote(parsedNote)
+          } else {
+            console.warn('⚠️ Invalid note structure in localStorage, skipping')
+          }
         }
         
         if (savedAccountDescription) {
@@ -215,9 +282,13 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
         }
       } catch (error) {
         console.error('Error loading from localStorage:', error)
+        // Clear corrupted localStorage data
+        localStorage.removeItem('postGeneration_note')
+        localStorage.removeItem('postGeneration_canvasImages')
+        localStorage.removeItem('postGeneration_fullContentHash')
       }
     }
-  }, [user, authLoading])
+  }, [user, authLoading, loadingNote, loadingIdeas, selectedIdea])
 
   if (authLoading) {
     return (
@@ -244,6 +315,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     setError('')
     setIdeas([])
     setNote(null)
+    setSelectedIdea(null)
 
     try {
       const response = await fetch(`${API_URL}/api/social`, {
@@ -311,11 +383,11 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
       }
     }
 
-    // Check if user has credits (only deduct credit for note generation, not ideas)
-    // Generating ideas is FREE - only note generation costs credits
-    // Allow generation if user has at least 1 credit (creditsRemaining > 0)
-    if (creditsRemaining <= 0) {
-      console.log('No credits available. Credits remaining:', creditsRemaining, 'Context credits:', credits)
+    // Check if user has enough credits based on whether images are included
+    // Text only: 1 credit, Text + Image: 2 credits
+    const requiredCredits = includeImages ? 2 : 1
+    if (creditsRemaining < requiredCredits) {
+      console.log(`Not enough credits. Required: ${requiredCredits}, Available: ${creditsRemaining}`)
       setShowUpgradePrompt(true)
       return
     }
@@ -325,10 +397,23 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     setError('')
     setNote(null)
     setCurrentStep('generating')
+    // Clear localStorage note temporarily to prevent it from loading during generation
+    // We'll save the new note once it's generated
+    try {
+      localStorage.removeItem('postGeneration_note')
+      localStorage.removeItem('postGeneration_canvasImages')
+      localStorage.removeItem('postGeneration_fullContentHash')
+      localStorage.removeItem('postGeneration_contentHash')
+    } catch (error) {
+      console.error('Error clearing localStorage during generation:', error)
+    }
 
     // Simulate step progression
     setTimeout(() => setCurrentStep('analysing'), 1000)
     setTimeout(() => setCurrentStep('rendering'), 2000)
+
+    // Log the includeImages value being sent to API
+    console.log('🖼️ Frontend: Sending includeImages =', includeImages)
 
     try {
       const response = await fetch(`${API_URL}/api/social`, {
@@ -345,21 +430,40 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
       const result = await response.json()
 
       if (result.success) {
-        // Credit will be deducted when slides are actually generated in SlideImageGenerator
-        setNote(result.data)
-        // Clear generation_id to force new generation creation (new ideaTitle = new generation)
-        try {
-          localStorage.removeItem('postGeneration_generationId')
-          localStorage.removeItem('postGeneration_contentHash')
-          localStorage.setItem('postGeneration_note', JSON.stringify(result.data))
-          localStorage.setItem('postGeneration_accountDescription', accountDescription.trim())
-          localStorage.setItem('postGeneration_fontCombinationId', fontCombinationId)
-          localStorage.setItem('postGeneration_colorThemeId', colorThemeId)
-        } catch (error) {
-          console.error('Error saving to localStorage:', error)
+        // Credit will be deducted when carousels are actually generated in CarouselImageGenerator
+        // Verify result data structure before saving
+        // Note: API still returns 'slides' but we map it to 'carousels' in our Note interface
+        if (result.data && Array.isArray(result.data.slides) && result.data.slides.length > 0) {
+          console.log('✅ Received note with', result.data.slides.length, 'carousels from API')
+          // Map API response 'slides' to 'carousels' for our Note interface
+          const noteData = {
+            ...result.data,
+            carousels: result.data.slides
+          }
+          setNote(noteData)
+          // Clear generation_id to force new generation creation (new ideaTitle = new generation)
+          try {
+            localStorage.removeItem('postGeneration_generationId')
+            localStorage.removeItem('postGeneration_contentHash')
+            localStorage.removeItem('postGeneration_ideaTitle') // Clear ideaTitle for new note
+            localStorage.setItem('postGeneration_note', JSON.stringify(noteData))
+            localStorage.setItem('postGeneration_accountDescription', accountDescription.trim())
+            localStorage.setItem('postGeneration_fontCombinationId', fontCombinationId)
+            localStorage.setItem('postGeneration_colorThemeId', colorThemeId)
+            if (user?.id) {
+              localStorage.setItem('postGeneration_userId', user.id)
+            }
+            console.log('✅ Saved note to localStorage')
+          } catch (error) {
+            console.error('Error saving to localStorage:', error)
+          }
+          setError('')
+          setCurrentStep(null)
+        } else {
+          console.error('❌ Invalid data structure received from API')
+          setError('Invalid data received from server')
+          setCurrentStep(null)
         }
-        setError('')
-        setCurrentStep(null)
       } else {
         setError(result.error || 'Failed to generate note')
         setCurrentStep(null)
@@ -373,8 +477,8 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     }
   }
 
-  const handleSlideFieldChange = (index: number, field: 'title' | 'content', value: string) => {
-    setEditedSlides(prev => {
+  const handleCarouselFieldChange = (index: number, field: 'title' | 'content', value: string) => {
+    setEditedCarousels(prev => {
       if (!prev[index]) return prev
       const next = [...prev]
       next[index] = {
@@ -383,57 +487,59 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
       }
       return next
     })
-    setSlidesDirty(true)
+    setCarouselsDirty(true)
   }
 
-  const resetEditedSlides = () => {
+  const resetEditedCarousels = () => {
     if (note) {
-      setEditedSlides(note.slides.map(slide => ({ ...slide })))
+      setEditedCarousels(note.carousels.map(carousel => ({ ...carousel })))
     } else {
-      setEditedSlides([])
+      setEditedCarousels([])
     }
-    setSlidesDirty(false)
+    setCarouselsDirty(false)
   }
 
-  const saveEditedSlides = () => {
-    if (!note || savingSlides) return
+  const saveEditedCarousels = () => {
+    if (!note || savingCarousels) return
 
-    const cleanedSlides = editedSlides.map(slide => ({
-      ...slide,
-      title: (slide.title ?? '').trim(),
-      content: (slide.content ?? '').trim()
+    const cleanedCarousels = editedCarousels.map(carousel => ({
+      ...carousel,
+      title: (carousel.title ?? '').trim(),
+      content: (carousel.content ?? '').trim()
     }))
 
-    setSavingSlides(true)
+    setSavingCarousels(true)
     setError('')
+
+    console.log('🖼️ Frontend: Refreshing slides with includeImages =', includeImages)
 
     fetch(`${API_URL}/api/social`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'refreshSlides',
-        slides: cleanedSlides,
+        slides: cleanedCarousels,
         includeImages
       })
     })
       .then(async (response) => {
         const data = await response.json()
         if (!response.ok || !data.success) {
-          throw new Error(data.error || 'Failed to refresh slide enhancements')
+          throw new Error(data.error || 'Failed to refresh carousel enhancements')
         }
 
         const updatedUnderline: Note['underlineWords'] = data.data?.underlineWords || {}
-        const sanitizedSlides: Note['slides'] = (data.data?.slides || cleanedSlides) as Note['slides']
+        const sanitizedCarousels: Note['carousels'] = (data.data?.slides || cleanedCarousels) as Note['carousels']
 
         const updatedNote: Note = {
           ...note,
-          slides: sanitizedSlides,
+          carousels: sanitizedCarousels,
           underlineWords: updatedUnderline
         }
 
         setNote(updatedNote)
-        setEditedSlides(sanitizedSlides.map(slide => ({ ...slide })))
-        setSlidesDirty(false)
+        setEditedCarousels(sanitizedCarousels.map(carousel => ({ ...carousel })))
+        setCarouselsDirty(false)
 
         try {
           localStorage.setItem('postGeneration_note', JSON.stringify(updatedNote))
@@ -441,16 +547,26 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
           localStorage.removeItem('postGeneration_fullContentHash')
           localStorage.removeItem('postGeneration_contentHash')
         } catch (storageError) {
-          console.warn('Could not persist edited slides to localStorage:', storageError)
+          console.warn('Could not persist edited carousels to localStorage:', storageError)
         }
       })
       .catch((err: any) => {
-        console.error('Error refreshing slides:', err)
-        setError(err.message || 'Failed to refresh slides. Please try again.')
+        console.error('Error refreshing carousels:', err)
+        setError(err.message || 'Failed to refresh carousels. Please try again.')
       })
       .finally(() => {
-        setSavingSlides(false)
+        setSavingCarousels(false)
       })
+  }
+
+  const goBackToBusinessDetails = () => {
+    // Just switch to business details panel, keep the note
+    setShowCustomisation(false)
+  }
+
+  const goToCustomisation = () => {
+    // Switch to customisation panel
+    setShowCustomisation(true)
   }
 
   const reset = () => {
@@ -491,10 +607,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
         top: 0,
         zIndex: 100,
       }}>
-        <div style={{
-          maxWidth: '1400px',
-          margin: '0 auto',
-          padding: '0 48px',
+        <div className="header-inner" style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -554,184 +667,238 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
           overflow: 'hidden'
         }}
       >
-        {/* Input Section - Always Visible */}
-        <div style={{ marginBottom: '24px', flex: '0 0 auto' }}>
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <input
-              type="text"
-              className="input"
-              placeholder="Describe your business: e.g., productivity coach helping remote workers overcome procrastination"
-              value={accountDescription}
-              onChange={(e) => setAccountDescription(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && generateIdeas()}
-              style={{ flex: 1, minWidth: '300px' }}
-            />
-            <label
-              className={`toggle-switch ${includeImages ? 'on' : ''}`}
-              style={{ display: 'flex', alignItems: 'center', position: 'relative' }}
-            >
-              <input
-                type="checkbox"
-                checked={includeImages}
-                onChange={(e) => setIncludeImages(e.target.checked)}
-                aria-label={includeImages ? 'Disable images' : 'Enable images'}
-              />
-              <span className="toggle-slider"></span>
-            </label>
-            <span className="toggle-label" style={{ marginRight: '8px' }}>
-              Images {includeImages ? 'On' : 'Off'}
-            </span>
-            <button
-              className="button"
-              onClick={generateIdeas}
-              disabled={loadingIdeas || !accountDescription.trim()}
-              style={{ minWidth: '150px' }}
-            >
-              {loadingIdeas ? 'Generating...' : 'Generate Ideas'}
-            </button>
-              <button
-                className="button secondary"
-                onClick={reset}
-                style={{ minWidth: '120px' }}
-              >
-                Reset
-              </button>
-          </div>
-          
-          {/* Include Images Toggle */}
-          {/* Include Images Toggle is now above in the main action row */}
-        </div>
+        {/* Mobile Stack Wrapper */}
+        <div className="mobile-stack" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          {error && (
+            <div className="error" style={{ margin: '0 0 24px', flex: '0 0 auto' }}>
+              {error}
+            </div>
+          )}
 
-        {error && (
-          <div className="error" style={{ margin: '0 0 32px' }}>
-            {error}
-          </div>
-        )}
+          {/* Two-Column Layout - Responsive Grid */}
+          <div 
+            className="responsive-grid"
+            style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'minmax(260px, 0.3fr) minmax(0, 0.7fr)', 
+              gap: '32px',
+              alignItems: 'stretch',
+              flex: 1,
+              overflow: 'hidden'
+            }}
+          >
+            {/* LEFT COLUMN - Control Panel with Input, Tab Group, Buttons, and Customize Section */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', overflow: 'hidden', alignSelf: 'stretch' }}>
+              {!showCustomisation ? (
+                <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {/* Business details heading */}
+                  <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '8px', color: '#000000' }}>
+                    Idea
+                  </h3>
+                  
+                  {/* Textarea for business description */}
+                  <textarea
+                    className="input mobile-prompt"
+                    placeholder="Describe what you want to create"
+                    value={accountDescription}
+                    onChange={(e) => setAccountDescription(e.target.value)}
+                    rows={4}
+                    style={{ 
+                      width: '100%', 
+                      resize: 'vertical',
+                      maxHeight: '200px',
+                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
+                    }}
+                  />
+                  
+                  {/* Dropdown for Text / Text + Image */}
+                  <select
+                    value={includeImages ? 'text-image' : 'text'}
+                    onChange={(e) => setIncludeImages(e.target.value === 'text-image')}
+                    className="input"
+                    style={{ cursor: 'pointer', padding: '12px' }}
+                  >
+                    <option value="text">Text (1 credit)</option>
+                    <option value="text-image">Text + Image (2 credits)</option>
+                  </select>
 
-        {/* Two-Column Layout - Always Visible */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'minmax(260px, 0.3fr) minmax(0, 0.7fr)', 
-          gap: '32px',
-          alignItems: 'start',
-          flex: 1,
-          overflow: 'hidden'
-          }}>
-            {/* LEFT COLUMN */}
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '24px', height: '100%', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                {leftTabs.map(tab => {
-                  const TabIcon = tab.icon
-                  return (
+                  {/* Show Customisation button if note exists */}
+                  {note && (
                     <button
-                      key={tab.id}
-                      className={`button ${activeLeftTab === tab.id ? '' : 'secondary'}`}
-                      onClick={() => setActiveLeftTab(tab.id)}
-                      disabled={!note}
+                      className="button secondary"
+                      onClick={goToCustomisation}
+                      style={{ width: '100%' }}
+                    >
+                      Customise
+                    </button>
+                  )}
+
+                  {/* Generate button */}
+                  <button
+                    className="button mobile-generate"
+                    onClick={generateIdeas}
+                    disabled={loadingIdeas || !accountDescription.trim()}
+                    style={{ width: '100%' }}
+                  >
+                    {loadingIdeas ? 'Generating...' : 'Generate'}
+                  </button>
+                </div>
+              ) : (
+                <div className="card mobile-customize" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: '16px' }}>
+                  {/* Content area */}
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    {/* Back button */}
+                    <button
+                      onClick={goBackToBusinessDetails}
                       style={{
-                        padding: '12px',
-                        width: '56px',
-                        height: '56px',
-                        borderRadius: '50%',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        opacity: !note ? 0.5 : 1,
-                        cursor: !note ? 'not-allowed' : 'pointer'
+                        gap: '8px',
+                        background: 'none',
+                        border: 'none',
+                        padding: '8px 0',
+                        cursor: 'pointer',
+                        marginBottom: '24px',
+                        color: '#000000',
+                        fontSize: '16px',
+                        fontWeight: '600'
                       }}
-                      title={tab.label}
-                      aria-label={tab.label}
                     >
-                      <TabIcon size={20} />
+                      <ChevronLeft size={20} />
+                      <span>Back</span>
                     </button>
-                  )
-                })}
-              </div>
+                    
+                    {/* Customisation heading */}
+                    <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px', color: '#000000' }}>
+                      Customisation
+                    </h3>
+                  
+                  {/* Tab buttons for Design / Carousels / Caption */}
+                  <div 
+                    style={{ 
+                      display: 'flex', 
+                      gap: '0',
+                      alignItems: 'stretch',
+                      border: '2px solid #e5e5e5',
+                      borderRadius: '12px',
+                      padding: '2px',
+                      background: '#ededed',
+                      height: 'fit-content',
+                      opacity: !note ? 0.5 : 1,
+                      pointerEvents: !note ? 'none' : 'auto',
+                      marginBottom: '24px'
+                    }}
+                  >
+                    {leftTabs.map(tab => {
+                      const TabIcon = tab.icon
+                      const isActive = activeLeftTab === tab.id
+                      return (
+                        <button
+                          key={tab.id}
+                          onClick={() => setActiveLeftTab(tab.id)}
+                          disabled={!note}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '8px 16px',
+                            flex: 1,
+                            border: 'none',
+                            borderRadius: '10px',
+                            background: isActive ? '#d8d8d8' : '#ededed',
+                            cursor: !note ? 'not-allowed' : 'pointer',
+                            transition: 'all 0.2s ease'
+                          }}
+                          title={tab.label}
+                          aria-label={tab.label}
+                        >
+                          <TabIcon size={20} color="#000000" />
+                        </button>
+                      )
+                    })}
+                  </div>
 
-              {activeLeftTab === 'design' && (
-                <div style={{ opacity: !note ? 0.5 : 1, pointerEvents: !note ? 'none' : 'auto' }}>
-                  <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
-                    Customize Design
-                  </h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000000' }}>
-                        Font Combination
-                      </label>
-                      <select
-                        value={fontCombinationId}
-                        onChange={(e) => setFontCombinationId(e.target.value)}
-                        className="input"
-                        style={{ cursor: 'pointer', padding: '12px' }}
-                      >
-                        {FONT_COMBINATIONS.map(combo => (
-                          <option key={combo.id} value={combo.id}>
-                            {combo.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000000' }}>
-                        Color Theme
-                      </label>
-                      <select
-                        value={colorThemeId}
-                        onChange={(e) => setColorThemeId(e.target.value)}
-                        className="input"
-                        style={{ cursor: 'pointer', padding: '12px' }}
-                      >
-                        {COLOR_THEMES.map(theme => (
-                          <option key={theme.id} value={theme.id}>
-                            {theme.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    {backgroundOptions.length > 0 && (
+                {activeLeftTab === 'design' && (
+                  <div style={{ opacity: !note ? 0.5 : 1, pointerEvents: !note ? 'none' : 'auto', marginBottom: '24px' }}>
+                    <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
+                      Carousel Style
+                    </h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
                       <div>
-                        <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000000' }}>
-                          Background Texture
+                        <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
+                          Font Combination
                         </label>
                         <select
-                          value={backgroundId}
-                          onChange={(e) => setBackgroundId(e.target.value)}
+                          value={fontCombinationId}
+                          onChange={(e) => setFontCombinationId(e.target.value)}
                           className="input"
                           style={{ cursor: 'pointer', padding: '12px' }}
                         >
-                          {backgroundOptions.map(option => (
-                            <option key={option.id} value={option.id}>
-                              {option.label}
+                          {FONT_COMBINATIONS.map(combo => (
+                            <option key={combo.id} value={combo.id}>
+                              {combo.name}
                             </option>
                           ))}
                         </select>
                       </div>
-                    )}
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
+                          Color Theme
+                        </label>
+                        <select
+                          value={colorThemeId}
+                          onChange={(e) => setColorThemeId(e.target.value)}
+                          className="input"
+                          style={{ cursor: 'pointer', padding: '12px' }}
+                        >
+                          {COLOR_THEMES.map(theme => (
+                            <option key={theme.id} value={theme.id}>
+                              {theme.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {backgroundOptions.length > 0 && (
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
+                            Background Texture
+                          </label>
+                          <select
+                            value={backgroundId}
+                            onChange={(e) => setBackgroundId(e.target.value)}
+                            className="input"
+                            style={{ cursor: 'pointer', padding: '12px' }}
+                          >
+                            {backgroundOptions.map(option => (
+                              <option key={option.id} value={option.id}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {activeLeftTab === 'slides' && (
-                <div style={{ opacity: !note ? 0.5 : 1, pointerEvents: !note ? 'none' : 'auto' }}>
-                  <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
-                    Slides Content
-                  </h3>
-                  <p style={{ fontSize: '14px', color: '#4b5563', marginBottom: '16px' }}>
-                    {!note ? 'Generate a post to edit slides here' : 'Edit any slide text below. Save to refresh the preview and generated assets.'}
-                  </p>
-                  {note && (
-                  <div style={{ display: 'grid', gap: '12px' }}>
-                    {editedSlides.map((slide, index) => {
-                      const kind = note.slides[index]?.kind ?? 'MIDDLE'
-                      const isExpanded = expandedSlideIndexes.includes(index)
+                {activeLeftTab === 'carousels' && (
+                  <div style={{ opacity: !note ? 0.5 : 1, pointerEvents: !note ? 'none' : 'auto', marginBottom: '24px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
+                      Carousel Content
+                    </h3>
+                    {note && (
+                      <div style={{ display: 'grid', gap: '16px' }}>
+                    {editedCarousels.map((carousel, index) => {
+                      const kind = note.carousels[index]?.kind ?? 'MIDDLE'
+                      const isExpanded = expandedCarouselIndexes.includes(index)
                       return (
                         <div 
                           key={index}
-                          className={`slide-card ${kind === 'HOOK' ? 'hook' : kind === 'CTA' ? 'cta' : 'middle'}`}
-                          style={{ padding: '16px' }}
+                          className={`carousel-card ${kind === 'HOOK' ? 'hook' : kind === 'CTA' ? 'cta' : 'content'}`}
+                          style={{ padding: '0px' }}
                         >
                           <button
-                            onClick={() => toggleSlideExpansion(index)}
+                            onClick={() => toggleCarouselExpansion(index)}
                             style={{
                               display: 'flex',
                               alignItems: 'center',
@@ -739,37 +906,37 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                               width: '100%',
                               background: 'none',
                               border: 'none',
-                              padding: 0,
+                              padding: '6px 0',
                               margin: 0,
                               cursor: 'pointer',
                               textAlign: 'left'
                             }}
                           >
                             <div style={{ 
-                              fontSize: '11px', 
-                              fontWeight: '700', 
-                              color: '#999999', 
-                              textTransform: 'uppercase',
-                              letterSpacing: '1px'
+                              fontSize: '14px', 
+                              fontWeight: '500', 
+                              color: '#000000', 
+                              textTransform: 'none',
+                              letterSpacing: '0px'
                             }}>
-                              Slide {index + 1} • {kind}
+                              Carousel {index + 1} • {kind === 'MIDDLE' ? 'Content' : kind === 'HOOK' ? 'Hook' : kind === 'CTA' ? 'CTA' : kind}
                             </div>
-                            <span style={{ fontSize: '18px', color: '#999999', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
+                            <span style={{ fontSize: '14px', color: '#000000', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
                               ▾
                             </span>
                           </button>
 
                           {isExpanded && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px', paddingTop: '12px' }}>
                             <div>
                               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7280', marginBottom: '6px' }}>
                                 Title
                               </label>
                               <input
                                 className="input"
-                                value={slide.title ?? ''}
-                                onChange={(e) => handleSlideFieldChange(index, 'title', e.target.value)}
-                                placeholder="Enter slide title"
+                                value={carousel.title ?? ''}
+                                onChange={(e) => handleCarouselFieldChange(index, 'title', e.target.value)}
+                                placeholder="Enter carousel title"
                                 style={{ width: '100%' }}
                               />
                             </div>
@@ -779,9 +946,9 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                               </label>
                               <textarea
                                 className="input"
-                                value={slide.content ?? ''}
-                                onChange={(e) => handleSlideFieldChange(index, 'content', e.target.value)}
-                                placeholder="Enter slide content"
+                                value={carousel.content ?? ''}
+                                onChange={(e) => handleCarouselFieldChange(index, 'content', e.target.value)}
+                                placeholder="Enter carousel content"
                                 rows={kind === 'CTA' ? 5 : 6}
                                 style={{ width: '100%', resize: 'vertical', minHeight: '120px' }}
                               />
@@ -796,54 +963,85 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                   {note && (
                   <div style={{ 
                     display: 'flex', 
-                    justifyContent: 'flex-end', 
+                    flexDirection: 'column',
                     gap: '12px',
                     marginTop: '24px'
                   }}>
                     <button
                       className="button secondary"
-                      onClick={resetEditedSlides}
-                      disabled={!slidesDirty || savingSlides}
-                      style={{ minWidth: '130px' }}
+                      onClick={resetEditedCarousels}
+                      disabled={!carouselsDirty || savingCarousels}
+                      style={{ width: '100%' }}
                     >
-                      Reset Changes
+                      Reset
                     </button>
                     <button
                       className="button"
-                      onClick={saveEditedSlides}
-                      disabled={!slidesDirty || savingSlides}
-                      style={{ minWidth: '130px' }}
+                      onClick={saveEditedCarousels}
+                      disabled={!carouselsDirty || savingCarousels}
+                      style={{ width: '100%' }}
                     >
-                      {savingSlides ? 'Saving...' : 'Save Slides'}
+                      {savingCarousels ? 'Saving...' : 'Save'}
                     </button>
+                      </div>
+                    )}
                   </div>
-                  )}
-                </div>
-              )}
+                )}
 
-              {activeLeftTab === 'caption' && (
-                <div style={{ opacity: !note ? 0.5 : 1, pointerEvents: !note ? 'none' : 'auto' }}>
-                  <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
-                    Instagram Caption
-                  </h3>
-                  <div style={{ 
-                    padding: '20px', 
-                    background: '#fafafa',
-                    border: '2px solid #e5e5e5',
-                    borderRadius: '12px',
-                    whiteSpace: 'pre-wrap',
-                    fontSize: '15px',
-                    lineHeight: '1.8',
-                    color: '#000000'
-                  }}>
-                    {note ? note.caption : 'Generate a post to see the caption here'}
+                {activeLeftTab === 'caption' && (
+                  <div style={{ opacity: !note ? 0.5 : 1, pointerEvents: !note ? 'none' : 'auto', marginBottom: '24px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
+                      Instagram Caption
+                    </h3>
+                    <textarea
+                      className="input"
+                      value={editedCaption}
+                      onChange={(e) => setEditedCaption(e.target.value)}
+                      placeholder="Generate a post to see the caption here"
+                      disabled={!note}
+                      style={{ 
+                        width: '100%',
+                        minHeight: '300px',
+                        padding: '20px', 
+                        background: '#fafafa',
+                        border: '2px solid #e5e5e5',
+                        borderRadius: '12px',
+                        fontSize: '15px',
+                        lineHeight: '1.8',
+                        color: '#000000',
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
+                        resize: 'vertical'
+                      }}
+                    />
+                    {note && (
+                      <button
+                        className="button"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(editedCaption)
+                            setCaptionCopied(true)
+                            // Reset to "Copy" after 2 seconds
+                            setTimeout(() => {
+                              setCaptionCopied(false)
+                            }, 2000)
+                          } catch (err) {
+                            console.error('Failed to copy caption:', err)
+                          }
+                        }}
+                        style={{ width: '100%', marginTop: '12px' }}
+                      >
+                        {captionCopied ? 'Copied' : 'Copy'}
+                      </button>
+                    )}
                   </div>
+                )}
                 </div>
+              </div>
               )}
             </div>
 
-            {/* RIGHT COLUMN - Ideas, Loading, or Generated Slides */}
-            <div style={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '24px', minHeight: 0 }}>
+            {/* RIGHT COLUMN - Output Section - Mobile Order 4 */}
+            <div className="mobile-output" style={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '24px', minHeight: 0, alignSelf: 'stretch' }}>
               {/* Show loading state while generating ideas */}
               {loadingIdeas && (
                 <div className="card" style={{ textAlign: 'center', padding: '48px 20px' }}>
@@ -852,7 +1050,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                     Generating ideas...
                   </h3>
                   <p style={{ fontSize: '15px', color: '#666666' }}>
-                    Sit tight—Gemini is crafting 10 fresh angles for you.
+                    Post my Note is crafting 10 fresh angles for you.
                   </p>
                 </div>
               )}
@@ -860,24 +1058,24 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
               {/* Show Ideas if available and no note selected */}
               {ideas.length > 0 && !selectedIdea && !note && !loadingIdeas && (
                 <div className="card" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-              <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
-                Choose an Idea
-              </h3>
+                  <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
+                    Choose an Idea
+                  </h3>
                   <div style={{ display: 'grid', gap: '12px', flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '6px' }}>
-                {ideas.map((idea, index) => (
-                  <button
-                    key={index}
-                    onClick={() => generateNote(idea)}
-                    disabled={loadingNote}
-                    className="idea-button"
-                  >
-                    <span className="idea-number">{index + 1}</span>
-                    <span style={{ flex: 1 }}>{idea}</span>
-                  </button>
-                ))}
-            </div>
-          </div>
-        )}
+                    {ideas.map((idea, index) => (
+                      <button
+                        key={index}
+                        onClick={() => generateNote(idea)}
+                        disabled={loadingNote}
+                        className="idea-button"
+                      >
+                        <span className="idea-number">{index + 1}</span>
+                        <span style={{ flex: 1 }}>{idea}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Show Loading Steps if generating */}
         {selectedIdea && loadingNote && (
@@ -990,11 +1188,11 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
           </div>
         )}
 
-              {/* Show Generated Slides if note exists */}
+              {/* Show Generated Carousels if note exists */}
         {note && !loadingNote && (
                 <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
-            <SlideImageGenerator 
-              slides={note.slides}
+            <CarouselImageGenerator 
+              carousels={carouselsDirty && editedCarousels.length > 0 ? editedCarousels : note.carousels}
               ideaTitle={note.ideaTitle}
               underlineWords={note.underlineWords || {}}
               fontCombinationId={fontCombinationId}
@@ -1019,7 +1217,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                     fontWeight: '700',
                     color: '#000000'
                   }}>
-                    Your slides
+                    Your carousel
               </h3>
                   <p style={{ fontSize: '15px', color: '#666' }}>
                     Generate ideas to get started
@@ -1028,6 +1226,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
               )}
             </div>
           </div>
+        </div>
 
         {/* Debug Panel - Full Width Below */}
         {note && !loadingNote && (
@@ -1051,21 +1250,21 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                 whiteSpace: 'pre-wrap',
                 overflowX: 'auto'
               }}>
-                {note.slides.map((slide, index) => {
+                {note.carousels.map((carousel, index) => {
                   const emphasis = (note as any).underlineWords?.[index];
                   return (
-                    <div key={index} style={{ marginBottom: '30px', paddingBottom: '20px', borderBottom: index < note.slides.length - 1 ? '1px solid #333' : 'none' }}>
+                    <div key={index} style={{ marginBottom: '30px', paddingBottom: '20px', borderBottom: index < note.carousels.length - 1 ? '1px solid #333' : 'none' }}>
                       <div style={{ color: '#ffbd59', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
-                        ━━━ SLIDE {index + 1}/{note.slides.length} • {slide.kind} ━━━
+                        ━━━ CAROUSEL {index + 1}/{note.carousels.length} • {carousel.kind} ━━━
                     </div>
                       
                       <div style={{ marginLeft: '20px' }}>
                         <div style={{ marginBottom: '8px' }}>
-                          <span style={{ color: '#888' }}>Title:</span> <span style={{ color: '#fff' }}>{slide.title || '(empty)'}</span>
+                          <span style={{ color: '#888' }}>Title:</span> <span style={{ color: '#fff' }}>{carousel.title || '(empty)'}</span>
                         </div>
                         
                         <div style={{ marginBottom: '8px' }}>
-                          <span style={{ color: '#888' }}>Content:</span> <span style={{ color: '#fff' }}>{slide.content || '(empty)'}</span>
+                          <span style={{ color: '#888' }}>Content:</span> <span style={{ color: '#fff' }}>{carousel.content || '(empty)'}</span>
                         </div>
                         
                         {emphasis && (
@@ -1087,11 +1286,11 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                                 </div>
                               )}
                               
-                              {slide.kind === 'MIDDLE' && (
+                              {carousel.kind === 'MIDDLE' && (
                                 <>
                                   <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed #444' }}>
                                     <div style={{ color: '#a78bfa', fontWeight: 'bold', marginBottom: '8px' }}>
-                                      🖼️  IMAGE DATA (MIDDLE SLIDE ONLY):
+                                      🖼️  Image data (content carousel only):
                                     </div>
                                     
                                     <div style={{ marginLeft: '15px' }}>
@@ -1168,9 +1367,9 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                                 </>
                               )}
                               
-                              {slide.kind !== 'MIDDLE' && (
+                              {carousel.kind !== 'MIDDLE' && (
                                 <div style={{ marginTop: '8px', color: '#888', fontSize: '12px' }}>
-                                  ℹ️  Images only available for MIDDLE slides
+                                  ℹ️  Images only available for content carousels
             </div>
                               )}
                             </div>
@@ -1204,10 +1403,10 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                     📊 SUMMARY:
                   </div>
                   <div style={{ marginLeft: '15px' }}>
-                    <div>Total Slides: {note.slides.length}</div>
-                    <div>Middle Slides: {note.slides.filter(s => s.kind === 'MIDDLE').length}</div>
+                    <div>Total Carousels: {note.carousels.length}</div>
+                    <div>Content carousels: {note.carousels.filter(c => c.kind === 'MIDDLE').length}</div>
                     <div>
-                      Images Found: {note.slides.filter((s, i) => s.kind === 'MIDDLE' && (note as any).underlineWords?.[i]?.imageUrl).length} / {note.slides.filter(s => s.kind === 'MIDDLE').length}
+                      Images Found: {note.carousels.filter((c, i) => c.kind === 'MIDDLE' && (note as any).underlineWords?.[i]?.imageUrl).length} / {note.carousels.filter(c => c.kind === 'MIDDLE').length}
                     </div>
                     <div style={{ marginTop: '10px', color: '#fff' }}>
                       Raw underlineWords data:

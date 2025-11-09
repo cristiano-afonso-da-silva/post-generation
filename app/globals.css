@@ -44,9 +44,16 @@ a {
    ════════════════════════════════════════════════════════════════════════════ */
 
 .container {
-  max-width: none;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 32px 48px;
+}
+
+/* Header inner container - matches body padding */
+.header-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 48px;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -65,6 +72,20 @@ a {
 
 .card:hover {
   box-shadow: 0 4px 24px rgba(255, 189, 89, 0.15);
+}
+
+.card.mobile-customize {
+  cursor: default;
+}
+
+.card.mobile-customize:hover {
+  box-shadow: none;
+  cursor: default;
+}
+
+/* Remove margin-bottom for cards inside grid to ensure equal heights */
+.responsive-grid .card {
+  margin-bottom: 0;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -149,6 +170,12 @@ a {
   color: #999999;
 }
 
+textarea.input {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+}
+
 /* ════════════════════════════════════════════════════════════════════════════
    LOADING & SPINNER
    ════════════════════════════════════════════════════════════════════════════ */
@@ -220,12 +247,11 @@ a {
   border-radius: 12px;
   border: 2px solid #e5e5e5;
   background: #ffffff;
-  transition: all 0.3s ease;
 }
 
 .slide-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-  transform: translateY(-2px);
+  box-shadow: none;
+  transform: none;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -378,13 +404,15 @@ a {
    RESPONSIVE
    ════════════════════════════════════════════════════════════════════════════ */
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .container {
     padding: 24px 16px;
+    height: auto !important;
+    overflow: visible !important;
   }
   
   .card {
-    padding: 24px;
+    padding: 20px;
   }
   
   .stats-grid {
@@ -393,6 +421,110 @@ a {
   
   .plans-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* Mobile layout classes */
+  .mobile-stack {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .mobile-prompt {
+    width: 100% !important;
+    min-width: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  .mobile-tab-group {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .mobile-tab-group button {
+    flex: 1 !important;
+  }
+
+  .mobile-generate {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .mobile-reset {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Make toggle and label stack on mobile */
+  .toggle-switch,
+  .toggle-label {
+    order: 2;
+  }
+
+  .mobile-output {
+    order: 3;
+  }
+
+  .mobile-customize {
+    order: 4;
+  }
+
+  /* Make buttons touch-friendly */
+  .button {
+    min-height: 44px;
+    padding: 14px 24px;
+    font-size: 16px;
+  }
+
+  .input {
+    min-height: 44px;
+    font-size: 16px;
+    padding: 14px 16px;
+  }
+
+  /* Responsive grid to single column */
+  .responsive-grid {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 24px !important;
+  }
+
+  /* Header responsive styles */
+  header {
+    padding: 16px 0 !important;
+  }
+
+  header > div,
+  .header-inner {
+    padding: 0 16px !important;
+  }
+
+  header a[href="/landing"] {
+    font-size: 20px !important;
+  }
+
+  /* Toggle switch touch-friendly */
+  .toggle-switch {
+    min-width: 58px;
+    min-height: 44px;
+  }
+
+  /* Select elements touch-friendly */
+  select.input {
+    min-height: 44px;
+  }
+
+  /* Tab buttons touch-friendly */
+  .button[title] {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Textarea touch-friendly */
+  textarea.input {
+    min-height: 120px;
+    font-size: 16px;
   }
 }
 

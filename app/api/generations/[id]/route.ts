@@ -31,7 +31,7 @@ export async function GET(
       .from('carousel-images')
       .list(`${userId}/${params.id}`)
 
-    // Sort files by name to ensure correct order (slide-0.png, slide-1.png, etc.)
+    // Sort files by name to ensure correct order (carousel-0.png, carousel-1.png, etc.)
     const sortedFiles = files?.sort((a, b) => {
       const aNum = parseInt(a.name.match(/\d+/)?.[0] || '0')
       const bNum = parseInt(b.name.match(/\d+/)?.[0] || '0')

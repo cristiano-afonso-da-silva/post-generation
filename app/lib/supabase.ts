@@ -43,7 +43,7 @@ export async function getUserCredits(userId: string): Promise<UserCredits | null
 
   if (error) {
     if (error.code === 'PGRST116') {
-      // No record found, create one with default 1 credit
+      // No record found, create one with default 5 credits
       return await createInitialCreditRecord(userId)
     }
     console.error('Error fetching user credits:', error)
@@ -59,7 +59,7 @@ export async function createInitialCreditRecord(userId: string): Promise<UserCre
     .from('user_credits')
     .insert({
       user_id: userId,
-      credits_remaining: 1,
+      credits_remaining: 5,
       total_credits_used: 0,
     })
     .select()
@@ -194,7 +194,7 @@ export async function getUserCreditsServer(userId: string): Promise<UserCredits 
 
   if (error) {
     if (error.code === 'PGRST116') {
-      // No record found, create one with default 1 credit
+      // No record found, create one with default 5 credits
       return await createInitialCreditRecordServer(userId)
     }
     console.error('Error fetching user credits:', error)
@@ -212,7 +212,7 @@ export async function createInitialCreditRecordServer(userId: string): Promise<U
     .from('user_credits')
     .insert({
       user_id: userId,
-      credits_remaining: 1,
+      credits_remaining: 5,
       total_credits_used: 0,
     })
     .select()
