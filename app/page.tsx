@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { History, Palette, Edit3, MessageSquare } from 'lucide-react'
+import { History, Palette, Edit3, MessageSquare, ChevronLeft } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import './globals.css'
 import SlideImageGenerator from './components/SlideImageGenerator'
@@ -68,12 +68,14 @@ export default function Home() {
   const [error, setError] = useState('')
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
-  const [includeImages, setIncludeImages] = useState(true)
+  const [includeImages, setIncludeImages] = useState(false)
   const [editedSlides, setEditedSlides] = useState<Note['slides']>([])
   const [slidesDirty, setSlidesDirty] = useState(false)
   const [savingSlides, setSavingSlides] = useState(false)
+  const [editedCaption, setEditedCaption] = useState<string>('')
   const [activeLeftTab, setActiveLeftTab] = useState<'design' | 'slides' | 'caption'>('design')
   const [expandedSlideIndexes, setExpandedSlideIndexes] = useState<number[]>([])
+  const [showCustomisation, setShowCustomisation] = useState(false)
 const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] = [
   { id: 'design', label: 'Customize Design', icon: Palette },
   { id: 'slides', label: 'Edit Slides', icon: Edit3 },
@@ -110,12 +112,17 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
   useEffect(() => {
     if (note) {
       setEditedSlides(note.slides.map(slide => ({ ...slide })))
+      setEditedCaption(note.caption || '')
       setSlidesDirty(false)
       setExpandedSlideIndexes([])
+      // Auto-show customisation when note exists
+      setShowCustomisation(true)
     } else {
       setEditedSlides([])
+      setEditedCaption('')
       setSlidesDirty(false)
       setExpandedSlideIndexes([])
+      setShowCustomisation(false)
     }
   }, [note])
 
@@ -183,6 +190,8 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     if (!backgroundId) return
     try {
       localStorage.setItem('postGeneration_backgroundId', backgroundId)
+      // If note exists, trigger regeneration by updating a dependency
+      // The SlideImageGenerator will detect the backgroundImageUrl change
     } catch (error) {
       console.warn('Unable to persist background preference to localStorage:', error)
     }
@@ -199,7 +208,13 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
         
         if (savedNote) {
           const parsedNote = JSON.parse(savedNote)
-          setNote(parsedNote)
+          // Verify note structure and slides array integrity
+          if (parsedNote && Array.isArray(parsedNote.slides) && parsedNote.slides.length > 0) {
+            console.log('✅ Loaded note with', parsedNote.slides.length, 'slides from localStorage')
+            setNote(parsedNote)
+          } else {
+            console.warn('⚠️ Invalid note structure in localStorage, skipping')
+          }
         }
         
         if (savedAccountDescription) {
@@ -215,6 +230,10 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
         }
       } catch (error) {
         console.error('Error loading from localStorage:', error)
+        // Clear corrupted localStorage data
+        localStorage.removeItem('postGeneration_note')
+        localStorage.removeItem('postGeneration_canvasImages')
+        localStorage.removeItem('postGeneration_fullContentHash')
       }
     }
   }, [user, authLoading])
@@ -244,6 +263,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     setError('')
     setIdeas([])
     setNote(null)
+    setSelectedIdea(null)
 
     try {
       const response = await fetch(`${API_URL}/api/social`, {
@@ -311,11 +331,11 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
       }
     }
 
-    // Check if user has credits (only deduct credit for note generation, not ideas)
-    // Generating ideas is FREE - only note generation costs credits
-    // Allow generation if user has at least 1 credit (creditsRemaining > 0)
-    if (creditsRemaining <= 0) {
-      console.log('No credits available. Credits remaining:', creditsRemaining, 'Context credits:', credits)
+    // Check if user has enough credits based on whether images are included
+    // Text only: 1 credit, Text + Image: 2 credits
+    const requiredCredits = includeImages ? 2 : 1
+    if (creditsRemaining < requiredCredits) {
+      console.log(`Not enough credits. Required: ${requiredCredits}, Available: ${creditsRemaining}`)
       setShowUpgradePrompt(true)
       return
     }
@@ -346,20 +366,29 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
 
       if (result.success) {
         // Credit will be deducted when slides are actually generated in SlideImageGenerator
-        setNote(result.data)
-        // Clear generation_id to force new generation creation (new ideaTitle = new generation)
-        try {
-          localStorage.removeItem('postGeneration_generationId')
-          localStorage.removeItem('postGeneration_contentHash')
-          localStorage.setItem('postGeneration_note', JSON.stringify(result.data))
-          localStorage.setItem('postGeneration_accountDescription', accountDescription.trim())
-          localStorage.setItem('postGeneration_fontCombinationId', fontCombinationId)
-          localStorage.setItem('postGeneration_colorThemeId', colorThemeId)
-        } catch (error) {
-          console.error('Error saving to localStorage:', error)
+        // Verify result data structure before saving
+        if (result.data && Array.isArray(result.data.slides) && result.data.slides.length > 0) {
+          console.log('✅ Received note with', result.data.slides.length, 'slides from API')
+          setNote(result.data)
+          // Clear generation_id to force new generation creation (new ideaTitle = new generation)
+          try {
+            localStorage.removeItem('postGeneration_generationId')
+            localStorage.removeItem('postGeneration_contentHash')
+            localStorage.setItem('postGeneration_note', JSON.stringify(result.data))
+            localStorage.setItem('postGeneration_accountDescription', accountDescription.trim())
+            localStorage.setItem('postGeneration_fontCombinationId', fontCombinationId)
+            localStorage.setItem('postGeneration_colorThemeId', colorThemeId)
+            console.log('✅ Saved note to localStorage')
+          } catch (error) {
+            console.error('Error saving to localStorage:', error)
+          }
+          setError('')
+          setCurrentStep(null)
+        } else {
+          console.error('❌ Invalid data structure received from API')
+          setError('Invalid data received from server')
+          setCurrentStep(null)
         }
-        setError('')
-        setCurrentStep(null)
       } else {
         setError(result.error || 'Failed to generate note')
         setCurrentStep(null)
@@ -453,6 +482,16 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
       })
   }
 
+  const goBackToBusinessDetails = () => {
+    // Just switch to business details panel, keep the note
+    setShowCustomisation(false)
+  }
+
+  const goToCustomisation = () => {
+    // Switch to customisation panel
+    setShowCustomisation(true)
+  }
+
   const reset = () => {
     setAccountDescription('')
     setIdeas([])
@@ -491,10 +530,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
         top: 0,
         zIndex: 100,
       }}>
-        <div style={{
-          maxWidth: '1400px',
-          margin: '0 auto',
-          padding: '0 48px',
+        <div className="header-inner" style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -554,173 +590,230 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
           overflow: 'hidden'
         }}
       >
-        {/* Input Section - Always Visible */}
-        <div style={{ marginBottom: '24px', flex: '0 0 auto' }}>
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <input
-              type="text"
-              className="input"
-              placeholder="Describe your business: e.g., productivity coach helping remote workers overcome procrastination"
-              value={accountDescription}
-              onChange={(e) => setAccountDescription(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && generateIdeas()}
-              style={{ flex: 1, minWidth: '300px' }}
-            />
-            <label
-              className={`toggle-switch ${includeImages ? 'on' : ''}`}
-              style={{ display: 'flex', alignItems: 'center', position: 'relative' }}
-            >
-              <input
-                type="checkbox"
-                checked={includeImages}
-                onChange={(e) => setIncludeImages(e.target.checked)}
-                aria-label={includeImages ? 'Disable images' : 'Enable images'}
-              />
-              <span className="toggle-slider"></span>
-            </label>
-            <span className="toggle-label" style={{ marginRight: '8px' }}>
-              Images {includeImages ? 'On' : 'Off'}
-            </span>
-            <button
-              className="button"
-              onClick={generateIdeas}
-              disabled={loadingIdeas || !accountDescription.trim()}
-              style={{ minWidth: '150px' }}
-            >
-              {loadingIdeas ? 'Generating...' : 'Generate Ideas'}
-            </button>
-              <button
-                className="button secondary"
-                onClick={reset}
-                style={{ minWidth: '120px' }}
-              >
-                Reset
-              </button>
-          </div>
-          
-          {/* Include Images Toggle */}
-          {/* Include Images Toggle is now above in the main action row */}
-        </div>
+        {/* Mobile Stack Wrapper */}
+        <div className="mobile-stack" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          {error && (
+            <div className="error" style={{ margin: '0 0 24px', flex: '0 0 auto' }}>
+              {error}
+            </div>
+          )}
 
-        {error && (
-          <div className="error" style={{ margin: '0 0 32px' }}>
-            {error}
-          </div>
-        )}
+          {/* Two-Column Layout - Responsive Grid */}
+          <div 
+            className="responsive-grid"
+            style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'minmax(260px, 0.3fr) minmax(0, 0.7fr)', 
+              gap: '32px',
+              alignItems: 'stretch',
+              flex: 1,
+              overflow: 'hidden'
+            }}
+          >
+            {/* LEFT COLUMN - Control Panel with Input, Tab Group, Buttons, and Customize Section */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', overflow: 'hidden', alignSelf: 'stretch' }}>
+              {!showCustomisation ? (
+                <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {/* Business details heading */}
+                  <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '8px', color: '#000000' }}>
+                    Business details
+                  </h3>
+                  
+                  {/* Textarea for business description */}
+                  <textarea
+                    className="input mobile-prompt"
+                    placeholder="Describe your business: e.g., productivity coach helping remote workers overcome procrastination"
+                    value={accountDescription}
+                    onChange={(e) => setAccountDescription(e.target.value)}
+                    rows={4}
+                    style={{ 
+                      width: '100%', 
+                      resize: 'vertical',
+                      maxHeight: '200px',
+                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
+                    }}
+                  />
+                  
+                  {/* Dropdown for Text / Text + Image */}
+                  <select
+                    value={includeImages ? 'text-image' : 'text'}
+                    onChange={(e) => setIncludeImages(e.target.value === 'text-image')}
+                    className="input"
+                    style={{ cursor: 'pointer', padding: '12px' }}
+                  >
+                    <option value="text">Text (1 credit)</option>
+                    <option value="text-image">Text + Image (2 credits)</option>
+                  </select>
 
-        {/* Two-Column Layout - Always Visible */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'minmax(260px, 0.3fr) minmax(0, 0.7fr)', 
-          gap: '32px',
-          alignItems: 'start',
-          flex: 1,
-          overflow: 'hidden'
-          }}>
-            {/* LEFT COLUMN */}
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '24px', height: '100%', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                {leftTabs.map(tab => {
-                  const TabIcon = tab.icon
-                  return (
+                  {/* Show Customisation button if note exists */}
+                  {note && (
                     <button
-                      key={tab.id}
-                      className={`button ${activeLeftTab === tab.id ? '' : 'secondary'}`}
-                      onClick={() => setActiveLeftTab(tab.id)}
-                      disabled={!note}
+                      className="button secondary"
+                      onClick={goToCustomisation}
+                      style={{ width: '100%' }}
+                    >
+                      Customise
+                    </button>
+                  )}
+
+                  {/* Generate button */}
+                  <button
+                    className="button mobile-generate"
+                    onClick={generateIdeas}
+                    disabled={loadingIdeas || !accountDescription.trim()}
+                    style={{ width: '100%' }}
+                  >
+                    {loadingIdeas ? 'Generating...' : 'Generate'}
+                  </button>
+                </div>
+              ) : (
+                <div className="card mobile-customize" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: '16px' }}>
+                  {/* Content area */}
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    {/* Back button */}
+                    <button
+                      onClick={goBackToBusinessDetails}
                       style={{
-                        padding: '12px',
-                        width: '56px',
-                        height: '56px',
-                        borderRadius: '50%',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        opacity: !note ? 0.5 : 1,
-                        cursor: !note ? 'not-allowed' : 'pointer'
+                        gap: '8px',
+                        background: 'none',
+                        border: 'none',
+                        padding: '8px 0',
+                        cursor: 'pointer',
+                        marginBottom: '24px',
+                        color: '#000000',
+                        fontSize: '16px',
+                        fontWeight: '600'
                       }}
-                      title={tab.label}
-                      aria-label={tab.label}
                     >
-                      <TabIcon size={20} />
+                      <ChevronLeft size={20} />
+                      <span>Back</span>
                     </button>
-                  )
-                })}
-              </div>
+                    
+                    {/* Customisation heading */}
+                    <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px', color: '#000000' }}>
+                      Customisation
+                    </h3>
+                  
+                  {/* Tab buttons for Design / Slides / Caption */}
+                  <div 
+                    style={{ 
+                      display: 'flex', 
+                      gap: '0',
+                      alignItems: 'stretch',
+                      border: '2px solid #e5e5e5',
+                      borderRadius: '12px',
+                      padding: '2px',
+                      background: '#ededed',
+                      height: 'fit-content',
+                      opacity: !note ? 0.5 : 1,
+                      pointerEvents: !note ? 'none' : 'auto',
+                      marginBottom: '24px'
+                    }}
+                  >
+                    {leftTabs.map(tab => {
+                      const TabIcon = tab.icon
+                      const isActive = activeLeftTab === tab.id
+                      return (
+                        <button
+                          key={tab.id}
+                          onClick={() => setActiveLeftTab(tab.id)}
+                          disabled={!note}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '8px 16px',
+                            flex: 1,
+                            border: 'none',
+                            borderRadius: '10px',
+                            background: isActive ? '#d8d8d8' : '#ededed',
+                            cursor: !note ? 'not-allowed' : 'pointer',
+                            transition: 'all 0.2s ease'
+                          }}
+                          title={tab.label}
+                          aria-label={tab.label}
+                        >
+                          <TabIcon size={20} color="#000000" />
+                        </button>
+                      )
+                    })}
+                  </div>
 
-              {activeLeftTab === 'design' && (
-                <div style={{ opacity: !note ? 0.5 : 1, pointerEvents: !note ? 'none' : 'auto' }}>
-                  <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
-                    Customize Design
-                  </h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000000' }}>
-                        Font Combination
-                      </label>
-                      <select
-                        value={fontCombinationId}
-                        onChange={(e) => setFontCombinationId(e.target.value)}
-                        className="input"
-                        style={{ cursor: 'pointer', padding: '12px' }}
-                      >
-                        {FONT_COMBINATIONS.map(combo => (
-                          <option key={combo.id} value={combo.id}>
-                            {combo.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000000' }}>
-                        Color Theme
-                      </label>
-                      <select
-                        value={colorThemeId}
-                        onChange={(e) => setColorThemeId(e.target.value)}
-                        className="input"
-                        style={{ cursor: 'pointer', padding: '12px' }}
-                      >
-                        {COLOR_THEMES.map(theme => (
-                          <option key={theme.id} value={theme.id}>
-                            {theme.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    {backgroundOptions.length > 0 && (
+                {activeLeftTab === 'design' && (
+                  <div style={{ opacity: !note ? 0.5 : 1, pointerEvents: !note ? 'none' : 'auto', marginBottom: '24px' }}>
+                    <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
+                      Slides Style
+                    </h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000000' }}>
-                          Background Texture
+                          Font Combination
                         </label>
                         <select
-                          value={backgroundId}
-                          onChange={(e) => setBackgroundId(e.target.value)}
+                          value={fontCombinationId}
+                          onChange={(e) => setFontCombinationId(e.target.value)}
                           className="input"
                           style={{ cursor: 'pointer', padding: '12px' }}
                         >
-                          {backgroundOptions.map(option => (
-                            <option key={option.id} value={option.id}>
-                              {option.label}
+                          {FONT_COMBINATIONS.map(combo => (
+                            <option key={combo.id} value={combo.id}>
+                              {combo.name}
                             </option>
                           ))}
                         </select>
                       </div>
-                    )}
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000000' }}>
+                          Color Theme
+                        </label>
+                        <select
+                          value={colorThemeId}
+                          onChange={(e) => setColorThemeId(e.target.value)}
+                          className="input"
+                          style={{ cursor: 'pointer', padding: '12px' }}
+                        >
+                          {COLOR_THEMES.map(theme => (
+                            <option key={theme.id} value={theme.id}>
+                              {theme.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {backgroundOptions.length > 0 && (
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000000' }}>
+                            Background Texture
+                          </label>
+                          <select
+                            value={backgroundId}
+                            onChange={(e) => setBackgroundId(e.target.value)}
+                            className="input"
+                            style={{ cursor: 'pointer', padding: '12px' }}
+                          >
+                            {backgroundOptions.map(option => (
+                              <option key={option.id} value={option.id}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {activeLeftTab === 'slides' && (
-                <div style={{ opacity: !note ? 0.5 : 1, pointerEvents: !note ? 'none' : 'auto' }}>
-                  <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
-                    Slides Content
-                  </h3>
-                  <p style={{ fontSize: '14px', color: '#4b5563', marginBottom: '16px' }}>
-                    {!note ? 'Generate a post to edit slides here' : 'Edit any slide text below. Save to refresh the preview and generated assets.'}
-                  </p>
-                  {note && (
-                  <div style={{ display: 'grid', gap: '12px' }}>
+                {activeLeftTab === 'slides' && (
+                  <div style={{ opacity: !note ? 0.5 : 1, pointerEvents: !note ? 'none' : 'auto', marginBottom: '24px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
+                      Slides Content
+                    </h3>
+                    <p style={{ fontSize: '14px', color: '#4b5563', marginBottom: '16px' }}>
+                      {!note ? 'Generate a post to edit slides here' : 'Edit any slide text below. Save to refresh the preview and generated assets.'}
+                    </p>
+                    {note && (
+                      <div style={{ display: 'grid', gap: '12px' }}>
                     {editedSlides.map((slide, index) => {
                       const kind = note.slides[index]?.kind ?? 'MIDDLE'
                       const isExpanded = expandedSlideIndexes.includes(index)
@@ -796,7 +889,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                   {note && (
                   <div style={{ 
                     display: 'flex', 
-                    justifyContent: 'flex-end', 
+                    flexDirection: 'column',
                     gap: '12px',
                     marginTop: '24px'
                   }}>
@@ -804,46 +897,73 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                       className="button secondary"
                       onClick={resetEditedSlides}
                       disabled={!slidesDirty || savingSlides}
-                      style={{ minWidth: '130px' }}
+                      style={{ width: '100%' }}
                     >
-                      Reset Changes
+                      Reset
                     </button>
                     <button
                       className="button"
                       onClick={saveEditedSlides}
                       disabled={!slidesDirty || savingSlides}
-                      style={{ minWidth: '130px' }}
+                      style={{ width: '100%' }}
                     >
-                      {savingSlides ? 'Saving...' : 'Save Slides'}
+                      {savingSlides ? 'Saving...' : 'Save'}
                     </button>
+                      </div>
+                    )}
                   </div>
-                  )}
-                </div>
-              )}
+                )}
 
-              {activeLeftTab === 'caption' && (
-                <div style={{ opacity: !note ? 0.5 : 1, pointerEvents: !note ? 'none' : 'auto' }}>
-                  <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
-                    Instagram Caption
-                  </h3>
-                  <div style={{ 
-                    padding: '20px', 
-                    background: '#fafafa',
-                    border: '2px solid #e5e5e5',
-                    borderRadius: '12px',
-                    whiteSpace: 'pre-wrap',
-                    fontSize: '15px',
-                    lineHeight: '1.8',
-                    color: '#000000'
-                  }}>
-                    {note ? note.caption : 'Generate a post to see the caption here'}
+                {activeLeftTab === 'caption' && (
+                  <div style={{ opacity: !note ? 0.5 : 1, pointerEvents: !note ? 'none' : 'auto', marginBottom: '24px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
+                      Instagram Caption
+                    </h3>
+                    <textarea
+                      className="input"
+                      value={editedCaption}
+                      onChange={(e) => setEditedCaption(e.target.value)}
+                      placeholder="Generate a post to see the caption here"
+                      disabled={!note}
+                      style={{ 
+                        width: '100%',
+                        minHeight: '300px',
+                        padding: '20px', 
+                        background: '#fafafa',
+                        border: '2px solid #e5e5e5',
+                        borderRadius: '12px',
+                        fontSize: '15px',
+                        lineHeight: '1.8',
+                        color: '#000000',
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
+                        resize: 'vertical'
+                      }}
+                    />
+                    {note && (
+                      <button
+                        className="button"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(editedCaption)
+                            // You could add a toast notification here if desired
+                          } catch (err) {
+                            console.error('Failed to copy caption:', err)
+                          }
+                        }}
+                        style={{ width: '100%', marginTop: '12px' }}
+                      >
+                        Copy
+                      </button>
+                    )}
                   </div>
+                )}
                 </div>
+              </div>
               )}
             </div>
 
-            {/* RIGHT COLUMN - Ideas, Loading, or Generated Slides */}
-            <div style={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '24px', minHeight: 0 }}>
+            {/* RIGHT COLUMN - Output Section - Mobile Order 4 */}
+            <div className="mobile-output" style={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '24px', minHeight: 0, alignSelf: 'stretch' }}>
               {/* Show loading state while generating ideas */}
               {loadingIdeas && (
                 <div className="card" style={{ textAlign: 'center', padding: '48px 20px' }}>
@@ -860,24 +980,24 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
               {/* Show Ideas if available and no note selected */}
               {ideas.length > 0 && !selectedIdea && !note && !loadingIdeas && (
                 <div className="card" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-              <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
-                Choose an Idea
-              </h3>
+                  <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
+                    Choose an Idea
+                  </h3>
                   <div style={{ display: 'grid', gap: '12px', flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '6px' }}>
-                {ideas.map((idea, index) => (
-                  <button
-                    key={index}
-                    onClick={() => generateNote(idea)}
-                    disabled={loadingNote}
-                    className="idea-button"
-                  >
-                    <span className="idea-number">{index + 1}</span>
-                    <span style={{ flex: 1 }}>{idea}</span>
-                  </button>
-                ))}
-            </div>
-          </div>
-        )}
+                    {ideas.map((idea, index) => (
+                      <button
+                        key={index}
+                        onClick={() => generateNote(idea)}
+                        disabled={loadingNote}
+                        className="idea-button"
+                      >
+                        <span className="idea-number">{index + 1}</span>
+                        <span style={{ flex: 1 }}>{idea}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Show Loading Steps if generating */}
         {selectedIdea && loadingNote && (
@@ -1028,6 +1148,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
               )}
             </div>
           </div>
+        </div>
 
         {/* Debug Panel - Full Width Below */}
         {note && !loadingNote && (

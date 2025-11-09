@@ -59,6 +59,41 @@ interface Props {
   onGenerationComplete?: () => void
 }
 
+// Initialize images from localStorage before rendering
+const getInitialImages = (slides: Slide[], ideaTitle: string, underlineWords: Record<number, any>, fontCombinationId: string, colorThemeId: string, backgroundImageUrl: string | null): string[] => {
+  try {
+    const savedImages = localStorage.getItem('postGeneration_canvasImages')
+    const savedFullContentHash = localStorage.getItem('postGeneration_fullContentHash')
+    const savedContentHash = localStorage.getItem('postGeneration_contentHash')
+    const savedHash = savedFullContentHash || savedContentHash
+    
+    // Create deterministic hash with consistent property order
+    const currentFullContentHash = JSON.stringify({ 
+      ideaTitle, 
+      slides, 
+      underlineWords, 
+      fontCombinationId, 
+      colorThemeId, 
+      backgroundImageUrl: backgroundImageUrl || null 
+    })
+    
+    if (savedImages && savedHash && savedHash === currentFullContentHash) {
+      const imageDataUrls = JSON.parse(savedImages)
+      // Verify all images are present and valid data URLs
+      if (imageDataUrls.length === slides.length && 
+          imageDataUrls.every((img: string) => img && typeof img === 'string' && img.startsWith('data:image/'))) {
+        console.log('✅ Loaded all', imageDataUrls.length, 'images from cache')
+        return imageDataUrls
+      } else {
+        console.warn('⚠️ Cached images incomplete or invalid, will regenerate')
+      }
+    }
+  } catch (error) {
+    console.error('Error loading images from localStorage:', error)
+  }
+  return []
+}
+
 export default function SlideImageGenerator({ 
   slides, 
   ideaTitle, 
@@ -72,10 +107,24 @@ export default function SlideImageGenerator({
 }: Props) {
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([])
   const [generating, setGenerating] = useState(false)
-  const [imagesLoaded, setImagesLoaded] = useState(false)
+  const [slideImages, setSlideImages] = useState<string[]>(() => 
+    getInitialImages(slides, ideaTitle, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl)
+  )
   const { user, refreshCredits } = useAuth()
   const hasDeductedCredit = useRef(false)
-  const hasAutoSaved = useRef(false)
+  const isInitialMount = useRef(true)
+  // Initialize prevDesignSettings immediately with initial prop values
+  const prevDesignSettings = useRef<{ fontCombinationId: string; colorThemeId: string; backgroundImageUrl: string | null }>({
+    fontCombinationId,
+    colorThemeId,
+    backgroundImageUrl
+  })
+  const hasInitialized = useRef(false)
+  
+  // Debug: Log background image URL
+  useEffect(() => {
+    console.log('Background image URL prop changed:', backgroundImageUrl)
+  }, [backgroundImageUrl])
   
   // Use refs for values that should not trigger re-renders when changed
   const accountDescriptionRef = useRef(accountDescription)
@@ -91,63 +140,6 @@ export default function SlideImageGenerator({
   const FONT_CONFIG = getFontCombination(fontCombinationId)
   const COLOR_THEME = getColorTheme(colorThemeId)
 
-  const loadImagesFromStorage = useCallback(async () => {
-    try {
-      const savedImages = localStorage.getItem('postGeneration_canvasImages')
-      // Use full content hash (includes theme/font) for image matching, fallback to content hash if not available
-      const savedFullContentHash = localStorage.getItem('postGeneration_fullContentHash')
-      const savedContentHash = localStorage.getItem('postGeneration_contentHash')
-      const savedHash = savedFullContentHash || savedContentHash
-      
-      // Create current full content hash (includes theme/font for image matching)
-      const currentFullContentHash = JSON.stringify({ ideaTitle, slides, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl: backgroundImageUrl || null })
-      
-      if (savedImages && savedHash && savedHash === currentFullContentHash) {
-        const imageDataUrls = JSON.parse(savedImages)
-        // Check if we have the same number of slides
-        if (imageDataUrls.length === slides.length) {
-          // Wait for all canvas refs to be available
-          let allCanvasesReady = true
-          for (let i = 0; i < slides.length; i++) {
-            if (!canvasRefs.current[i]) {
-              allCanvasesReady = false
-              break
-            }
-          }
-          
-          if (allCanvasesReady) {
-            // Load images onto canvases
-            for (let i = 0; i < slides.length; i++) {
-              const canvas = canvasRefs.current[i]
-              if (canvas && imageDataUrls[i]) {
-                const img = new Image()
-                await new Promise<void>((resolve) => {
-                  img.onload = () => {
-                    canvas.width = img.width
-                    canvas.height = img.height
-                    const ctx = canvas.getContext('2d')
-                    if (ctx) {
-                      ctx.drawImage(img, 0, 0)
-                    }
-                    resolve()
-                  }
-                  img.onerror = () => resolve()
-                  img.src = imageDataUrls[i]
-                })
-              }
-            }
-            setImagesLoaded(true)
-            setGenerating(false)
-            return true
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error loading images from localStorage:', error)
-    }
-    // If no saved images or content doesn't match, return false to trigger generation
-    return false
-  }, [slides, ideaTitle, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl])
 
   // Auto-save function
   const saveToDatabase = useCallback(async (imageDataUrls: string[]) => {
@@ -229,28 +221,72 @@ export default function SlideImageGenerator({
     }
   }, [ideaTitle, slides, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl, user?.id])
 
-  const generateAllSlides = useCallback(async () => {
+  const generateAllSlides = useCallback(async (overrideFontId?: string, overrideColorId?: string, overrideBgUrl?: string | null) => {
     setGenerating(true)
     
-    const imageDataUrls: string[] = []
+    // Use override values if provided (for design changes), otherwise use current props
+    const currentFontId = overrideFontId ?? fontCombinationId
+    const currentColorId = overrideColorId ?? colorThemeId
+    const currentBgUrl = overrideBgUrl !== undefined ? overrideBgUrl : backgroundImageUrl
+    
+    // Compute configs with current values
+    const currentFontConfig = getFontCombination(currentFontId)
+    const currentColorTheme = getColorTheme(currentColorId)
+    
+    // Ensure canvasRefs array has correct length
+    if (canvasRefs.current.length !== slides.length) {
+      canvasRefs.current = new Array(slides.length).fill(null)
+    }
+    
+    // Initialize array with correct length to maintain order
+    const imageDataUrls: string[] = new Array(slides.length).fill('')
     
     for (let i = 0; i < slides.length; i++) {
-      await generateSlideImage(i)
-      // Save canvas to data URL
+      await generateSlideImage(i, currentFontConfig, currentColorTheme, currentBgUrl)
+      // Save canvas to data URL at the specific index to maintain order
       const canvas = canvasRefs.current[i]
       if (canvas) {
-        imageDataUrls.push(canvas.toDataURL('image/png'))
+        const dataUrl = canvas.toDataURL('image/png')
+        imageDataUrls[i] = dataUrl
+        console.log(`✅ Generated slide ${i + 1}/${slides.length}`)
+        // Incrementally update UI for instant feedback
+        setSlideImages(prev => {
+          const next = prev.length === slides.length ? [...prev] : Array.from({ length: slides.length }, (_, idx) => prev[idx] || '')
+          next[i] = dataUrl
+          return next
+        })
+      } else {
+        console.warn(`⚠️ Canvas not found for slide ${i + 1}`)
       }
     }
     
-    // Create full content hash (includes theme/font) for image matching
-    const fullContentHash = JSON.stringify({ ideaTitle, slides, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl: backgroundImageUrl || null })
+    // Verify all images were generated
+    const allImagesValid = imageDataUrls.every(img => img && img.startsWith('data:image/'))
+    if (!allImagesValid) {
+      console.error('❌ Some images failed to generate')
+    } else {
+      console.log('✅ All', imageDataUrls.length, 'slides generated successfully')
+    }
+    
+    // Set images immediately for display
+    setSlideImages(imageDataUrls)
+    
+    // Create full content hash (includes theme/font) for image matching - deterministic order
+    const fullContentHash = JSON.stringify({ 
+      ideaTitle, 
+      slides, 
+      underlineWords, 
+      fontCombinationId: currentFontId, 
+      colorThemeId: currentColorId, 
+      backgroundImageUrl: currentBgUrl || null 
+    })
     // Create content hash (only ideaTitle + slides) for generation update detection
     const contentHash = JSON.stringify({ ideaTitle, slides })
     
     // Save all images to localStorage with content hashes
     try {
       localStorage.setItem('postGeneration_canvasImages', JSON.stringify(imageDataUrls))
+      // Always update fullContentHash (includes design settings)
       localStorage.setItem('postGeneration_fullContentHash', fullContentHash)
       // Only update contentHash if generation_id doesn't exist (new generation)
       // If generation_id exists, keep the existing contentHash to allow updates
@@ -289,37 +325,18 @@ export default function SlideImageGenerator({
     }
     
     setGenerating(false)
-    setImagesLoaded(true)
     
-    // Auto-save to database after successful generation
-    // Only save if images are data URLs (newly generated), not URLs (from history)
-    if (user?.id && !hasAutoSaved.current && imageDataUrls.length > 0) {
-      const isNewGeneration = imageDataUrls[0]?.startsWith('data:image/')
-      if (isNewGeneration) {
-        // Check if we should skip auto-save (already saved with matching content)
-        const storedGenerationId = localStorage.getItem('postGeneration_generationId')
-        const storedContentHash = localStorage.getItem('postGeneration_contentHash')
-        const currentContentHash = JSON.stringify({ ideaTitle, slides })
-        
-        // Only skip if generation_id exists AND content hash matches (prevent duplicate on reload)
-        const shouldSkipSave = storedGenerationId && storedContentHash === currentContentHash
-        
-        if (!shouldSkipSave) {
-          hasAutoSaved.current = true
-          // Don't await - let it save in background
-          saveToDatabase(imageDataUrls).catch(err => {
-            console.error('Auto-save failed:', err)
-            // Reset flag so it can try again if needed
-            hasAutoSaved.current = false
-          })
-        } else {
-          // Already saved with matching content, skip auto-save
-          console.log('⏭️ Skipping auto-save: generation already exists with matching content')
-          hasAutoSaved.current = true
+    // Save to Supabase immediately after generation (always save, including design updates)
+    if (user?.id && imageDataUrls.length > 0) {
+      const isDataUrl = imageDataUrls[0]?.startsWith('data:image/')
+      if (isDataUrl) {
+        console.log('💾 Saving images to Supabase (design update or new generation)...')
+        try {
+          await saveToDatabase(imageDataUrls)
+          console.log('✅ Images saved to Supabase successfully')
+        } catch (err) {
+          console.error('❌ Failed to save to Supabase:', err)
         }
-      } else {
-        // Images are URLs from history, already saved
-        hasAutoSaved.current = true
       }
     }
     
@@ -329,51 +346,106 @@ export default function SlideImageGenerator({
     }
   }, [slides, ideaTitle, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl, user?.id, refreshCredits, onGenerationComplete, saveToDatabase])
 
-  // Load images from localStorage or generate new ones
+  // Generate slides if not loaded from storage
   useEffect(() => {
-    if (slides.length > 0) {
-      // Wait a bit for canvas refs to be set
-      const timer = setTimeout(async () => {
-        const loaded = await loadImagesFromStorage()
-        if (!loaded) {
-          // If images weren't loaded from storage, generate new ones (will deduct credit)
-          generateAllSlides()
-        } else {
-          // Images loaded from cache - don't deduct credit, but reset flag for next generation
-          hasDeductedCredit.current = true
-        }
-      }, 100)
-      return () => clearTimeout(timer)
+    if (slides.length > 0 && slideImages.length === 0) {
+      // Only generate if we don't have cached images
+      console.log('Initial generation triggered')
+      generateAllSlides().then(() => {
+        // Mark as not initial mount after first generation completes
+        isInitialMount.current = false
+        console.log('Initial mount flag set to false')
+      })
+    } else if (slides.length > 0 && slideImages.length > 0 && isInitialMount.current) {
+      // If we have images from cache, mark as not initial mount
+      isInitialMount.current = false
+      console.log('Initial mount flag set to false (cached images)')
     }
-  }, [slides.length, loadImagesFromStorage, generateAllSlides])
+  }, [slides.length, slideImages.length, generateAllSlides])
 
-  // Regenerate if theme, fonts, or underline words change (but only if images were already loaded)
+  // Regenerate when design settings change (post initial mount)
   useEffect(() => {
-    if (slides.length > 0 && imagesLoaded) {
-      // Don't deduct credit for theme/font changes - only for new note generation
-      // Temporarily set flag to prevent deduction
-      const wasDeducted = hasDeductedCredit.current
-      hasDeductedCredit.current = true
-      const regenerate = async () => {
-        await generateAllSlides()
-        // Restore flag after generation
+    // Skip during initial mount; initial generation handles first render
+    if (isInitialMount.current) return
+
+    const prev = prevDesignSettings.current
+    const hasChanged =
+      prev.fontCombinationId !== fontCombinationId ||
+      prev.colorThemeId !== colorThemeId ||
+      prev.backgroundImageUrl !== backgroundImageUrl
+
+    if (!hasChanged) return
+
+    console.log('🎨 Design change detected → regenerating', {
+      from: prev,
+      to: { fontCombinationId, colorThemeId, backgroundImageUrl }
+    })
+
+    const currentFontId = fontCombinationId
+    const currentColorId = colorThemeId
+    const currentBgUrl = backgroundImageUrl
+
+    const wasDeducted = hasDeductedCredit.current
+    hasDeductedCredit.current = true
+
+    // Persist new full-content hash immediately
+    try {
+      localStorage.setItem(
+        'postGeneration_fullContentHash',
+        JSON.stringify({
+          ideaTitle,
+          slides,
+          underlineWords,
+          fontCombinationId: currentFontId,
+          colorThemeId: currentColorId,
+          backgroundImageUrl: currentBgUrl || null
+        })
+      )
+    } catch (error) {
+      console.error('Error updating localStorage hash:', error)
+    }
+
+    const run = async () => {
+      try {
+        await generateAllSlides(currentFontId, currentColorId, currentBgUrl)
+        prevDesignSettings.current = {
+          fontCombinationId: currentFontId,
+          colorThemeId: currentColorId,
+          backgroundImageUrl: currentBgUrl
+        }
+      } catch (error) {
+        console.error('❌ Regeneration failed:', error)
+      } finally {
         hasDeductedCredit.current = wasDeducted
       }
-      regenerate()
     }
-  }, [fontCombinationId, colorThemeId, backgroundImageUrl, imagesLoaded, slides.length, generateAllSlides])
+    run()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fontCombinationId, colorThemeId, backgroundImageUrl])
   
   // Reset credit deduction flag when slides change (new note)
   useEffect(() => {
     hasDeductedCredit.current = false
-  }, [ideaTitle, slides.length])
+    isInitialMount.current = true
+    hasInitialized.current = false
+    // Reset design settings tracking with current values
+    prevDesignSettings.current = { fontCombinationId, colorThemeId, backgroundImageUrl }
+    console.log('🔄 Reset for new note, prevDesignSettings:', prevDesignSettings.current)
+  }, [ideaTitle, slides.length, fontCombinationId, colorThemeId, backgroundImageUrl])
 
   const loadImage = (src: string): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
       const img = new Image()
-      img.crossOrigin = 'anonymous'
+      // Don't set crossOrigin for local images (same origin)
+      // Only set it for external images if needed
+      if (src.startsWith('http://') || src.startsWith('https://')) {
+        img.crossOrigin = 'anonymous'
+      }
       img.onload = () => resolve(img)
-      img.onerror = reject
+      img.onerror = (error) => {
+        console.error(`Failed to load image: ${src}`, error)
+        reject(error)
+      }
       img.src = src
     })
   }
@@ -404,7 +476,12 @@ export default function SlideImageGenerator({
     }
   }
 
-  const generateSlideImage = async (index: number) => {
+  const generateSlideImage = async (
+    index: number, 
+    fontConfig = FONT_CONFIG, 
+    colorTheme = COLOR_THEME, 
+    bgImageUrl = backgroundImageUrl
+  ) => {
     const canvas = canvasRefs.current[index]
     if (!canvas) return
 
@@ -433,22 +510,31 @@ export default function SlideImageGenerator({
     canvas.width = width
     canvas.height = height
 
-    if (backgroundImageUrl) {
+    // Draw background image or white background
+    if (bgImageUrl) {
       try {
-        const bgImage = await loadImage(backgroundImageUrl)
+        console.log(`Loading background image: ${bgImageUrl}`)
+        const bgImage = await loadImage(bgImageUrl)
+        console.log(`Background image loaded: ${bgImage.width}x${bgImage.height}`)
+        
+        // Fill entire canvas with background (cover mode - fill entire area)
         const scale = Math.max(width / bgImage.width, height / bgImage.height)
         const scaledWidth = bgImage.width * scale
         const scaledHeight = bgImage.height * scale
         const offsetX = (width - scaledWidth) / 2
         const offsetY = (height - scaledHeight) / 2
 
+        // Draw background image covering entire canvas
         ctx.drawImage(bgImage, offsetX, offsetY, scaledWidth, scaledHeight)
-    } catch (error) {
-        console.warn(`Unable to load background ${backgroundImageUrl}, falling back to plain color:`, error)
+        console.log(`Background image drawn at ${offsetX}, ${offsetY} with size ${scaledWidth}x${scaledHeight}`)
+      } catch (error) {
+        console.error(`Unable to load background ${backgroundImageUrl}:`, error)
+        // Fallback to white background
         ctx.fillStyle = '#FFFFFF'
         ctx.fillRect(0, 0, width, height)
       }
     } else {
+      // No background image - use white
       ctx.fillStyle = '#FFFFFF'
       ctx.fillRect(0, 0, width, height)
     }
@@ -463,20 +549,20 @@ export default function SlideImageGenerator({
     // Center content area
     const centerY = safeMarginTop + (safeHeight / 2)
 
-    const highlightFillStyle = ensureColorAlpha(COLOR_THEME.highlightColor, 0.5)
+    const highlightFillStyle = ensureColorAlpha(colorTheme.highlightColor, 0.5)
 
     // For HOOK slide - just show the hook text with word highlighting
     if (cleanSlide.kind === 'HOOK') {
       const hookText = cleanSlide.title || cleanSlide.content
       
-      const hookFontMatch = FONT_CONFIG.hook.font.match(/(\d+\.?\d*)px/)
+      const hookFontMatch = fontConfig.hook.font.match(/(\d+\.?\d*)px/)
       const hookBaseFontSize = hookFontMatch ? parseFloat(hookFontMatch[1]) : 130
-      const hookLineHeightRatio = FONT_CONFIG.hook.lineHeight / Math.max(1, hookBaseFontSize)
+      const hookLineHeightRatio = fontConfig.hook.lineHeight / Math.max(1, hookBaseFontSize)
       const highlightOffsetRatio = 100 / Math.max(1, hookBaseFontSize)
       const highlightHeightRatio = 120 / Math.max(1, hookBaseFontSize)
 
       const buildHookFont = (size: number) =>
-        FONT_CONFIG.hook.font.replace(/(\d+\.?\d*)px/, `${size}px`)
+        fontConfig.hook.font.replace(/(\d+\.?\d*)px/, `${size}px`)
 
       const wrapHookText = (fontSize: number) => {
         ctx.font = buildHookFont(fontSize)
@@ -546,7 +632,7 @@ export default function SlideImageGenerator({
       const highlightHeight = hookFontSize * highlightHeightRatio
 
       ctx.font = buildHookFont(hookFontSize)
-      ctx.fillStyle = COLOR_THEME.textColor
+      ctx.fillStyle = colorTheme.textColor
       ctx.textAlign = 'left'
 
       // Get highlight word
@@ -607,7 +693,7 @@ export default function SlideImageGenerator({
         // Second pass: Draw text
         let currentX = x
         lineWords.forEach((word, wordIndex) => {
-          ctx.fillStyle = COLOR_THEME.textColor
+          ctx.fillStyle = colorTheme.textColor
           ctx.fillText(word, currentX, y)
           
           const wordMetrics = ctx.measureText(word)
@@ -622,8 +708,8 @@ export default function SlideImageGenerator({
       
     } else if (cleanSlide.kind === 'CTA') {
       // CTA content with underlines and line breaks
-      ctx.font = FONT_CONFIG.content.font
-      ctx.fillStyle = COLOR_THEME.textColor
+      ctx.font = fontConfig.content.font
+      ctx.fillStyle = colorTheme.textColor
       ctx.textAlign = 'left'
       const x = safeMarginSides
       
@@ -666,7 +752,7 @@ export default function SlideImageGenerator({
       const underlinePhrases = emphasisData.underline.split(',').map(p => p.trim()).filter(p => p)
       
       // Calculate true vertical center
-      const lineHeight = FONT_CONFIG.content.lineHeight
+      const lineHeight = fontConfig.content.lineHeight
       const totalHeight = (lines.length - 1) * lineHeight  // Height between lines
       let y = centerY - (totalHeight / 2)
       
@@ -706,7 +792,7 @@ export default function SlideImageGenerator({
         // Draw text
         let currentX = x
         words.forEach((word, wordIndex) => {
-          ctx.fillStyle = COLOR_THEME.textColor
+          ctx.fillStyle = colorTheme.textColor
           ctx.fillText(word, currentX, y)
           
           const wordMetrics = ctx.measureText(word)
@@ -733,7 +819,7 @@ export default function SlideImageGenerator({
           } else {
             if (underlineStart !== -1) {
               const underlineY = y + 8
-              ctx.strokeStyle = COLOR_THEME.underlineColor
+              ctx.strokeStyle = colorTheme.underlineColor
               ctx.lineWidth = 2
               ctx.beginPath()
               ctx.moveTo(underlineX, underlineY)
@@ -749,7 +835,7 @@ export default function SlideImageGenerator({
         // Draw final underline
         if (underlineStart !== -1) {
           const underlineY = y + 8
-          ctx.strokeStyle = COLOR_THEME.underlineColor
+          ctx.strokeStyle = colorTheme.underlineColor
           ctx.lineWidth = 2
           ctx.beginPath()
           ctx.moveTo(underlineX, underlineY)
@@ -912,7 +998,7 @@ export default function SlideImageGenerator({
         
         // Draw title with calculated font size
         ctx.font = `bold ${titleFontSize}px Poppins, sans-serif`
-        ctx.fillStyle = COLOR_THEME.textColor
+        ctx.fillStyle = colorTheme.textColor
         titleLines.forEach(line => {
           ctx.fillText(line, x, y)
           y += titleLineHeight
@@ -922,7 +1008,7 @@ export default function SlideImageGenerator({
         
         // Draw content with calculated font size
         ctx.font = `${contentFontSize}px DreamingOutloudSans, sans-serif`
-        ctx.fillStyle = COLOR_THEME.textColor
+        ctx.fillStyle = colorTheme.textColor
         
         // Use emphasisData already parsed above (no need to re-parse)
         const underlinePhrases = emphasisData.underline.split(',').map(p => p.trim()).filter(p => p)
@@ -1030,7 +1116,7 @@ export default function SlideImageGenerator({
           words.forEach((word, wordIndex) => {
             const wordMetrics = ctx.measureText(word)
             
-            ctx.fillStyle = COLOR_THEME.textColor
+            ctx.fillStyle = colorTheme.textColor
             ctx.fillText(word, currentX, y)
             
             currentX += wordMetrics.width
@@ -1058,7 +1144,7 @@ export default function SlideImageGenerator({
               if (underlineStart !== -1) {
                 // End underline
                 const underlineY = y + 8
-                ctx.strokeStyle = COLOR_THEME.underlineColor
+                ctx.strokeStyle = colorTheme.underlineColor
                 ctx.lineWidth = 2
                 ctx.beginPath()
                 ctx.moveTo(underlineX, underlineY)
@@ -1075,7 +1161,7 @@ export default function SlideImageGenerator({
           // Draw final underline if line ends with underlined word
           if (underlineStart !== -1) {
             const underlineY = y + 8
-            ctx.strokeStyle = COLOR_THEME.underlineColor
+            ctx.strokeStyle = colorTheme.underlineColor
             ctx.lineWidth = 2
             ctx.beginPath()
             ctx.moveTo(underlineX, underlineY)
@@ -1147,15 +1233,15 @@ export default function SlideImageGenerator({
   }  // Close generateSlideImage function
 
   const downloadSlide = (index: number) => {
-    const canvas = canvasRefs.current[index]
-    if (!canvas) return
+    const imageDataUrl = slideImages[index]
+    if (!imageDataUrl) return
 
     const link = document.createElement('a')
     const slide = slides[index]
     const fileName = `slide-${index + 1}-${slide.kind.toLowerCase()}.png`
     
     link.download = fileName
-    link.href = canvas.toDataURL('image/png')
+    link.href = imageDataUrl
     link.click()
   }
 
@@ -1165,15 +1251,14 @@ export default function SlideImageGenerator({
       
       // Process all slides and add them to the zip
       for (let i = 0; i < slides.length; i++) {
-        const canvas = canvasRefs.current[i]
-        if (!canvas) continue
+        const imageDataUrl = slideImages[i]
+        if (!imageDataUrl) continue
         
         const slide = slides[i]
         const fileName = `slide-${i + 1}-${slide.kind.toLowerCase()}.png`
         
-        // Convert canvas to blob
-        const dataUrl = canvas.toDataURL('image/png')
-        const base64Data = dataUrl.split(',')[1]
+        // Convert data URL to base64
+        const base64Data = imageDataUrl.split(',')[1]
         
         // Add image to zip
         zip.file(fileName, base64Data, { base64: true })
@@ -1243,7 +1328,7 @@ export default function SlideImageGenerator({
         }}
       >
         {slides.map((slide, index) => (
-          <div key={index} style={{
+          <div key={`slide-${index}-${slide.kind}-${slide.title?.substring(0, 20)}`} style={{
             background: 'rgba(255,255,255,0.02)',
             border: '1px solid rgba(255,255,255,0.1)',
             borderRadius: '16px',
@@ -1271,6 +1356,7 @@ export default function SlideImageGenerator({
               overflow: 'hidden',
               marginBottom: '12px'
             }}>
+              {/* Always render an offscreen canvas so we can regenerate at any time */}
               <canvas
                 ref={el => { canvasRefs.current[index] = el }}
                 style={{
@@ -1279,9 +1365,28 @@ export default function SlideImageGenerator({
                   left: 0,
                   width: '100%',
                   height: '100%',
-                  objectFit: 'contain'
+                  objectFit: 'contain',
+                  opacity: 0,
+                  pointerEvents: 'none',
+                  zIndex: 0
                 }}
               />
+              {/* If we already have an image, show it above the canvas */}
+              {slideImages[index] && (
+                <img
+                  src={slideImages[index]}
+                  alt={`Slide ${index + 1}`}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    zIndex: 1
+                  }}
+                />
+              )}
             </div>
             
             <button
