@@ -219,6 +219,48 @@ export async function POST(request: NextRequest) {
     const baseUrl = getOrigin()
     console.log('[CREATE-CHECKOUT] Base URL determined:', baseUrl)
 
+    // Validate price ID exists in Stripe before creating session
+    console.log('[CREATE-CHECKOUT] Validating price ID in Stripe...', { priceId })
+    try {
+      const price = await stripe.prices.retrieve(priceId)
+      console.log('[CREATE-CHECKOUT] Price validated:', { 
+        priceId: price.id,
+        active: price.active,
+        type: price.type 
+      })
+      
+      if (!price.active) {
+        console.error('[CREATE-CHECKOUT] ERROR: Price is not active:', priceId)
+        return NextResponse.json(
+          { error: 'The selected plan is not available. Please try again or contact support.' },
+          { status: 400 }
+        )
+      }
+    } catch (error: any) {
+      console.error('[CREATE-CHECKOUT] ERROR validating price ID:', {
+        message: error.message,
+        type: error.type,
+        code: error.code,
+        priceId
+      })
+      
+      // Check if it's a mode mismatch error
+      if (error.code === 'resource_missing' || error.message?.includes('No such price')) {
+        return NextResponse.json(
+          { 
+            error: 'Invalid plan selected. This may be due to a configuration mismatch. Please refresh the page and try again.',
+            details: 'Price ID not found in current Stripe mode'
+          },
+          { status: 400 }
+        )
+      }
+      
+      return NextResponse.json(
+        { error: 'Failed to validate plan. Please try again.', details: error.message },
+        { status: 500 }
+      )
+    }
+
     // Create Checkout Session
     console.log('[CREATE-CHECKOUT] Creating Stripe checkout session...', {
       customerId,
@@ -256,8 +298,17 @@ export async function POST(request: NextRequest) {
         statusCode: error.statusCode,
         stack: error.stack
       })
+      
+      // Provide more specific error messages
+      let errorMessage = 'Failed to create checkout session'
+      if (error.code === 'resource_missing') {
+        errorMessage = 'The selected plan is not available. Please refresh the page and try again.'
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
       return NextResponse.json(
-        { error: 'Failed to create checkout session', details: error.message },
+        { error: errorMessage, details: error.message },
         { status: 500 }
       )
     }

@@ -83,7 +83,16 @@ const LIVE_MODE_PLANS = {
 } as const
 
 // Helper function to check if we're in test mode (runtime check)
+// Works on both client and server side
 function isTestMode(): boolean {
+  // On client side, use publishable key (which is available)
+  if (typeof window !== 'undefined') {
+    const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+    if (!publishableKey) return true // Default to test mode for safety
+    return publishableKey.startsWith('pk_test_')
+  }
+  
+  // On server side, use secret key
   const secretKey = process.env.STRIPE_SECRET_KEY
   // Default to test mode if key is not set or starts with sk_test_
   if (!secretKey) return true // Default to test mode for safety
@@ -96,8 +105,8 @@ export function getStripePlans() {
 }
 
 // Export the plans - uses runtime detection
-// For client components, this will default to test mode
-// For server components/API routes, this will use the actual STRIPE_SECRET_KEY
+// For client components, uses NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY to determine mode
+// For server components/API routes, uses STRIPE_SECRET_KEY to determine mode
 export const STRIPE_PLANS = getStripePlans()
 
 export type PlanId = keyof typeof STRIPE_PLANS
