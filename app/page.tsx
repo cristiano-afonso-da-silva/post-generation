@@ -1241,7 +1241,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                                 </div>
                               )}
                               
-                              {slide.kind === 'MIDDLE' && (
+                              {carousel.kind === 'MIDDLE' && (
                                 <>
                                   <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed #444' }}>
                                     <div style={{ color: '#a78bfa', fontWeight: 'bold', marginBottom: '8px' }}>
