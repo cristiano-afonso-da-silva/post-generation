@@ -6,7 +6,7 @@ import {
   getEmphasisPrompt,
   buildAIImagePrompt,
   type AIImageStyle
-} from '../config/prompts';
+} from '../../config/prompts';
 // ════════════════════════════════════════════════════════════════════════════
 // API Configuration
 // ════════════════════════════════════════════════════════════════════════════

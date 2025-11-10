@@ -294,17 +294,17 @@ export const getEmphasisPrompt = (
  */
 export const validatePromptParams = {
   ideas: (accountDescription: string): boolean => {
-    return accountDescription && accountDescription.trim().length > 0;
+    return !!(accountDescription && accountDescription.trim().length > 0);
   },
   
   note: (ideaTitle: string): boolean => {
-    return ideaTitle && ideaTitle.trim().length > 0;
+    return !!(ideaTitle && ideaTitle.trim().length > 0);
   },
   
   emphasis: (kind: string, title?: string, content?: string): boolean => {
     if (kind === 'HOOK') return !!title;
     if (kind === 'CTA') return !!content;
-    if (kind === 'MIDDLE') return !!title && !!content;
+    if (kind === 'MIDDLE') return !!(title && content);
     return false;
   }
 };

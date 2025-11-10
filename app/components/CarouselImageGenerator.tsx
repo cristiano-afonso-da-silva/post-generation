@@ -1576,7 +1576,7 @@ export default function CarouselImageGenerator({
                 marginBottom: '12px',
                 fontSize: '12px',
                 fontWeight: '600',
-                color: 'rgba(255,255,255,0.5)',
+                color: '#000000',
                 textTransform: 'none',
                 letterSpacing: '0px'
               }}>
