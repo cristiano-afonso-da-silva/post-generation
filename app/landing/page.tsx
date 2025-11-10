@@ -186,7 +186,8 @@ export default function LandingPage() {
                 style={{
                   padding: '10px 24px',
                   borderRadius: '999px',
-                  background: '#ffbd59',
+                  background: 'transparent',
+                  border: '1px solid #e5e5e5',
                   color: '#000000',
                   fontSize: '14px',
                   fontWeight: '600',
@@ -194,7 +195,7 @@ export default function LandingPage() {
                   transition: 'all 0.2s ease',
                 }}
               >
-                Get Started Free
+                Log In
               </Link>
             )}
           </div>
@@ -740,6 +741,7 @@ export default function LandingPage() {
           </h2>
           <Link
             href={user ? "/" : "/signup"}
+            className="cta-button"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -845,6 +847,10 @@ export default function LandingPage() {
           .features-heading {
             text-align: left;
           }
+        }
+
+        .cta-button:hover {
+          background: #ffa929 !important;
         }
       `}</style>
     </div>

@@ -407,7 +407,7 @@ export default function AccountModal({
           {/* Feedback Section */}
           <div style={{ marginBottom: '12px' }}>
             <button
-              onClick={() => window.location.href = 'mailto:joshua@nestmodel.co?subject=Feedback'}
+              onClick={() => window.location.href = 'mailto:hello@postmynote.app?subject=Feedback'}
               className="button secondary"
               style={{ 
                 width: '100%',

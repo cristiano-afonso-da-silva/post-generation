@@ -99,16 +99,14 @@ export default function VerifyPage() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', background: '#ffffff' }}>
       <div style={{ width: '100%', maxWidth: '440px' }}>
-        <Link href="/" style={{ display: 'inline-block', marginBottom: '32px' }}>
-          <span style={{ fontSize: '24px', fontWeight: '700', color: '#000000' }}>← Post My Note</span>
-        </Link>
-
-        <h1 style={{ fontSize: '36px', fontWeight: '700', marginBottom: '8px', color: '#000000' }}>
+        <h1 style={{ fontSize: '36px', fontWeight: '700', marginBottom: '24px', color: '#000000', textAlign: 'left' }}>
           Verify your email
         </h1>
-        <p style={{ color: '#666666', marginBottom: '32px', fontSize: '15px', lineHeight: '1.6' }}>
+        <p style={{ color: '#666666', marginBottom: '32px', fontSize: '15px', lineHeight: '1.6', textAlign: 'left' }}>
           We sent a verification code to<br />
-          <span style={{ color: '#000000', fontWeight: '600' }}>{email}</span>
+          <span style={{ color: '#666666' }}>{email}</span>
+          <br />
+          Check your <span style={{ fontWeight: '600' }}>Spam folder</span> in case you don't see it.
         </p>
 
         <form onSubmit={handleVerify} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -116,9 +114,6 @@ export default function VerifyPage() {
           {success && <div className="success">{success}</div>}
 
           <div>
-            <label htmlFor="code" style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#000000', marginBottom: '8px' }}>
-              Verification Code
-            </label>
             <input
               id="code"
               type="text"
@@ -135,17 +130,14 @@ export default function VerifyPage() {
                 fontFamily: 'monospace',
               }}
             />
-            <p style={{ marginTop: '8px', fontSize: '12px', color: '#999999', textAlign: 'center' }}>
-              Enter the 6-digit code from your email
-            </p>
           </div>
 
           <button type="submit" disabled={isLoading || verificationCode.length !== 6} className="button" style={{ width: '100%', marginTop: '8px' }}>
-            {isLoading ? 'Verifying...' : 'Verify Email'}
+            {isLoading ? 'Verifying...' : 'Continue'}
           </button>
         </form>
 
-        <div style={{ marginTop: '24px', textAlign: 'center' }}>
+        <div style={{ marginTop: '24px', textAlign: 'left' }}>
           <button
             onClick={handleResendCode}
             disabled={isResending}

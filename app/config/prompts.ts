@@ -24,6 +24,7 @@ REQUIREMENTS
 ✓ No emojis, no numbering, no quotes
 ✓ Each must be clearly distinct from others (no semantic overlap)
 ✓ Use plain, direct language
+✓ Avoid complicated words - use day-to-day language that humans naturally use
 ✓ Focus on value delivery and curiosity
 ✓ NO dashes (-) or semicolons (;) anywhere in the generated content
 
@@ -31,6 +32,9 @@ EXAMPLES OF GOOD TITLES
 - "Why Your Morning Routine Is Sabotaging Your Productivity"
 - "The Five Minute Framework That Doubled My Client Base"
 - "What I Learned Spending Six Months Without Social Media"
+
+BAD EXAMPLES
+- "Mortgage Made Easy: Demystifying Home Loan Calculations" (BAD: "Demystifying" is too complicated - use simpler, everyday language)
 
 OUTPUT FORMAT
 Return ONLY valid JSON matching this exact structure:
