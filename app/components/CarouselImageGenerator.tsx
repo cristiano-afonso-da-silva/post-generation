@@ -62,6 +62,13 @@ interface Props {
 // Initialize images from localStorage before rendering
 const getInitialImages = (carousels: Carousel[], ideaTitle: string, underlineWords: Record<number, any>, fontCombinationId: string, colorThemeId: string, backgroundImageUrl: string | null): string[] => {
   try {
+    // If there's no generationId in localStorage, we're on a fresh /app page - don't load from cache
+    const storedGenerationId = localStorage.getItem('postGeneration_generationId')
+    if (!storedGenerationId) {
+      console.log('🆕 Fresh page detected (no generationId) - skipping localStorage cache')
+      return []
+    }
+    
     const savedImages = localStorage.getItem('postGeneration_canvasImages')
     const savedFullContentHash = localStorage.getItem('postGeneration_fullContentHash')
     const savedContentHash = localStorage.getItem('postGeneration_contentHash')

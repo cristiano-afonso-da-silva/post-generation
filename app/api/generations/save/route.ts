@@ -122,14 +122,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Upload images to Supabase Storage
-    const thumbnailUrls: string[] = []
+    // Upload images to Supabase Storage IN PARALLEL (much faster!)
+    console.log(`⚡ Starting parallel upload of ${images.length} images...`)
+    const uploadStartTime = Date.now()
     
-    for (let i = 0; i < images.length; i++) {
-      const base64Data = images[i].replace(/^data:image\/\w+;base64,/, '')
+    const uploadPromises = images.map(async (imageData, i) => {
+      const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '')
       const buffer = Buffer.from(base64Data, 'base64')
       
-      const filePath = `${userId}/${generation.id}/carousel-${i}.png`
+      const filePath = `${userId}/${generation.id}/slide-${i}.png`
       
       const { error: uploadError } = await supabase.storage
         .from('carousel-images')
@@ -139,7 +140,7 @@ export async function POST(request: NextRequest) {
         })
 
       if (uploadError) {
-        console.error(`Error uploading carousel ${i}:`, uploadError)
+        console.error(`Error uploading slide ${i}:`, uploadError)
         throw uploadError
       }
 
@@ -148,19 +149,26 @@ export async function POST(request: NextRequest) {
         .from('carousel-images')
         .getPublicUrl(filePath)
 
-      // Store first 2 images as thumbnails
-      if (i < 2) {
-        thumbnailUrls.push(urlData.publicUrl)
-      }
-    }
+      return urlData.publicUrl
+    })
 
-    // Update generation with thumbnail URLs
-    const { error: thumbnailUpdateError } = await supabase
+    // Wait for all uploads to complete in parallel
+    const imageUrls = await Promise.all(uploadPromises)
+    const thumbnailUrls = imageUrls.slice(0, 2) // First 2 as thumbnails
+    
+    const uploadTime = Date.now() - uploadStartTime
+    console.log(`✅ Uploaded ${images.length} images in ${uploadTime}ms (parallel)`)
+
+    // Update generation with thumbnail URLs and all image URLs for caching
+    const { error: urlUpdateError } = await supabase
       .from('generations')
-      .update({ thumbnail_urls: thumbnailUrls })
+      .update({ 
+        thumbnail_urls: thumbnailUrls,
+        image_urls: imageUrls 
+      })
       .eq('id', generation.id)
 
-    if (thumbnailUpdateError) throw thumbnailUpdateError
+    if (urlUpdateError) throw urlUpdateError
 
     return NextResponse.json({ 
       success: true, 

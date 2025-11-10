@@ -237,6 +237,29 @@ textarea.input {
   100% { transform: rotate(360deg); }
 }
 
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   PAGINATION
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.pagination-button:not(:disabled):hover {
+  background: #f5f5f5 !important;
+  border-color: #d5d5d5 !important;
+  transform: translateY(-1px);
+}
+
+.pagination-button:active {
+  transform: translateY(0);
+}
+
 @keyframes marqueeSlides {
   0% {
     transform: translateX(0);
@@ -350,8 +373,6 @@ textarea.input {
 
 .idea-button:hover {
   border-color: #ffbd59;
-  box-shadow: 0 4px 16px rgba(255, 189, 89, 0.2);
-  transform: translateX(4px);
 }
 
 .idea-button:disabled {

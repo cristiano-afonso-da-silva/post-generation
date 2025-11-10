@@ -26,24 +26,37 @@ export async function GET(
       return NextResponse.json({ error: 'Generation not found' }, { status: 404 })
     }
 
-    // Get all image URLs from storage
-    const { data: files, error: listError } = await supabase.storage
-      .from('carousel-images')
-      .list(`${userId}/${params.id}`)
+    // Use cached image URLs from database if available
+    let imageUrls = generation.image_urls || []
 
-    // Sort files by name to ensure correct order (carousel-0.png, carousel-1.png, etc.)
-    const sortedFiles = files?.sort((a, b) => {
-      const aNum = parseInt(a.name.match(/\d+/)?.[0] || '0')
-      const bNum = parseInt(b.name.match(/\d+/)?.[0] || '0')
-      return aNum - bNum
-    }) || []
-
-    const imageUrls = sortedFiles.map(file => {
-      const { data } = supabase.storage
+    // If image_urls doesn't exist or is empty, fetch from storage and cache in DB
+    if (!imageUrls || imageUrls.length === 0) {
+      const { data: files, error: listError } = await supabase.storage
         .from('carousel-images')
-        .getPublicUrl(`${userId}/${params.id}/${file.name}`)
-      return data.publicUrl
-    })
+        .list(`${userId}/${params.id}`)
+
+      if (!listError && files && files.length > 0) {
+        // Sort files by name to ensure correct order (slide-0.png, slide-1.png, etc.)
+        const sortedFiles = files.sort((a, b) => {
+          const aNum = parseInt(a.name.match(/\d+/)?.[0] || '0')
+          const bNum = parseInt(b.name.match(/\d+/)?.[0] || '0')
+          return aNum - bNum
+        })
+
+        imageUrls = sortedFiles.map(file => {
+          const { data } = supabase.storage
+            .from('carousel-images')
+            .getPublicUrl(`${userId}/${params.id}/${file.name}`)
+          return data.publicUrl
+        })
+
+        // Cache image URLs in database for future requests
+        await supabase
+          .from('generations')
+          .update({ image_urls: imageUrls })
+          .eq('id', params.id)
+      }
+    }
 
     return NextResponse.json({ 
       generation: {

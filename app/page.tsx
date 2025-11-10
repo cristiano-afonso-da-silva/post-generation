@@ -163,14 +163,14 @@ export default function LandingPage() {
             style={{ 
               display: 'flex',
               alignItems: 'center',
-              gap: '12px',
+              gap: '8px',
               fontSize: '20px',
               fontWeight: '700', 
               color: '#000000', 
               textDecoration: 'none',
             }}
           >
-            <Image src="/logo.svg" alt="Post My Note" width={32} height={32} priority style={{ width: '32px', height: '32px' }} />
+            <Image src="/logo.svg" alt="Post My Note" width={40} height={40} priority style={{ width: '40px', height: '40px' }} />
             <span>Post My Note</span>
           </Link>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>

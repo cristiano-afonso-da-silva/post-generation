@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense, useMemo, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { History, Palette, Edit3, MessageSquare, ChevronLeft } from 'lucide-react'
+import { History, Palette, Edit3, MessageSquare, ChevronLeft, Plus } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import '../globals.css'
 import CarouselImageGenerator from '../components/CarouselImageGenerator'
@@ -80,7 +80,6 @@ export default function Home() {
   const [activeLeftTab, setActiveLeftTab] = useState<'design' | 'carousels' | 'caption'>('design')
   const [expandedCarouselIndexes, setExpandedCarouselIndexes] = useState<number[]>([])
   const [showCustomisation, setShowCustomisation] = useState(false)
-  const hasLoadedFromStorage = useRef(false)
 const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] = [
   { id: 'design', label: 'Customize Design', icon: Palette },
   { id: 'carousels', label: 'Edit Carousel', icon: Edit3 },
@@ -88,12 +87,24 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
 ]
 
   const showDebugPanel = false
-  const [backgroundOptions, setBackgroundOptions] = useState<BackgroundOption[]>([])
   const [backgroundId, setBackgroundId] = useState<string>('')
   
   // Theme settings
   const [fontCombinationId, setFontCombinationId] = useState('combination-1')
   const [colorThemeId, setColorThemeId] = useState('purple-black')
+  
+  // Memoize available background images - only compute once, no network requests
+  const backgroundOptions = useMemo<BackgroundOption[]>(() => {
+    const backgrounds = []
+    for (let i = 1; i <= 10; i++) {
+      backgrounds.push({
+        id: `bg${i}`,
+        label: `Background ${i}`,
+        src: `/backgrounds/bg${i}.jpg`
+      })
+    }
+    return backgrounds
+  }, [])
 
   // Save theme changes to localStorage
   useEffect(() => {
@@ -150,65 +161,31 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     }
   }, [carouselsDirty])
 
-  const toggleCarouselExpansion = (index: number) => {
+  const toggleCarouselExpansion = useCallback((index: number) => {
     setExpandedCarouselIndexes(prev => {
       if (prev.includes(index)) {
         return prev.filter(i => i !== index)
       }
       return [...prev, index]
     })
-  }
-
-  // Detect available background images (bg1.jpg, bg2.jpg, ...)
+  }, [])
+  
+  // Set default background on mount
   useEffect(() => {
-    let isMounted = true
-    const loadBackgrounds = async () => {
-      const detected: BackgroundOption[] = []
-      const maxBackgrounds = 10
-
-      await Promise.all(
-        Array.from({ length: maxBackgrounds }, (_, i) => i + 1).map(async (num) => {
-          const id = `bg${num}`
-          const src = `/backgrounds/${id}.jpg`
-          try {
-            const res = await fetch(src, { method: 'HEAD' })
-            if (res.ok) {
-              detected.push({
-                id,
-                label: `Background ${num}`,
-                src
-              })
-            }
-          } catch {
-            // Ignore missing files
-          }
-        })
-      )
-
-      if (isMounted) {
-        setBackgroundOptions(detected)
-
-        try {
-          const savedId = localStorage.getItem('postGeneration_backgroundId')
-          if (savedId && detected.some(option => option.id === savedId)) {
-            setBackgroundId(savedId)
-          } else if (detected.length > 0) {
-            setBackgroundId(detected[0].id)
-          } else {
-            setBackgroundId('')
-          }
-        } catch (error) {
-          console.warn('Unable to read background preference from localStorage:', error)
-          setBackgroundId(detected[0]?.id ?? '')
+    if (backgroundOptions.length > 0 && !backgroundId) {
+      try {
+        const savedId = localStorage.getItem('postGeneration_backgroundId')
+        if (savedId && backgroundOptions.some(option => option.id === savedId)) {
+          setBackgroundId(savedId)
+        } else {
+          setBackgroundId(backgroundOptions[0].id)
         }
+      } catch (error) {
+        console.warn('Unable to read background preference from localStorage:', error)
+        setBackgroundId(backgroundOptions[0].id)
       }
     }
-
-    loadBackgrounds()
-    return () => {
-      isMounted = false
-    }
-  }, [])
+  }, [backgroundOptions, backgroundId])
 
   useEffect(() => {
     if (!backgroundId) return
@@ -221,94 +198,47 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     }
   }, [backgroundId])
 
-  // Reset hasLoadedFromStorage when user changes
-  useEffect(() => {
-    hasLoadedFromStorage.current = false
-  }, [user?.id])
 
-  // Load note from localStorage on initial mount only (not during generation)
+  // Clear localStorage and reset all state on mount - /app is always a fresh/new idea page
   useEffect(() => {
-    // Only load from localStorage once per user session, not when generating
-    // This allows reloading the page to restore the previous carousel
-    if (user && !authLoading && !hasLoadedFromStorage.current && !loadingNote && !loadingIdeas && !selectedIdea) {
-      hasLoadedFromStorage.current = true
+    if (user && !authLoading) {
+      // Clear all localStorage to ensure fresh state
       try {
-        // Check if localStorage belongs to current user
-        const storedUserId = localStorage.getItem('postGeneration_userId')
-        if (storedUserId !== user.id) {
-          // User changed, clear localStorage
-          console.log('User changed, clearing localStorage')
-          localStorage.removeItem('postGeneration_note')
-          localStorage.removeItem('postGeneration_accountDescription')
-          localStorage.removeItem('postGeneration_fontCombinationId')
-          localStorage.removeItem('postGeneration_colorThemeId')
-          localStorage.removeItem('postGeneration_canvasImages')
-          localStorage.removeItem('postGeneration_contentHash')
-          localStorage.removeItem('postGeneration_generationId')
-          localStorage.removeItem('postGeneration_fullContentHash')
-          localStorage.removeItem('postGeneration_ideaTitle')
+        localStorage.removeItem('postGeneration_note')
+        localStorage.removeItem('postGeneration_accountDescription')
+        localStorage.removeItem('postGeneration_fontCombinationId')
+        localStorage.removeItem('postGeneration_colorThemeId')
+        localStorage.removeItem('postGeneration_canvasImages')
+        localStorage.removeItem('postGeneration_contentHash')
+        localStorage.removeItem('postGeneration_generationId')
+        localStorage.removeItem('postGeneration_fullContentHash')
+        localStorage.removeItem('postGeneration_ideaTitle')
+        localStorage.removeItem('postGeneration_fromHistory')
+        // Keep userId for user-specific operations
+        if (user?.id) {
           localStorage.setItem('postGeneration_userId', user.id)
-          return
-        }
-        
-        const savedNote = localStorage.getItem('postGeneration_note')
-        const savedAccountDescription = localStorage.getItem('postGeneration_accountDescription')
-        const savedFontCombination = localStorage.getItem('postGeneration_fontCombinationId')
-        const savedColorTheme = localStorage.getItem('postGeneration_colorThemeId')
-        
-        if (savedNote) {
-          const parsedNote = JSON.parse(savedNote)
-          // Handle backward compatibility: migrate 'slides' to 'carousels' if needed
-          if (parsedNote && Array.isArray(parsedNote.slides) && !parsedNote.carousels) {
-            parsedNote.carousels = parsedNote.slides
-            delete parsedNote.slides
-          }
-          // Verify note structure and carousels array integrity
-          if (parsedNote && Array.isArray(parsedNote.carousels) && parsedNote.carousels.length > 0) {
-            console.log('✅ Loaded note with', parsedNote.carousels.length, 'carousels from localStorage')
-            setNote(parsedNote)
-          } else {
-            console.warn('⚠️ Invalid note structure in localStorage, skipping')
-          }
-        }
-        
-        if (savedAccountDescription) {
-          setAccountDescription(savedAccountDescription)
-        }
-        
-        if (savedFontCombination) {
-          setFontCombinationId(savedFontCombination)
-        }
-        
-        if (savedColorTheme) {
-          setColorThemeId(savedColorTheme)
         }
       } catch (error) {
-        console.error('Error loading from localStorage:', error)
-        // Clear corrupted localStorage data
-        localStorage.removeItem('postGeneration_note')
-        localStorage.removeItem('postGeneration_canvasImages')
-        localStorage.removeItem('postGeneration_fullContentHash')
+        console.error('Error clearing localStorage:', error)
       }
+      
+      // Reset all state to ensure fresh page
+      setNote(null)
+      setAccountDescription('')
+      setIdeas([])
+      setSelectedIdea(null)
+      setCurrentStep(null)
+      setError('')
+      setShowCustomisation(false)
+      setEditedCarousels([])
+      setEditedCaption('')
+      setCarouselsDirty(false)
+      setFontCombinationId('combination-1')
+      setColorThemeId('purple-black')
     }
-  }, [user, authLoading, loadingNote, loadingIdeas, selectedIdea])
+  }, [user, authLoading])
 
-  if (authLoading) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div className="loading">
-          <div className="spinner"></div>
-          <span style={{ color: '#000000' }}>Loading...</span>
-        </div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return null
-  }
-
-  const generateIdeas = async () => {
+  const generateIdeas = useCallback(async () => {
     if (!accountDescription.trim()) {
       setError('Please enter a business description')
       return
@@ -344,6 +274,21 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     } finally {
       setLoadingIdeas(false)
     }
+  }, [accountDescription])
+
+  if (authLoading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="loading">
+          <div className="spinner"></div>
+          <span style={{ color: '#000000' }}>Loading...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return null
   }
 
   const generateNote = async (idea: string) => {
@@ -593,6 +538,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
       localStorage.removeItem('postGeneration_contentHash')
       localStorage.removeItem('postGeneration_generationId')
       localStorage.removeItem('postGeneration_fullContentHash')
+      localStorage.removeItem('postGeneration_fromHistory')
     } catch (error) {
       console.error('Error clearing localStorage:', error)
     }
@@ -633,10 +579,47 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
               textDecoration: 'none'
             }}
           >
-            <Image src="/logo.svg" alt="Post My Note" width={32} height={32} priority style={{ width: '32px', height: '32px' }} />
-            <span>Post My Note</span>
+            <Image src="/logo.svg" alt="Post My Note" width={40} height={40} priority style={{ width: '40px', height: '40px' }} />
           </Link>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Link
+              href="/app"
+              onClick={(e) => {
+                e.preventDefault()
+                // Clear all state and navigate to fresh /app
+                try {
+                  localStorage.removeItem('postGeneration_note')
+                  localStorage.removeItem('postGeneration_canvasImages')
+                  localStorage.removeItem('postGeneration_fullContentHash')
+                  localStorage.removeItem('postGeneration_contentHash')
+                  localStorage.removeItem('postGeneration_generationId')
+                  localStorage.removeItem('postGeneration_ideaTitle')
+                  localStorage.removeItem('postGeneration_fromHistory')
+                  localStorage.removeItem('postGeneration_accountDescription')
+                  localStorage.removeItem('postGeneration_fontCombinationId')
+                  localStorage.removeItem('postGeneration_colorThemeId')
+                } catch (error) {
+                  console.error('Error clearing localStorage:', error)
+                }
+                router.push('/app')
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                background: '#ffbd59',
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                textDecoration: 'none',
+              }}
+              title="Create New Idea"
+            >
+              <Plus size={18} color="#000000" />
+            </Link>
             {credits && (
               <>
                 <Link 
@@ -645,18 +628,18 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    width: '40px',
-                    height: '40px',
+                    width: '36px',
+                    height: '36px',
                     borderRadius: '50%',
                     background: '#f5f5f5',
-                    border: '2px solid #e5e5e5',
+                    border: 'none',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',
                     textDecoration: 'none',
                   }}
                   title="History"
                 >
-                  <History size={20} color="#000000" />
+                  <History size={18} color="#000000" />
                 </Link>
                 <AccountButton
                   credits={credits.credits_remaining}
@@ -1220,8 +1203,8 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
           </div>
         )}
 
-              {/* Show Generated Carousels if note exists */}
-        {note && !loadingNote && (
+              {/* Show Generated Carousels if note exists and was generated on this page */}
+        {note && !loadingNote && note.carousels && note.carousels.length > 0 && (
                 <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
             <CarouselImageGenerator 
               carousels={carouselsDirty && editedCarousels.length > 0 ? editedCarousels : note.carousels}
@@ -1236,6 +1219,13 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                         ? backgroundOptions.find(option => option.id === backgroundId)?.src ?? null
                         : null
                     }
+                    onGenerationComplete={() => {
+                      // Navigate to /app/{generationId} after saving
+                      const savedGenerationId = localStorage.getItem('postGeneration_generationId')
+                      if (savedGenerationId) {
+                        router.push(`/app/${savedGenerationId}`)
+                      }
+                    }}
                   />
                 </div>
               )}

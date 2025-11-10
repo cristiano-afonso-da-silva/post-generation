@@ -30,8 +30,8 @@ export default function AccountButton({ credits, subscriptionStatus, currentPlan
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          width: '40px',
-          height: '40px',
+          width: '36px',
+          height: '36px',
           borderRadius: '50%',
           background: '#e5e5e5',
           border: '2px solid #e5e5e5',
@@ -40,15 +40,17 @@ export default function AccountButton({ credits, subscriptionStatus, currentPlan
           padding: 0,
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.opacity = '0.9'
+          e.currentTarget.style.background = '#d0d0d0'
+          e.currentTarget.style.borderColor = '#d0d0d0'
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.opacity = '1'
+          e.currentTarget.style.background = '#e5e5e5'
+          e.currentTarget.style.borderColor = '#e5e5e5'
         }}
         aria-label="Account menu"
       >
         <span style={{ 
-          fontSize: '16px', 
+          fontSize: '14px', 
           fontWeight: '600', 
           color: '#000000',
           userSelect: 'none'
