@@ -1,60 +1,119 @@
-# Carousel Theme Configuration Guide
+# Configuration Files
 
-This folder contains the theme configuration system for carousel generation.
+This directory contains all configuration files for the application.
 
-## How to Add New Font Combinations
+## Files
 
-1. Open `carouselThemes.ts`
-2. Add a new object to the `FONT_COMBINATIONS` array:
+### `prompts.ts`
+**All AI prompts in one centralized location**
+
+Contains:
+- **Gemini Prompts**
+  - `IDEAS_PROMPT` - Generate 10 post ideas from business description
+  - `NOTE_PROMPT` - Generate complete carousel note with slides and caption
+  - `HOOK_EMPHASIS_PROMPT` - Extract emphasis words from hook carousel
+  - `CTA_EMPHASIS_PROMPT` - Extract emphasis words from CTA carousel
+  - `MIDDLE_EMPHASIS_PROMPT` - Extract emphasis words and image keywords from middle carousel
+
+- **AI Image Generation Prompts**
+  - `buildAIImagePrompt()` - Build Pollinations.AI prompt based on style
+  - `AIImageStyle` type - 'animated' | 'surreal'
+  - `AI_IMAGE_STYLES` - Style descriptions and keywords
+
+- **Utilities**
+  - `getEmphasisPrompt()` - Get appropriate prompt based on carousel kind
+  - `validatePromptParams` - Validate prompt parameters
+
+**Why centralized?**
+- Easy to find and edit all prompts in one place
+- Consistent prompt structure across the app
+- Easier to test and iterate on prompts
+- Better maintainability
+
+### `carouselThemes.ts`
+**Visual styling configuration for carousels**
+
+Contains:
+- Font combinations (Poppins + Dreaming Outloud Sans)
+- Color themes (Purple, Blue, Pink, Orange, Coral, Gold, Mint)
+- Helper functions to get font/color configs
+
+### `stripeConfig.ts`
+**Stripe subscription and pricing configuration**
+
+Contains:
+- Subscription plans (Free, Starter, Pro)
+- Pricing details
+- Feature lists
+- Stripe product/price IDs
+
+## Usage Examples
+
+### Using Prompts
 
 ```typescript
-{
-  id: 'combination-2',  // Unique ID
-  name: 'Combination 2 (Your Font Names)',  // Display name
-  hook: {
-    font: 'bold 130px YourFont, sans-serif',  // Hook carousel font
-    lineHeight: 155
-  },
-  title: {
-    font: 'bold 75px YourFont, sans-serif',  // Middle carousel title font
-    lineHeight: 90
-  },
-  content: {
-    font: '55px YourContentFont, sans-serif',  // Middle/CTA content font
-    lineHeight: 70
-  }
-}
+import { IDEAS_PROMPT, NOTE_PROMPT, buildAIImagePrompt } from '@/app/config/prompts';
+
+// Generate ideas
+const prompt = IDEAS_PROMPT('sustainable clothing brand');
+const result = await gemini.generateContent(prompt);
+
+// Generate note
+const notePrompt = NOTE_PROMPT('Why Fast Fashion Is Bad', 'eco brand');
+const note = await gemini.generateContent(notePrompt);
+
+// Generate AI image prompt
+const imagePrompt = buildAIImagePrompt('person wearing hoodie', 'animated');
+// Returns: "person wearing hoodie, anime illustration, cel-shaded..."
 ```
 
-3. Make sure your fonts are loaded in `/public/fonts/`
-4. Update the font loading in `CarouselImageGenerator.tsx` if needed
-
-## How to Add New Color Themes
-
-1. Open `carouselThemes.ts`
-2. Add a new object to the `COLOR_THEMES` array:
+### Using Themes
 
 ```typescript
-{
-  id: 'my-theme',  // Unique ID
-  name: 'My Custom Theme',  // Display name
-  textColor: '#1a1a3e',  // Main text color
-  highlightColor: 'rgba(255, 107, 107, 0.5)',  // Word highlight background
-  underlineColor: '#1a1a3e'  // Underline color
-}
+import { getFontCombination, getColorTheme } from '@/app/config/carouselThemes';
+
+const fonts = getFontCombination('combination-1');
+const colors = getColorTheme('purple-black');
 ```
 
-## Color Format
+## Editing Prompts
 
-- **textColor**: Hex color (e.g., `#000000`)
-- **highlightColor**: RGBA with opacity (e.g., `rgba(119, 119, 255, 0.5)`)
-- **underlineColor**: Hex color (e.g., `#000000`)
+To modify prompts:
 
-## Font Size Guidelines
+1. Open `app/config/prompts.ts`
+2. Find the prompt you want to edit
+3. Modify the prompt text
+4. Save the file
+5. Restart the dev server
 
-- **Hook**: 100-150px (main attention-grabber)
-- **Title**: 60-80px (section headers)
-- **Content**: 45-60px (body text)
+**Tips:**
+- Keep prompts clear and specific
+- Include examples of good/bad outputs
+- Specify exact output format (JSON structure)
+- Test changes thoroughly
 
-Adjust line heights proportionally to font sizes for optimal readability.
+## Adding New Prompts
 
+```typescript
+// In app/config/prompts.ts
+
+export const MY_NEW_PROMPT = (param: string) => `
+Your prompt text here with ${param}
+`.trim();
+```
+
+Then import and use:
+
+```typescript
+import { MY_NEW_PROMPT } from '@/app/config/prompts';
+
+const prompt = MY_NEW_PROMPT('value');
+```
+
+## Best Practices
+
+1. **Keep prompts in config files** - Don't hardcode prompts in API routes
+2. **Use template functions** - Allow dynamic values via parameters
+3. **Document prompt purpose** - Add JSDoc comments explaining what each prompt does
+4. **Version control** - Track prompt changes in git
+5. **Test thoroughly** - Changes to prompts can affect output quality

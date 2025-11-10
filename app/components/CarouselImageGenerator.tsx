@@ -50,7 +50,7 @@ interface Carousel {
 interface Props {
   carousels: Carousel[]
   ideaTitle: string
-  underlineWords?: Record<number, { underline: string; highlight: string; imageUrl?: string | null }>
+  underlineWords?: Record<number, { underline: string; highlight: string; imageUrl?: string | null; originalImageUrl?: string | null }>
   fontCombinationId?: string
   colorThemeId?: string
   accountDescription?: string
@@ -114,8 +114,12 @@ export default function CarouselImageGenerator({
     carousels.forEach((carousel, index) => {
       if (carousel.kind === 'MIDDLE') {
         const emphasis = underlineWords[index]
-        if (emphasis?.imageUrl) {
-          console.log(`✅ Carousel ${index + 1} (MIDDLE): Has imageUrl =`, emphasis.imageUrl)
+        const hasImage = !!(emphasis?.imageUrl || emphasis?.originalImageUrl)
+        if (hasImage) {
+          console.log(`✅ Carousel ${index + 1} (MIDDLE): Has imageUrl =`, emphasis?.imageUrl || '(proxied not set)')
+          if (emphasis?.originalImageUrl) {
+            console.log(`   Original image URL:`, emphasis.originalImageUrl)
+          }
         } else {
           console.warn(`⚠️ Carousel ${index + 1} (MIDDLE): No imageUrl found!`)
           console.warn(`   Emphasis data:`, emphasis)
@@ -612,14 +616,16 @@ export default function CarouselImageGenerator({
   const loadImage = (src: string): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
       const img = new Image()
-      // Don't set crossOrigin for local images (same origin)
-      // Only set it for external images if needed
-      if (src.startsWith('http://') || src.startsWith('https://')) {
-        img.crossOrigin = 'anonymous'
+      // Set crossOrigin for all images to allow canvas drawing
+      // This is needed for both external images and proxied images
+      img.crossOrigin = 'anonymous'
+      
+      img.onload = () => {
+        console.log(`✅ Image loaded successfully: ${src}`)
+        resolve(img)
       }
-      img.onload = () => resolve(img)
       img.onerror = (error) => {
-        console.error(`Failed to load image: ${src}`, error)
+        console.error(`❌ Failed to load image: ${src}`, error)
         reject(error)
       }
       img.src = src
@@ -1028,31 +1034,35 @@ export default function CarouselImageGenerator({
       const x = safeMarginSides
       
       // Parse emphasis words to check for image
-      const emphasisData = underlineWords[index] || { underline: '', highlight: '', imageUrl: null }
+      const emphasisData = underlineWords[index] || { underline: '', highlight: '', imageUrl: null, originalImageUrl: null }
       
       // Debug: Log image data for MIDDLE carousels
       if (cleanCarousel.kind === 'MIDDLE') {
         console.log(`\n🖼️ Carousel ${index + 1} Image Check:`)
         console.log('  Emphasis data:', emphasisData)
         console.log('  imageUrl present?', !!emphasisData.imageUrl)
+        console.log('  originalImageUrl present?', !!emphasisData.originalImageUrl)
         console.log('  imageUrl value:', emphasisData.imageUrl)
+        console.log('  originalImageUrl value:', emphasisData.originalImageUrl)
       }
+      
+      const imageSourceUrl = emphasisData.imageUrl || emphasisData.originalImageUrl || null
       
       // Pre-load image if available to include in height calculation
       let imageHeight = 0
       let imageWidth = 0
       let loadedImage: HTMLImageElement | null = null
       
-      if (emphasisData.imageUrl) {
+      if (imageSourceUrl) {
         try {
-          console.log(`🖼️ Carousel ${index + 1}: Attempting to load image from:`, emphasisData.imageUrl)
-          loadedImage = await loadImage(emphasisData.imageUrl)
+          console.log(`🖼️ Carousel ${index + 1}: Attempting to load image from:`, imageSourceUrl)
+          loadedImage = await loadImage(imageSourceUrl)
           imageWidth = safeWidth
           imageHeight = Math.round(safeWidth * 9 / 16)
           console.log(`✅ Carousel ${index + 1}: Image loaded successfully! Dimensions: ${loadedImage.width}x${loadedImage.height}`)
         } catch (error) {
           console.error(`❌ Carousel ${index + 1}: Failed to pre-load image:`, error)
-          console.error(`   Image URL was:`, emphasisData.imageUrl)
+          console.error(`   Image URL was:`, imageSourceUrl)
         }
       } else if (cleanCarousel.kind === 'MIDDLE') {
         console.warn(`⚠️ Carousel ${index + 1}: No imageUrl in emphasisData for MIDDLE carousel!`)
@@ -1427,8 +1437,8 @@ export default function CarouselImageGenerator({
           }
         } else if (cleanCarousel.kind === 'MIDDLE') {
           console.warn(`⚠️ Carousel ${index + 1}: Image not drawn - loadedImage=${!!loadedImage}, imageWidth=${imageWidth}, imageHeight=${imageHeight}`)
-          if (!loadedImage && emphasisData.imageUrl) {
-            console.warn(`   Image URL exists but failed to load:`, emphasisData.imageUrl)
+          if (!loadedImage && imageSourceUrl) {
+            console.warn(`   Image URL exists but failed to load:`, imageSourceUrl)
           }
         }
     }  // Close else (MIDDLE carousel)
@@ -1547,57 +1557,69 @@ export default function CarouselImageGenerator({
           minHeight: 0
         }}
       >
-        {carousels.map((carousel, index) => (
-          <div key={`carousel-${index}-${carousel.kind}-${carousel.title?.substring(0, 20)}`} style={{
-            background: 'rgba(255,255,255,0.02)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: '16px',
-            padding: '16px',
-            transition: 'all 0.3s ease',
-            minWidth: '320px',
-            flex: '0 0 320px'
-          }}>
-            <div style={{ 
-              marginBottom: '12px',
-              fontSize: '12px',
-              fontWeight: '600',
-              color: 'rgba(255,255,255,0.5)',
-              textTransform: 'none',
-              letterSpacing: '0px'
+        {carousels.map((carousel, index) => {
+          const hasCurrentImage = !!carouselImages[index]
+          const hasPreviousImage = !!previousImagesRef.current[index]
+          const isImageReady = hasCurrentImage || hasPreviousImage
+
+          return (
+            <div key={`carousel-${index}-${carousel.kind}-${carousel.title?.substring(0, 20)}`} style={{
+              background: 'rgba(255,255,255,0.02)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '16px',
+              padding: '16px',
+              transition: 'all 0.3s ease',
+              minWidth: '320px',
+              flex: '0 0 320px'
             }}>
-              {carousel.kind === 'MIDDLE' ? 'Content' : carousel.kind === 'HOOK' ? 'Hook' : carousel.kind === 'CTA' ? 'CTA' : carousel.kind} • Carousel {index + 1}
-            </div>
-            
-            <div style={{ 
-              position: 'relative',
-              paddingBottom: '125%', // 4:5 aspect ratio
-              background: '#ffffff',
-              borderRadius: '12px',
-              overflow: 'hidden',
-              marginBottom: '12px'
-            }}>
-              {/* Always render an offscreen canvas so we can regenerate at any time */}
-              <canvas
-                ref={el => { canvasRefs.current[index] = el }}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                  opacity: 0,
-                  pointerEvents: 'none',
-                  zIndex: 0
-                }}
-              />
-              {/* If we already have an image, show it above the canvas */}
-              {/* Use current image if available, otherwise fall back to previous to prevent layout shifts */}
-              {(carouselImages[index] || previousImagesRef.current[index]) && (
-                <img
-                  key={`carousel-img-${index}-${carouselImages[index] ? 'current' : 'prev'}`}
-                  src={carouselImages[index] || previousImagesRef.current[index]}
-                  alt={`Carousel ${index + 1}`}
+              <div style={{ 
+                marginBottom: '12px',
+                fontSize: '12px',
+                fontWeight: '600',
+                color: 'rgba(255,255,255,0.5)',
+                textTransform: 'none',
+                letterSpacing: '0px'
+              }}>
+                {carousel.kind === 'MIDDLE' ? 'Content' : carousel.kind === 'HOOK' ? 'Hook' : carousel.kind === 'CTA' ? 'CTA' : carousel.kind} • Carousel {index + 1}
+              </div>
+              
+              <div style={{ 
+                position: 'relative',
+                paddingBottom: '125%', // 4:5 aspect ratio
+                background: '#ffffff',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                marginBottom: '12px'
+              }}>
+                {/* Placeholder while images are generating */}
+                {!isImageReady && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: '100%',
+                      background: 'rgba(229, 229, 229, 0.9)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '12px',
+                      color: '#4a4a4a',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      zIndex: 2
+                    }}
+                  >
+                    <span className="spinner" style={{ width: '32px', height: '32px', borderWidth: '3px' }} />
+                    <span>Preparing slide...</span>
+                  </div>
+                )}
+
+                {/* Always render an offscreen canvas so we can regenerate at any time */}
+                <canvas
+                  ref={el => { canvasRefs.current[index] = el }}
                   style={{
                     position: 'absolute',
                     top: 0,
@@ -1605,26 +1627,45 @@ export default function CarouselImageGenerator({
                     width: '100%',
                     height: '100%',
                     objectFit: 'contain',
-                    zIndex: 1,
-                    transition: 'opacity 0.2s ease'
+                    opacity: 0,
+                    pointerEvents: 'none',
+                    zIndex: 0
                   }}
                 />
-              )}
+                {/* If we already have an image, show it above the canvas */}
+                {/* Use current image if available, otherwise fall back to previous to prevent layout shifts */}
+                {(carouselImages[index] || previousImagesRef.current[index]) && (
+                  <img
+                    key={`carousel-img-${index}-${carouselImages[index] ? 'current' : 'prev'}`}
+                    src={carouselImages[index] || previousImagesRef.current[index]}
+                    alt={`Carousel ${index + 1}`}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'contain',
+                      zIndex: 1,
+                      transition: 'opacity 0.2s ease'
+                    }}
+                  />
+                )}
+              </div>
+              
+              <button
+                onClick={() => downloadCarousel(index)}
+                className="button"
+                style={{ 
+                  width: '100%',
+                  padding: '12px',
+                  fontSize: '14px'
+                }}
+              >
+                Download Carousel {index + 1}
+              </button>
             </div>
-            
-            <button
-              onClick={() => downloadCarousel(index)}
-              className="button"
-              style={{ 
-                width: '100%',
-                padding: '12px',
-                fontSize: '14px'
-              }}
-            >
-              Download Carousel {index + 1}
-            </button>
-          </div>
-        ))}
+          )})}
       </div>
 
       <button

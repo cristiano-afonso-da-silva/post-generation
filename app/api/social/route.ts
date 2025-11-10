@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
-
+import {
+  IDEAS_PROMPT,
+  NOTE_PROMPT,
+  getEmphasisPrompt,
+  buildAIImagePrompt,
+  type AIImageStyle
+} from '../config/prompts';
 // ════════════════════════════════════════════════════════════════════════════
 // API Configuration
 // ════════════════════════════════════════════════════════════════════════════
@@ -244,144 +250,7 @@ const formatIdeasToText = (ideas: string[]) => {
   return lines.join('\n');
 };
 
-// ════════════════════════════════════════════════════════════════════════════
-// Prompts
-// ════════════════════════════════════════════════════════════════════════════
-
-const IDEAS_PROMPT = (accountDescription: string) => `
-You are an expert social media strategist with deep knowledge of viral content and engagement patterns.
-
-TASK
-Generate 10 highly specific, compelling post idea titles for this account:
-"${accountDescription}"
-
-REQUIREMENTS
-✓ Each title must be 8-12 words maximum
-✓ Titles should be specific and actionable (not vague)
-✓ Cover diverse angles: how-to, mistakes, frameworks, case studies, experiments, myths, mindset shifts
-✓ No emojis, no numbering, no quotes
-✓ Each must be clearly distinct from others (no semantic overlap)
-✓ Use plain, direct language
-✓ Focus on value delivery and curiosity
-
-EXAMPLES OF GOOD TITLES
-- "Why Your Morning Routine Is Sabotaging Your Productivity"
-- "The Five Minute Framework That Doubled My Client Base"
-- "What I Learned Spending Six Months Without Social Media"
-
-OUTPUT FORMAT
-Return ONLY valid JSON matching this exact structure:
-{
-  "ideas": ["title 1", "title 2", ... "title 10"]
-}
-
-Think strategically about what would make someone stop scrolling and engage.
-`.trim();
-
-const NOTE_PROMPT = (ideaTitle: string, accountDescription: string) => `
-You are an expert Instagram note creator. Your posts go viral because they're perfectly structured and valuable.
-
-CONTEXT
-Account: ${accountDescription || 'General audience'}
-Post Idea: "${ideaTitle}"
-
-TASK
-Create a complete note with carousels and caption that follows these EXACT specifications:
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CAROUSEL 1: HOOK (FIRST CAROUSEL)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- title: The hook text itself (maximum 10 words)
-  * Use simple English - easy to understand, clear, and direct
-  * Avoid complex words or jargon
-  * Make it attention-grabbing and engaging
-- content: "" (leave empty)
-- kind: "HOOK"
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CAROUSELS 2-N: MIDDLE CONTENT (2-7 carousels)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Each middle carousel needs:
-
-TITLE: 2-5 words (clear, punchy)
-GOOD: "The Problem", "What Actually Works", "Mistake Three", "Try This Instead"
-BAD: "Here's what you need to know about the problem" (too long)
-
-CONTENT: 18-32 words (aim for 20-30 for optimal readability)
-GOOD EXAMPLE (24 words):
-"Most people pack their mornings with too many rigid tasks, creating stress instead of momentum. When one thing falls apart, the entire day feels ruined."
-
-GOOD EXAMPLE (20 words):
-"Focus on one anchor habit that truly energizes you. Everything else should be flexible. This creates consistency without pressure."
-
-BAD EXAMPLE (too short - 12 words):
-"Start your day right. Morning routines matter. Build good habits daily."
-
-BAD EXAMPLE (too long - 45 words):
-"The problem with morning routines is that most people try to do too many things at once, which creates unnecessary stress and pressure that ends up being counterproductive to what they're trying to achieve in the first place with their morning routine."
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-LAST CAROUSEL: CALL TO ACTION (CTA)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- title: Clear call-to-action (2-5 words)
-  GOOD: "Try This Today", "Start Here", "Your Next Step"
-  BAD: "Here's what you should do next" (too long)
-- content: Specific, actionable text (use imperative verbs)
-  GOOD: "Save this post. Pick one anchor habit. Test it for 7 days. Share your results below."
-  BAD: "You should probably try to implement these ideas" (vague, not actionable)
-- kind: "CTA"
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-INSTAGRAM CAPTION (150-250 words)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Structure:
-1. Opening hook (1-2 sentences that expand on the post idea)
-2. Main value (2-3 short paragraphs, use line breaks for readability)
-3. Call to action (engagement prompt)
-4. Relevant hashtags (8-12 hashtags, mix of broad and niche)
-
-Example structure:
-"Your morning routine might be working against you. Here's why.
-
-Most people... [insight paragraph]
-
-The shift that changed everything: [solution paragraph]
-
-Try this instead: [actionable advice]
-
-Save this if it resonated. What's your anchor habit? Drop it below 👇
-
-#productivity #morningroutine #habitbuilding #personaldevelopment"
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-OUTPUT FORMAT
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CRITICAL: You MUST return a JSON object with this EXACT structure. Do not return text, do not add explanations.
-
-Required JSON structure:
-{
-  "ideaTitle": "string (the original post idea)",
-  "slides": [
-    {"title": "string", "content": "string", "kind": "HOOK"},
-    {"title": "string", "content": "string", "kind": "MIDDLE"},
-    {"title": "string", "content": "string", "kind": "MIDDLE"},
-    {"title": "string", "content": "string", "kind": "CTA"}
-  ],
-  "caption": "string (full Instagram caption with hashtags)"
-}
-
-The "slides" array is REQUIRED and MUST contain at least 3 carousels.
-Each carousel MUST have: title, content, and kind properties.
-
-QUALITY CHECKLIST
-✓ Hook carousel has compelling title (max 10 words), empty content
-✓ Middle carousels have 2-5 word titles and 18-32 word content
-✓ Content flows logically and tells a story
-✓ CTA is specific and actionable
-✓ Caption is 150-250 words
-✓ No asterisks, no markdown formatting
-✓ Simple, clear English throughout
-`.trim();
+// Prompts are now imported from app/config/prompts.ts
 
 const NOTE_SCHEMA = {
   type: SchemaType.OBJECT,
@@ -456,12 +325,17 @@ const UNDERLINE_SCHEMA = {
 };
 
 // ════════════════════════════════════════════════════════════════════════════
-// Pexels API Integration
+// Image API Integration (Pexels & Pollinations.AI)
 // ════════════════════════════════════════════════════════════════════════════
 
 type PexelsImageResult = {
   url: string | null;
   id: number | null;
+};
+
+type PollinationsImageResult = {
+  url: string | null;
+  id: string | null;
 };
 
 async function searchPexelsImage(query: string, usedPhotoIds: Set<number>): Promise<PexelsImageResult | null> {
@@ -560,6 +434,62 @@ async function searchPexelsImage(query: string, usedPhotoIds: Set<number>): Prom
   }
 }
 
+/**
+ * Generate AI image using Pollinations.AI
+ * Simple API that generates images from text prompts
+ * 
+ * API Documentation: https://pollinations.ai/
+ * Usage: https://image.pollinations.ai/prompt/{prompt}?width={w}&height={h}&seed={s}&nologo=true
+ * 
+ * Benefits:
+ * - No API key required (free to use)
+ * - Generates unique images based on text descriptions
+ * - Perfect for creating custom visuals that match carousel content
+ * - 16:9 aspect ratio (1920x1080) optimized for Instagram carousels
+ * 
+ * IMPORTANT: Pollinations.AI returns images directly, not JSON
+ * The URL itself IS the image - no need to parse response
+ */
+async function generatePollinationsImage(prompt: string, usedImageIds: Set<string>): Promise<PollinationsImageResult | null> {
+  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('🎨 POLLINATIONS.AI IMAGE GENERATION INITIATED');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  
+  console.log(`📝 Prompt: "${prompt}"`);
+  console.log(`🔗 Encoded Prompt: "${encodeURIComponent(prompt)}"`);
+
+  try {
+    // Pollinations.AI simple API - the URL IS the image
+    // Add parameters for better quality: width, height, and seed for consistency
+    const seed = Math.floor(Math.random() * 1000000); // Random seed for variety
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1920&height=1080&seed=${seed}&nologo=true`;
+    
+    console.log(`🌐 Generated Image URL: ${imageUrl}`);
+    
+    // Pollinations.AI generates images on-demand, so we don't need to test
+    // The URL itself will generate and return the image when accessed
+    // Just return the URL immediately
+    
+    const imageId = `pollinations-${seed}`;
+    
+    console.log(`✅ SUCCESS: AI image URL generated!`);
+    console.log(`🖼️ Image URL: ${imageUrl}`);
+    console.log(`🆔 Image ID: ${imageId}`);
+    console.log(`📐 Dimensions: 1920x1080 (16:9 aspect ratio)`);
+    console.log(`ℹ️  Note: Image will be generated when URL is accessed`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    
+    return { url: imageUrl, id: imageId };
+  } catch (error: any) {
+    console.error(`❌ EXCEPTION during Pollinations.AI URL generation:`);
+    console.error(`   Error Type: ${error.constructor.name}`);
+    console.error(`   Error Message: ${error.message}`);
+    console.error(`   Stack Trace:`, error.stack);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    return null;
+  }
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // API Functions
 // ════════════════════════════════════════════════════════════════════════════
@@ -612,8 +542,11 @@ async function generateIdeas(accountDescription: string) {
   }
 }
 
-async function extractUnderlineWords(carousels: any[], includeImages: boolean = true) {
-  console.log(`\n🎨 Extracting emphasis words and ${includeImages ? '🖼️ images (enabled)' : '📝 NO images (disabled)'}`);
+// buildAIImagePrompt is now imported from app/config/prompts.ts
+
+async function extractUnderlineWords(carousels: any[], includeImages: boolean = true, useAIImages: boolean = false, aiImageStyle: AIImageStyle = 'animated') {
+  const imageSource = useAIImages ? 'Pollinations.AI (AI-generated)' : 'Pexels (stock photos)';
+  console.log(`\n🎨 Extracting emphasis words and ${includeImages ? `🖼️ images from ${imageSource} (enabled)` : '📝 NO images (disabled)'}`);
   
   const underlineModel = genAI.getGenerativeModel({
     model: GEMINI_MODEL,
@@ -625,80 +558,14 @@ async function extractUnderlineWords(carousels: any[], includeImages: boolean = 
   });
 
   const results: Record<number, any> = {};
-  const usedImageIds = new Set<number>();
+  const usedPexelsIds = new Set<number>();
+  const usedPollinationsIds = new Set<string>();
 
   for (let i = 0; i < carousels.length; i++) {
     const carousel = carousels[i];
     
-    let prompt = '';
-    
-    if (carousel.kind === 'HOOK') {
-      if (!carousel.title) continue;
-      
-      prompt = `Analyze this hook carousel title and extract emphasis words:
-
-Title: "${carousel.title}"
-
-Instructions:
-- Extract 1 single word that is most important for emphasis
-- The highlight word should be a KEY word that captures attention
-- Return the word without any punctuation
-- For underline and imageSearch, return empty string (no underlines or images on hook carousels)
-
-Return JSON with:
-- underline: "" (empty string for hook carousels)
-- highlight: "word" (single most important word, no punctuation)
-- imageSearch: "" (empty string for hook carousels)`;
-    } else if (carousel.kind === 'CTA') {
-      if (!carousel.content) continue;
-      
-      prompt = `Analyze this CTA carousel content and extract emphasis words:
-
-Content: "${carousel.content}"
-
-Instructions:
-- Extract 2-3 short phrases (2-4 words each) that are most important for emphasis
-- These phrases should be ACTION-ORIENTED and impactful
-- Return them comma-separated
-- For highlight and imageSearch, return empty string (no highlights or images on CTA carousels)
-
-Return JSON with:
-- underline: "phrase 1, phrase 2, phrase 3" (2-3 phrases)
-- highlight: "" (empty string for CTA carousels)
-- imageSearch: "" (empty string for CTA carousels)`;
-    } else if (carousel.kind === 'MIDDLE') {
-      if (!carousel.content) continue;
-      
-      prompt = `Analyze this middle carousel content and extract emphasis words and image search keywords:
-
-Title: "${carousel.title}"
-Content: "${carousel.content}"
-
-CRITICAL INSTRUCTIONS:
-1. UNDERLINE: Extract 2-4 short phrases (2-4 words each) that are KEY CONCEPTS
-- Return them comma-separated
-   - Example: "breathable fabric, everyday comfort, lightweight design"
-
-2. HIGHLIGHT: Extract THE MOST important single word
-   - Must be without punctuation
-   - Example: "comfort"
-
-3. IMAGE SEARCH: Extract 2-4 visual keywords for stock photo search
-   - MUST be descriptive, concrete visual terms
-   - Think about what IMAGE would represent this content
-   - Good examples: "person wearing hoodie", "cotton fabric texture", "winter clothing"
-   - Bad examples: "feeling", "concept", "idea" (too abstract)
-   - Focus on objects, people, activities that can be photographed
-
-REQUIRED JSON FORMAT (ALL FIELDS MUST BE PRESENT):
-{
-  "underline": "phrase 1, phrase 2, phrase 3",
-  "highlight": "word",
-  "imageSearch": "visual keyword1 keyword2 keyword3"
-}
-
-The imageSearch field is MANDATORY. Always provide visual search terms.`;
-    }
+    // Get prompt from centralized prompts config
+    const prompt = getEmphasisPrompt(carousel.kind, carousel.title, carousel.content);
     
     if (!prompt) continue;
     
@@ -734,39 +601,74 @@ The imageSearch field is MANDATORY. Always provide visual search terms.`;
         underline: parsed.underline || '',
         highlight: parsed.highlight || '',
         imageSearch: imageSearchKeywords,
-        imageUrl: null, // Will be populated next
+        imageUrl: null,
+        originalImageUrl: null,
       };
       
-      // For MIDDLE carousels, fetch image from Pexels if enabled and we have search keywords
+      // For MIDDLE carousels, fetch image if enabled and we have search keywords
       if (includeImages && carousel.kind === 'MIDDLE' && imageSearchKeywords && imageSearchKeywords.trim()) {
         console.log(`\n🖼️  MIDDLE CAROUSEL ${i + 1}: Attempting to fetch image...`);
         console.log(`   Keywords: "${imageSearchKeywords}"`);
         console.log(`   includeImages flag: ${includeImages}`);
+        console.log(`   useAIImages flag: ${useAIImages}`);
         console.log(`   carousel.kind: ${carousel.kind}`);
         console.log(`   imageSearchKeywords.trim(): "${imageSearchKeywords.trim()}"`);
         
         try {
-          const imageResult = await searchPexelsImage(imageSearchKeywords, usedImageIds);
-          results[i].imageUrl = imageResult?.url || null;
-          if (imageResult?.id) {
-            usedImageIds.add(imageResult.id);
-          }
-          if (imageResult?.url) {
-            console.log(`✅ SUCCESS: Image added to carousel ${i + 1}`);
-            console.log(`   Image URL: ${imageResult.url}`);
+          if (useAIImages) {
+            // Use Pollinations.AI to generate an image based on the description
+            console.log(`   Using Pollinations.AI for AI-generated image`);
+            
+            // Create a more detailed prompt based on the selected AI style
+            const aiPrompt = buildAIImagePrompt(imageSearchKeywords, aiImageStyle);
+            
+            const imageResult = await generatePollinationsImage(aiPrompt, usedPollinationsIds);
+            
+            // Use the Pollinations URL directly (no proxy needed - Pollinations supports CORS)
+            results[i].imageUrl = imageResult?.url || null;
+            results[i].originalImageUrl = imageResult?.url || null;
+            
+            if (imageResult?.id) {
+              usedPollinationsIds.add(imageResult.id);
+            }
+            if (imageResult?.url) {
+              console.log(`✅ SUCCESS: AI-generated image added to carousel ${i + 1}`);
+              console.log(`   Image URL: ${imageResult.url}`);
+              console.log(`   ℹ️  Using direct Pollinations URL (supports CORS)`);
+            } else {
+              console.error(`❌ FAILED: No image URL returned from Pollinations.AI for carousel ${i + 1}`);
+              console.error(`   This could mean: API error or network issue`);
+              results[i].imageUrl = null;
+              results[i].originalImageUrl = null;
+            }
           } else {
-            console.error(`❌ FAILED: No image URL returned for carousel ${i + 1}`);
-            console.error(`   Pexels API returned:`, imageResult);
-            console.error(`   This could mean: API key issue, rate limit, or no matching images`);
-            // Ensure imageUrl is explicitly set to null
-            results[i].imageUrl = null;
+            // Use Pexels to search for stock photos
+            console.log(`   Using Pexels for stock photo search`);
+            
+            const imageResult = await searchPexelsImage(imageSearchKeywords, usedPexelsIds);
+            results[i].originalImageUrl = imageResult?.url || null;
+            results[i].imageUrl = imageResult?.url || null;
+            if (imageResult?.id) {
+              usedPexelsIds.add(imageResult.id);
+            }
+            if (imageResult?.url) {
+              console.log(`✅ SUCCESS: Stock image added to carousel ${i + 1}`);
+              console.log(`   Image URL: ${imageResult.url}`);
+            } else {
+              console.error(`❌ FAILED: No image URL returned from Pexels for carousel ${i + 1}`);
+              console.error(`   Pexels API returned:`, imageResult);
+              console.error(`   This could mean: API key issue, rate limit, or no matching images`);
+              results[i].imageUrl = null;
+              results[i].originalImageUrl = null;
+            }
           }
-        } catch (pexelsError: any) {
-          console.error(`❌ EXCEPTION during Pexels fetch for carousel ${i + 1}:`);
-          console.error(`   Error:`, pexelsError);
-          console.error(`   Error message:`, pexelsError?.message);
-          console.error(`   Stack:`, pexelsError?.stack);
+        } catch (imageError: any) {
+          console.error(`❌ EXCEPTION during image fetch for carousel ${i + 1}:`);
+          console.error(`   Error:`, imageError);
+          console.error(`   Error message:`, imageError?.message);
+          console.error(`   Stack:`, imageError?.stack);
           results[i].imageUrl = null;
+          results[i].originalImageUrl = null;
         }
       } else {
         // Log why image fetch was skipped
@@ -791,19 +693,21 @@ The imageSearch field is MANDATORY. Always provide visual search terms.`;
       
     } catch (error: any) {
       console.error(`❌ Error extracting emphasis for carousel ${i + 1}:`, error.message);
-      results[i] = { underline: '', highlight: '', imageSearch: '', imageUrl: null };
+      results[i] = { underline: '', highlight: '', imageSearch: '', imageUrl: null, originalImageUrl: null };
     }
   }
   
   return results;
 }
 
-async function generateNote(ideaTitle: string, accountDescription: string, includeImages: boolean = true) {
+async function generateNote(ideaTitle: string, accountDescription: string, includeImages: boolean = true, useAIImages: boolean = false, aiImageStyle: AIImageStyle = 'animated') {
   const startTime = Date.now();
   
   try {
     console.log(`🚀 Generating note for: "${ideaTitle}"`);
     console.log(`🖼️ generateNote: includeImages parameter =`, includeImages);
+    console.log(`🎨 generateNote: useAIImages parameter =`, useAIImages);
+    console.log(`🎭 generateNote: aiImageStyle parameter =`, aiImageStyle);
     
     const result = await callGeminiWithRetry(model, {
       contents: [{
@@ -860,8 +764,8 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
       data.caption = data.caption.replace(/\*/g, '');
     }
     
-    console.log(`🖼️ generateNote: Calling extractUnderlineWords with includeImages =`, includeImages);
-    const underlineWords = await extractUnderlineWords(data.slides, includeImages);
+    console.log(`🖼️ generateNote: Calling extractUnderlineWords with includeImages =`, includeImages, 'useAIImages =', useAIImages, 'aiImageStyle =', aiImageStyle);
+    const underlineWords = await extractUnderlineWords(data.slides, includeImages, useAIImages, aiImageStyle);
     
     // Calculate stats before formatting
     const hookWords = data.slides[0]?.title ? wordCount(data.slides[0].title) : 0;
@@ -918,7 +822,7 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { action, accountDescription, ideaTitle, includeImages } = body;
+    const { action, accountDescription, ideaTitle, includeImages, useAIImages, aiImageStyle } = body;
     
     if (!action) {
       return NextResponse.json(
@@ -949,16 +853,24 @@ export async function POST(request: NextRequest) {
       
       // Default to true if not specified for backward compatibility
       const shouldIncludeImages = includeImages !== undefined ? includeImages : true;
+      const shouldUseAIImages = useAIImages !== undefined ? useAIImages : false;
+      const resolvedAIStyle: AIImageStyle = shouldUseAIImages && (aiImageStyle === 'surreal' || aiImageStyle === 'animated') ? aiImageStyle : 'animated';
       console.log('🖼️ Backend: Received includeImages =', includeImages, '→ Using shouldIncludeImages =', shouldIncludeImages);
+      console.log('🎨 Backend: Received useAIImages =', useAIImages, '→ Using shouldUseAIImages =', shouldUseAIImages);
+      console.log('🎭 Backend: Using AI image style =', resolvedAIStyle);
       
-      const result = await generateNote(ideaTitle.trim(), accountDescription?.trim() || '', shouldIncludeImages);
+      const result = await generateNote(ideaTitle.trim(), accountDescription?.trim() || '', shouldIncludeImages, shouldUseAIImages, resolvedAIStyle);
       return NextResponse.json(result);
     }
 
     if (action === 'refreshSlides') {
       const carouselsInput = body.slides;
       const shouldIncludeImages = includeImages !== undefined ? includeImages : true;
+      const shouldUseAIImages = useAIImages !== undefined ? useAIImages : false;
+      const resolvedAIStyle: AIImageStyle = shouldUseAIImages && (aiImageStyle === 'surreal' || aiImageStyle === 'animated') ? aiImageStyle : 'animated';
       console.log('🖼️ Backend: Received includeImages for refreshSlides =', includeImages, '→ Using shouldIncludeImages =', shouldIncludeImages);
+      console.log('🎨 Backend: Received useAIImages for refreshSlides =', useAIImages, '→ Using shouldUseAIImages =', shouldUseAIImages);
+      console.log('🎭 Backend: Using AI image style for refreshSlides =', resolvedAIStyle);
 
       if (!Array.isArray(carouselsInput) || carouselsInput.length === 0) {
         return NextResponse.json(
@@ -975,8 +887,8 @@ export async function POST(request: NextRequest) {
       })).map(({ index: _, ...rest }) => rest);
 
       try {
-        console.log('🖼️ refreshSlides: Calling extractUnderlineWords with shouldIncludeImages =', shouldIncludeImages);
-        const underlineWords = await extractUnderlineWords(sanitizedCarousels, shouldIncludeImages);
+        console.log('🖼️ refreshSlides: Calling extractUnderlineWords with shouldIncludeImages =', shouldIncludeImages, 'shouldUseAIImages =', shouldUseAIImages, 'aiImageStyle =', resolvedAIStyle);
+        const underlineWords = await extractUnderlineWords(sanitizedCarousels, shouldIncludeImages, shouldUseAIImages, resolvedAIStyle);
 
         return NextResponse.json({
           success: true,

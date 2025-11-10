@@ -29,7 +29,7 @@ interface Note {
     kind: 'HOOK' | 'MIDDLE' | 'CTA'
   }>
   caption: string
-  underlineWords?: Record<number, { underline: string; highlight: string; imageSearch?: string; imageUrl?: string | null }>
+  underlineWords?: Record<number, { underline: string; highlight: string; imageSearch?: string; imageUrl?: string | null; originalImageUrl?: string | null }>
 }
 
 // Component to handle search params with Suspense
@@ -69,6 +69,8 @@ export default function Home() {
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
   const [includeImages, setIncludeImages] = useState(false)
+  const [useAIImages, setUseAIImages] = useState(false) // true = Pollinations.AI, false = Pexels
+  const [aiImageStyle, setAiImageStyle] = useState<'animated' | 'surreal'>('animated')
   const [editedCarousels, setEditedCarousels] = useState<Note['carousels']>([])
   const [carouselsDirty, setCarouselsDirty] = useState(false)
   const [savingCarousels, setSavingCarousels] = useState(false)
@@ -384,7 +386,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     }
 
     // Check if user has enough credits based on whether images are included
-    // Text only: 1 credit, Text + Image: 2 credits
+    // Text only: 1 credit, Text + Image (Pexels): 2 credits, Text + AI Image (Pollinations): 2 credits
     const requiredCredits = includeImages ? 2 : 1
     if (creditsRemaining < requiredCredits) {
       console.log(`Not enough credits. Required: ${requiredCredits}, Available: ${creditsRemaining}`)
@@ -413,7 +415,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     setTimeout(() => setCurrentStep('rendering'), 2000)
 
     // Log the includeImages value being sent to API
-    console.log('🖼️ Frontend: Sending includeImages =', includeImages)
+    console.log('🖼️ Frontend: Sending includeImages =', includeImages, 'useAIImages =', useAIImages, 'aiImageStyle =', aiImageStyle)
 
     try {
       const response = await fetch(`${API_URL}/api/social`, {
@@ -423,7 +425,9 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
           action: 'note',
           ideaTitle: idea,
           accountDescription: accountDescription.trim(),
-          includeImages: includeImages
+          includeImages: includeImages,
+          useAIImages: useAIImages,
+          aiImageStyle: aiImageStyle
         })
       })
 
@@ -511,7 +515,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     setSavingCarousels(true)
     setError('')
 
-    console.log('🖼️ Frontend: Refreshing slides with includeImages =', includeImages)
+    console.log('🖼️ Frontend: Refreshing slides with includeImages =', includeImages, 'useAIImages =', useAIImages, 'aiImageStyle =', aiImageStyle)
 
     fetch(`${API_URL}/api/social`, {
       method: 'POST',
@@ -519,7 +523,9 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
       body: JSON.stringify({
         action: 'refreshSlides',
         slides: cleanedCarousels,
-        includeImages
+        includeImages,
+        useAIImages,
+        aiImageStyle
       })
     })
       .then(async (response) => {
@@ -711,15 +717,36 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                     }}
                   />
                   
-                  {/* Dropdown for Text / Text + Image */}
+                  {/* Dropdown for Text / Text + Image / Text + AI Image styles */}
                   <select
-                    value={includeImages ? 'text-image' : 'text'}
-                    onChange={(e) => setIncludeImages(e.target.value === 'text-image')}
+                    value={includeImages ? (useAIImages ? (aiImageStyle === 'surreal' ? 'text-ai-surreal' : 'text-ai-animated') : 'text-image') : 'text'}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      if (value === 'text') {
+                        setIncludeImages(false)
+                        setUseAIImages(false)
+                        setAiImageStyle('animated')
+                      } else if (value === 'text-image') {
+                        setIncludeImages(true)
+                        setUseAIImages(false)
+                        setAiImageStyle('animated')
+                      } else if (value === 'text-ai-animated') {
+                        setIncludeImages(true)
+                        setUseAIImages(true)
+                        setAiImageStyle('animated')
+                      } else if (value === 'text-ai-surreal') {
+                        setIncludeImages(true)
+                        setUseAIImages(true)
+                        setAiImageStyle('surreal')
+                      }
+                    }}
                     className="input"
                     style={{ cursor: 'pointer', padding: '12px' }}
                   >
                     <option value="text">Text (1 credit)</option>
                     <option value="text-image">Text + Image (2 credits)</option>
+                    <option value="text-ai-animated">Text + AI Animated Image (2 credits)</option>
+                    <option value="text-ai-surreal">Text + AI Surrealism Image (2 credits)</option>
                   </select>
 
                   {/* Show Customisation button if note exists */}
