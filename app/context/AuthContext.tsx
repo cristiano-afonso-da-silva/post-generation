@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase, getUserCredits, UserCredits } from '../lib/supabase'
 
@@ -55,11 +55,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const refreshCredits = async () => {
+  const refreshCredits = useCallback(async () => {
     if (user?.id) {
       await fetchCredits(user.id)
     }
-  }
+  }, [user?.id])
 
   // Helper function to clear all localStorage data
   const clearLocalStorageData = () => {

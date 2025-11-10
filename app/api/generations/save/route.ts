@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
 
     // First, check if a generation with the same ideaTitle already exists for this user
     // This ensures that updates to the same idea replace the existing entry instead of creating duplicates
+    // Use a single query to find the most recent generation with this ideaTitle
     const { data: existingByTitle, error: titleCheckError } = await supabase
       .from('generations')
       .select('*')
@@ -65,8 +66,60 @@ export async function POST(request: NextRequest) {
     const timestamp = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     const projectName = `${ideaTitle.substring(0, 50)} - ${timestamp}`
 
-    if (isUpdate) {
-      // UPDATE existing generation
+    // Use UPSERT pattern to prevent race conditions
+    // First, try to insert. If it fails due to unique constraint, update instead
+    if (!isUpdate) {
+      // Try to insert first
+      const { data: newGen, error: genError } = await supabase
+        .from('generations')
+        .insert({
+          user_id: userId,
+          project_name: projectName,
+          idea_title: ideaTitle,
+          account_description: accountDescription || null,
+          slides,
+          caption: caption || null,
+          underline_words: underlineWords || null,
+          font_combination_id: fontCombinationId || 'combination-1',
+          color_theme_id: colorThemeId || 'purple-black',
+        })
+        .select()
+        .single()
+
+      if (genError) {
+        // If insert fails due to unique constraint violation, try to update instead
+        // This handles race conditions where two requests try to create at the same time
+        if (genError.code === '23505' || genError.message?.includes('duplicate') || genError.message?.includes('unique')) {
+          console.log(`Insert failed due to duplicate, attempting update for ideaTitle "${ideaTitle}"`)
+          
+          // Fetch the existing generation
+          const { data: existingGen, error: fetchError } = await supabase
+            .from('generations')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('idea_title', ideaTitle)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          if (!fetchError && existingGen) {
+            generationId = existingGen.id
+            isUpdate = true
+            // Fall through to update logic below
+          } else {
+            throw genError // Re-throw if we can't find the existing record
+          }
+        } else {
+          throw genError // Re-throw if it's a different error
+        }
+      } else {
+        // Insert succeeded
+        generation = newGen
+      }
+    }
+
+    // If we need to update (either found existing or insert failed due to duplicate)
+    if (isUpdate && generationId) {
       const { data: updatedGen, error: updateError } = await supabase
         .from('generations')
         .update({
@@ -86,26 +139,6 @@ export async function POST(request: NextRequest) {
 
       if (updateError) throw updateError
       generation = updatedGen
-    } else {
-      // CREATE new generation
-      const { data: newGen, error: genError } = await supabase
-        .from('generations')
-        .insert({
-          user_id: userId,
-          project_name: projectName,
-          idea_title: ideaTitle,
-          account_description: accountDescription || null,
-          slides,
-          caption: caption || null,
-          underline_words: underlineWords || null,
-          font_combination_id: fontCombinationId || 'combination-1',
-          color_theme_id: colorThemeId || 'purple-black',
-        })
-        .select()
-        .single()
-
-      if (genError) throw genError
-      generation = newGen
     }
 
     // Delete old images if updating (to replace with new ones)

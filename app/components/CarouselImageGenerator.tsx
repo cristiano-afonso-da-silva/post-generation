@@ -172,6 +172,8 @@ export default function CarouselImageGenerator({
   const hasInitialized = useRef(false)
   // Track previous carousel content for detecting edits
   const prevCarouselsContent = useRef<string>(JSON.stringify(carousels))
+  // Track if a save is in progress to prevent duplicate saves
+  const isSavingRef = useRef<boolean>(false)
   
   // Debug: Log background image URL
   useEffect(() => {
@@ -204,6 +206,14 @@ export default function CarouselImageGenerator({
       console.warn('Cannot save: no images to save')
       return
     }
+
+    // Prevent multiple simultaneous saves
+    if (isSavingRef.current) {
+      console.warn('⚠️ Save already in progress, skipping duplicate save request')
+      return
+    }
+
+    isSavingRef.current = true
 
     try {
       // Calculate content hash (only ideaTitle + carousels, excludes theme/font)
@@ -271,6 +281,9 @@ export default function CarouselImageGenerator({
       }
     } catch (error: any) {
       console.error('❌ Error auto-saving generation:', error.message || error)
+    } finally {
+      // Always reset the saving flag, even if there was an error
+      isSavingRef.current = false
     }
   }, [ideaTitle, carousels, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl, user?.id])
 

@@ -37,18 +37,39 @@ interface Note {
 // Component to handle search params with Suspense
 function SearchParamsHandler({ refreshCredits, router }: { refreshCredits: () => void; router: ReturnType<typeof useRouter> }) {
   const searchParams = useSearchParams()
+  const processedKeyRef = useRef<string | null>(null)
   
   useEffect(() => {
     const success = searchParams.get('success')
     const canceled = searchParams.get('canceled')
     
+    // Create a unique key for these params
+    const paramsKey = success === 'true' ? 'success' : canceled === 'true' ? 'canceled' : null
+    
+    // Skip if no params or if we've already processed this exact param
+    if (!paramsKey || processedKeyRef.current === paramsKey) {
+      return
+    }
+    
+    // Mark as processed before doing anything to prevent re-execution
+    processedKeyRef.current = paramsKey
+    
     if (success === 'true') {
       refreshCredits()
-      router.replace(window.location.pathname)
-    } else if (canceled === 'true') {
-      router.replace(window.location.pathname)
     }
-  }, [searchParams, refreshCredits, router])
+    
+    // Remove query params from URL
+    const currentPath = window.location.pathname
+    
+    // Use replaceState first to update URL immediately without navigation
+    if (window.location.search) {
+      window.history.replaceState({}, '', currentPath)
+    }
+    
+    // Then sync with Next.js router (this shouldn't cause a reload since URL is already updated)
+    router.replace(currentPath)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]) // Only depend on searchParams - refreshCredits and router are stable
   
   return null
 }
@@ -118,8 +139,8 @@ export default function GenerationPage() {
         localStorage.setItem('postGeneration_ideaTitle', generation.idea_title)
       
       // Store images if available
-        if (generation.imageUrls && generation.imageUrls.length > 0) {
-          localStorage.setItem('postGeneration_canvasImages', JSON.stringify(generation.imageUrls))
+        if (generation.image_urls && generation.image_urls.length > 0) {
+          localStorage.setItem('postGeneration_canvasImages', JSON.stringify(generation.image_urls))
       }
     } catch (error) {
         console.error('Error storing in localStorage:', error)
@@ -308,7 +329,7 @@ export default function GenerationPage() {
               textDecoration: 'none'
             }}
           >
-            <Image src="/logo.svg" alt="Post My Note" width={32} height={32} priority style={{ width: '32px', height: '32px' }} />
+            <Image src="/logo.svg" alt="Post My Note" width={40} height={40} priority style={{ width: '40px', height: '40px' }} />
           </Link>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <Link
