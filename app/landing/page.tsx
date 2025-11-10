@@ -35,50 +35,40 @@ const features = [
 ]
 
 const workflowPreview = [
-  { title: 'Drop an idea prompt', subtitle: 'Describe what you want to teach' },
-  { title: 'AI drafts your slides', subtitle: 'Hooks, talking points, captions' },
-  { title: 'Pick a theme', subtitle: 'Match fonts, colors, and layout' },
-  { title: 'Export & share', subtitle: 'High-res images in seconds' },
+  { title: 'Type your idea', subtitle: '' },
+  { title: 'Pick your look', subtitle: '' },
+  { title: 'Share in seconds', subtitle: '' },
 ]
 
 const comparisonData = [
-  { metric: 'Content Creation Time', manual: 'Several hours', postMyNote: '2 minutes' },
-  { metric: 'Design Skills Required', manual: 'Professional level', postMyNote: 'None needed' },
-  { metric: 'Cost per Post', manual: '$50-200', postMyNote: 'From $0.90' },
-  { metric: 'Customization Options', manual: 'Limited by skills', postMyNote: 'Unlimited themes' },
-  { metric: 'Consistency', manual: 'Varies', postMyNote: 'Always on-brand' },
+  { metric: 'Speed', manual: '15–30 min', postMyNote: '~2 min' },
+  { metric: 'Workflow', manual: 'Manual design', postMyNote: 'AI-generated' },
+  { metric: 'Skill', manual: 'Needs design sense', postMyNote: 'No skills needed' },
+  { metric: 'Volume', manual: 'One post', postMyNote: 'Batch create' },
+  { metric: 'Revisions', manual: 'Manual edits', postMyNote: '1-click regenerate' },
+  { metric: 'Purpose', manual: 'General design', postMyNote: 'Built for carousel posts' },
 ]
 
 const testimonials = [
   {
     name: 'Sarah Chen',
     role: 'Content Creator',
-    quote: 'I used to spend 3-4 hours designing carousel posts. Now it takes me 2 minutes. This tool has completely transformed my workflow.',
+    quote: 'I used to spend hours in Canva trying to make carousel posts look good. Now Post My Note help me do it in two minutes.',
   },
   {
     name: 'Marcus Johnson',
     role: 'Marketing Director',
-    quote: 'Our engagement rate increased by 40% after switching to carousel posts. Post My Note makes it effortless to create professional content.',
+    quote: 'Our engagement jumped 40% after switching to carousel posts. It\'s never been this easy to create professional, on-brand content.',
   },
   {
     name: 'Emily Rodriguez',
-    role: 'Small Business Owner',
-    quote: 'As someone with zero design skills, this is a game-changer. I can finally compete with bigger brands on social media.',
+    role: 'Founder, Studio Bloom',
+    quote: 'With zero design experience, I finally create posts that look like a big brand\'s. Total game-changer for small businesses.',
   },
   {
-    name: 'David Kim',
-    role: 'Social Media Manager',
-    quote: 'The AI understands context perfectly. Every carousel feels authentic and engaging. My clients love the results.',
-  },
-  {
-    name: 'Lisa Thompson',
-    role: 'Entrepreneur',
-    quote: 'Best investment for my business. The time I save on content creation goes straight into growing my company.',
-  },
-  {
-    name: 'James Wilson',
-    role: 'Digital Marketer',
-    quote: 'Clean, professional, and incredibly fast. This tool has become essential to our content strategy.',
+    name: 'Daniel Lee',
+    role: 'Growth Strategist',
+    quote: 'What surprised me most is how good the ideas are. I just type a topic, and it gives me hooks, structure, and design — it\'s like an AI creative partner.',
   },
 ]
 
@@ -214,172 +204,16 @@ export default function LandingPage() {
       {/* Hero Section */}
       <section
         style={{
-          minHeight: '95vh',
+          minHeight: '85vh',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-        padding: '120px 24px 80px',
+        padding: '20px 24px 80px',
         textAlign: 'center',
           position: 'relative',
           overflow: 'hidden',
         }}
       >
-        {/* Background Rings */}
-        <div
-          style={{
-            position: 'absolute',
-            inset: '0',
-            pointerEvents: 'none',
-          }}
-          aria-hidden="true"
-        >
-          {/* Left Ring */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '50%',
-              left: '0',
-              transform: 'translate(-50%, -50%)',
-            }}
-          >
-            <div
-              style={
-                {
-                  width: 'min(92vw, 736px)',
-                  aspectRatio: '1 / 1',
-                  '--ring-radius': 'clamp(220px, 32vw, 300px)',
-                  animation: 'ringSpin 40s linear infinite',
-                } as CSSProperties
-              }
-            >
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: 'calc(var(--ring-radius) * 2 + 184px)',
-                  height: 'calc(var(--ring-radius) * 2 + 184px)',
-                  borderRadius: '50%',
-                  border: '1px solid rgba(255, 255, 255, 0.4)',
-                  zIndex: 0,
-                }}
-              />
-
-              {exampleSlides.map((slide, index) => {
-                const angle = (index / exampleSlides.length) * 360
-                return (
-                  <div
-                    key={`hero-left-${slide.src}`}
-                    style={{
-                      position: 'absolute',
-                      top: '50%',
-                      left: '50%',
-                      transform: `translate(-50%, -50%) rotate(${angle}deg) translateY(calc(var(--ring-radius) * -1)) rotate(${-angle}deg)`,
-                      zIndex: 1,
-                    }}
-                  >
-                    <div
-                      style={{
-                        animation: 'ringCounterSpin 40s linear infinite',
-                      }}
-                    >
-                      <Image
-                        src={slide.src}
-                        alt={slide.alt}
-                        width={360}
-                        height={460}
-                        style={{
-                          width: 'clamp(150px, 20vw, 200px)',
-                          height: 'auto',
-                          borderRadius: '24px',
-                          objectFit: 'cover',
-                          boxShadow: '0 28px 54px rgba(17, 24, 39, 0.14)',
-                          border: '5px solid #ffffff',
-                          background: '#ffffff',
-                        }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Right Ring */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '50%',
-              right: '0',
-              transform: 'translate(50%, -50%)',
-            }}
-          >
-            <div
-              style={
-                {
-                  width: 'min(92vw, 736px)',
-                  aspectRatio: '1 / 1',
-                  '--ring-radius': 'clamp(220px, 32vw, 300px)',
-                  animation: 'ringSpin -40s linear infinite',
-                } as CSSProperties
-              }
-            >
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: 'calc(var(--ring-radius) * 2 + 184px)',
-                  height: 'calc(var(--ring-radius) * 2 + 184px)',
-                  borderRadius: '50%',
-                  border: '1px solid rgba(255, 255, 255, 0.4)',
-                  zIndex: 0,
-                }}
-              />
-
-              {exampleSlides.map((slide, index) => {
-                const angle = (index / exampleSlides.length) * 360
-                return (
-                  <div
-                    key={`hero-right-${slide.src}`}
-                    style={{
-                      position: 'absolute',
-                      top: '50%',
-                      left: '50%',
-                      transform: `translate(-50%, -50%) rotate(${angle}deg) translateY(calc(var(--ring-radius) * -1)) rotate(${-angle}deg)`,
-                      zIndex: 1,
-                    }}
-                  >
-                    <div
-                      style={{
-                        animation: 'ringCounterSpin -40s linear infinite',
-                      }}
-                    >
-                      <Image
-                        src={slide.src}
-                        alt={slide.alt}
-                        width={360}
-                        height={460}
-                        style={{
-                          width: 'clamp(150px, 20vw, 200px)',
-                          height: 'auto',
-                          borderRadius: '24px',
-                          objectFit: 'cover',
-                          boxShadow: '0 28px 54px rgba(17, 24, 39, 0.14)',
-                          border: '5px solid #ffffff',
-                          background: '#ffffff',
-                        }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-
         <div style={{ maxWidth: '900px', position: 'relative', zIndex: 10 }}>
           <div
             style={{
@@ -409,7 +243,7 @@ export default function LandingPage() {
               marginBottom: '24px',
             }}
           >
-            Content creation made simple with AI
+            Turn your ideas into<br />viral posts
         </h1>
           <p
             style={{
@@ -421,16 +255,16 @@ export default function LandingPage() {
           margin: '0 auto 48px',
             }}
           >
-            Post My Note plugs into your workflow, so you can ditch the boring design work and focus on growing your audience.
+            Post My Note transforms your idea into ready-to-post content so you can focus on what you love doing.
           </p>
           <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
         <Link
-          href="/signup"
+          href={user ? "/" : "/signup"}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '8px',
-                padding: '16px 32px',
+                padding: '20px 32px',
                 borderRadius: '999px',
                 background: '#ffbd59',
                 color: '#000000',
@@ -440,13 +274,112 @@ export default function LandingPage() {
                 transition: 'all 0.2s ease',
               }}
             >
-              Get Started Free
+              {user ? "Go to app" : "Get Started Free"}
               <ArrowRight size={18} />
             </Link>
           </div>
         </div>
       </section>
 
+      {/* Scrolling Images Section */}
+      <section
+        className="scrolling-carousel-section"
+        style={{
+          padding: '60px 0',
+          background: '#ffffff',
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ textAlign: 'center', marginBottom: '40px', padding: '0 24px' }}>
+          <h2
+            style={{
+              fontSize: 'clamp(32px, 5vw, 48px)',
+              fontWeight: '800',
+              color: '#000000',
+              letterSpacing: '-2px',
+              marginBottom: '16px',
+            }}
+          >
+            Create a full carousel from one line
+          </h2>
+        </div>
+        {/* First Row - Scroll Left */}
+        <div
+          className="scroll-row-left"
+          style={{
+            display: 'flex',
+            gap: '24px',
+            marginBottom: '24px',
+            width: 'fit-content',
+            animation: 'scrollLeft 30s linear infinite',
+          }}
+        >
+          {[...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
+            <div
+              key={`left-${index}`}
+              style={{
+                flexShrink: 0,
+                width: 'clamp(200px, 25vw, 300px)',
+                height: 'auto',
+              }}
+            >
+              <Image
+                src={slide.src}
+                alt={slide.alt}
+                width={360}
+                height={460}
+                style={{
+                  width: '100%',
+                  height: 'auto',
+                  borderRadius: '24px',
+                  objectFit: 'cover',
+                  boxShadow: '0 20px 40px rgba(17, 24, 39, 0.1)',
+                  border: '5px solid #ffffff',
+                  background: '#ffffff',
+                }}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Second Row - Scroll Right */}
+        <div
+          className="scroll-row-right"
+          style={{
+            display: 'flex',
+            gap: '24px',
+            width: 'fit-content',
+            animation: 'scrollRight 30s linear infinite',
+          }}
+        >
+          {[...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
+            <div
+              key={`right-${index}`}
+              style={{
+                flexShrink: 0,
+                width: 'clamp(200px, 25vw, 300px)',
+                height: 'auto',
+              }}
+            >
+              <Image
+                src={slide.src}
+                alt={slide.alt}
+                width={360}
+                height={460}
+                style={{
+                  width: '100%',
+                  height: 'auto',
+                  borderRadius: '24px',
+                  objectFit: 'cover',
+                  boxShadow: '0 20px 40px rgba(17, 24, 39, 0.1)',
+                  border: '5px solid #ffffff',
+                  background: '#ffffff',
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* Features */}
       <section
@@ -463,105 +396,33 @@ export default function LandingPage() {
             flexWrap: 'wrap',
             gap: '64px',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            justifyContent: 'center',
           }}
         >
-          <div style={{ flex: '1 1 380px', maxWidth: '520px' }}>
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '6px 16px',
-                borderRadius: '999px',
-                background: '#fff5e6',
-                color: '#cc8800',
-                fontSize: '12px',
-                fontWeight: '600',
-                letterSpacing: '1px',
-                textTransform: 'uppercase',
-                marginBottom: '24px',
-              }}
-            >
-              Automate workflows
-            </div>
+          <div className="features-heading" style={{ flex: '1 1 400px', maxWidth: '520px', display: 'flex', flexDirection: 'column' }}>
             <h2
               style={{
                 fontSize: 'clamp(36px, 6vw, 60px)',
                 fontWeight: '800',
                 color: '#000000',
                 letterSpacing: '-2px',
-                marginBottom: '20px',
               }}
             >
-              Save 4+ hours every day
+              Create content in 3 simple steps
             </h2>
             <p
               style={{
-                fontSize: '18px',
+                fontSize: 'clamp(18px, 2.5vw, 22px)',
                 color: '#666666',
-                lineHeight: '1.7',
-                marginBottom: '32px',
+                marginTop: '16px',
+                lineHeight: '1.6',
+                maxWidth: '700px',
               }}
             >
-              Let our intelligent automation handle the repetitive design work so you can stay focused on strategy and growth.
+              From idea to post in under two minutes, no design skills needed.
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginBottom: '36px' }}>
-              {features.map((feature, index) => {
-                const Icon = feature.icon
-                return (
-                  <div
-                    key={index}
-                    style={{
-                      display: 'flex',
-                      gap: '16px',
-                      alignItems: 'flex-start',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: '44px',
-                        height: '44px',
-                        borderRadius: '14px',
-                        background: '#fff1cc',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Icon size={22} color="#000000" />
-                    </div>
-                    <div>
-                      <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#000000', marginBottom: '6px' }}>
-                        {feature.title}
-                      </h3>
-                      <p style={{ color: '#666666', fontSize: '15px', lineHeight: '1.6' }}>{feature.description}</p>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-            <Link
-              href="/signup"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '16px 32px',
-                borderRadius: '999px',
-                background: '#ffbd59',
-                color: '#000000',
-                fontSize: '16px',
-                fontWeight: '600',
-                textDecoration: 'none',
-                transition: 'all 0.2s ease',
-              }}
-            >
-              Get Started Free
-              <ArrowRight size={18} />
-            </Link>
           </div>
-          <div style={{ flex: '1 1 320px', display: 'flex', justifyContent: 'center' }}>
+          <div style={{ flex: '1 1 400px', maxWidth: '520px', display: 'flex', justifyContent: 'center' }}>
             <div
               style={{
                 width: '100%',
@@ -603,7 +464,7 @@ export default function LandingPage() {
                     </div>
                     <div>
                       <div style={{ fontSize: '16px', fontWeight: '700', color: '#0b0b0b' }}>{step.title}</div>
-                      <div style={{ fontSize: '13px', color: '#6b6b6b' }}>{step.subtitle}</div>
+                      {step.subtitle && <div style={{ fontSize: '13px', color: '#6b6b6b' }}>{step.subtitle}</div>}
                     </div>
                   </div>
                   {index < workflowPreview.length - 1 && (
@@ -640,10 +501,18 @@ export default function LandingPage() {
                 marginBottom: '16px',
               }}
             >
-              Your competitors are using AI for a reason
+              Create professional content instantly
         </h2>
-            <p style={{ fontSize: '18px', color: '#666666' }}>
-              Compare how your workflow transforms with automation and efficiency.
+            <p
+              style={{
+                fontSize: 'clamp(18px, 2.5vw, 22px)',
+                color: '#666666',
+                margin: '0 auto 48px',
+                lineHeight: '1.6',
+                maxWidth: '700px',
+              }}
+            >
+              Skip the hours of manual design. Post My Note turns your ideas into polished posts in minutes.
             </p>
           </div>
           <div
@@ -654,47 +523,47 @@ export default function LandingPage() {
               overflow: 'hidden',
             }}
           >
+            {/* Header Row */}
             <div
               style={{
-          display: 'grid',
-                gridTemplateColumns: '2fr 1fr 1fr',
-                padding: '24px 32px',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr 1fr',
+                padding: '0',
                 background: '#fafafa',
                 fontWeight: '700',
-                fontSize: '14px',
+                fontSize: 'clamp(12px, 2vw, 18px)',
                 color: '#000000',
-                textTransform: 'uppercase',
                 letterSpacing: '0.5px',
               }}
             >
-              <div></div>
-              <div style={{ textAlign: 'center' }}>Manual Work</div>
-              <div style={{ textAlign: 'center', color: '#ffbd59' }}>Post My Note</div>
+              <div style={{ padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', borderBottom: '1px solid #f0f0f0' }}></div>
+              <div style={{ textAlign: 'center', padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', borderBottom: '1px solid #f0f0f0', wordWrap: 'break-word', overflowWrap: 'break-word' }}>Canva</div>
+              <div style={{ textAlign: 'center', background: '#ffbd59', padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', borderBottom: '0.5px solid rgba(240, 240, 240, 0.5)', wordWrap: 'break-word', overflowWrap: 'break-word' }}>Post My Note</div>
             </div>
+            {/* Data Rows */}
             {comparisonData.map((row, index) => (
               <div
                 key={index}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '2fr 1fr 1fr',
-                  padding: '24px 32px',
-                  borderTop: '1px solid #f0f0f0',
+                  gridTemplateColumns: '1fr 1fr 1fr',
+                  padding: '0',
                   alignItems: 'center',
                 }}
               >
-                <div style={{ fontWeight: '600', color: '#000000', fontSize: '15px' }}>{row.metric}</div>
-                <div style={{ textAlign: 'center', color: '#999999', fontSize: '14px' }}>{row.manual}</div>
-                <div style={{ textAlign: 'center', color: '#000000', fontWeight: '600', fontSize: '14px' }}>
+                <div style={{ fontWeight: '600', color: '#000000', fontSize: 'clamp(13px, 2vw, 19px)', padding: 'clamp(16px, 3vw, 24px) 0 clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', borderTop: '1px solid #f0f0f0', wordWrap: 'break-word', overflowWrap: 'break-word' }}>{row.metric}</div>
+                <div style={{ textAlign: 'center', color: '#999999', fontSize: 'clamp(12px, 2vw, 17px)', padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', borderTop: '1px solid #f0f0f0', wordWrap: 'break-word', overflowWrap: 'break-word' }}>{row.manual}</div>
+                <div style={{ textAlign: 'center', color: '#000000', fontWeight: '600', fontSize: 'clamp(12px, 2vw, 17px)', background: '#ffbd59', padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', borderTop: '0.5px solid rgba(240, 240, 240, 0.5)', wordWrap: 'break-word', overflowWrap: 'break-word' }}>
                   {row.postMyNote}
                 </div>
-            </div>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
       {/* Testimonials */}
-      <section
+      {/* <section
         style={{
           padding: '120px 24px',
           background: '#fafafa',
@@ -711,7 +580,7 @@ export default function LandingPage() {
                 marginBottom: '16px',
               }}
             >
-              Don't take it from us, hear it from our users
+              Why creators love Post My Note
             </h2>
           </div>
           <div
@@ -744,10 +613,10 @@ export default function LandingPage() {
             ))}
           </div>
         </div>
-      </section>
+      </section> */}
 
       {/* Pricing */}
-      <section
+      {/* <section
         style={{
           padding: '120px 24px',
           background: '#ffffff',
@@ -764,7 +633,7 @@ export default function LandingPage() {
                 marginBottom: '16px',
               }}
             >
-              Simple, transparent pricing
+              Pricing
         </h2>
             <p style={{ fontSize: '18px', color: '#666666' }}>
               Choose the plan that fits your content creation needs
@@ -846,7 +715,7 @@ export default function LandingPage() {
             ))}
           </div>
         </div>
-      </section>
+      </section> */}
 
       {/* CTA Section */}
       <section
@@ -868,16 +737,13 @@ export default function LandingPage() {
           >
             Ready to create smarter?
           </h2>
-          <p style={{ fontSize: '18px', color: '#999999', marginBottom: '48px', lineHeight: '1.6' }}>
-            If you're looking to save time and focus on what really matters, Post My Note is here for you.
-          </p>
           <Link
-            href="/signup"
+            href={user ? "/" : "/signup"}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '8px',
-              padding: '16px 40px',
+              padding: '20px 40px',
               borderRadius: '999px',
               background: '#ffbd59',
               color: '#000000',
@@ -887,7 +753,7 @@ export default function LandingPage() {
               transition: 'all 0.2s ease',
             }}
           >
-            Get Started Free
+            {user ? "Go to app" : "Get Started Free"}
             <ArrowRight size={18} />
           </Link>
             </div>
@@ -939,6 +805,44 @@ export default function LandingPage() {
           }
           to {
             transform: rotate(-360deg);
+          }
+        }
+
+        @keyframes scrollLeft {
+          from {
+            transform: translateX(0);
+          }
+          to {
+            transform: translateX(calc(-100% / 3));
+          }
+        }
+
+        @keyframes scrollRight {
+          from {
+            transform: translateX(calc(-100% / 3));
+          }
+          to {
+            transform: translateX(0);
+          }
+        }
+
+        .scroll-row-left:hover,
+        .scroll-row-right:hover {
+          animation-play-state: paused;
+        }
+
+        .scrolling-carousel-section:hover .scroll-row-left,
+        .scrolling-carousel-section:hover .scroll-row-right {
+          animation-play-state: paused;
+        }
+
+        .features-heading {
+          text-align: center;
+        }
+
+        @media (min-width: 768px) {
+          .features-heading {
+            text-align: left;
           }
         }
       `}</style>

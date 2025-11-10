@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
 import Link from 'next/link'
+import Image from 'next/image'
 import AccountButton from '../components/AccountButton'
 
 interface Generation {
@@ -135,6 +136,9 @@ export default function HistoryPage() {
           <Link 
             href="/" 
             style={{ 
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
               fontSize: '24px', 
               fontWeight: '700', 
               color: '#000000', 
@@ -142,7 +146,8 @@ export default function HistoryPage() {
               textDecoration: 'none'
             }}
           >
-            Post My Note
+            <Image src="/logo.svg" alt="Post My Note" width={32} height={32} priority style={{ width: '32px', height: '32px' }} />
+            <span>Post My Note</span>
           </Link>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             {credits && (

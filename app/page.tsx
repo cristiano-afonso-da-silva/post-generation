@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { History, Palette, Edit3, MessageSquare, ChevronLeft } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import './globals.css'
@@ -621,6 +622,9 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
           <Link 
             href="/landing" 
             style={{ 
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
               fontSize: '24px', 
               fontWeight: '700', 
               color: '#000000', 
@@ -629,7 +633,8 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
               textDecoration: 'none'
             }}
           >
-            Post My Note
+            <Image src="/logo.svg" alt="Post My Note" width={32} height={32} priority style={{ width: '32px', height: '32px' }} />
+            <span>Post My Note</span>
           </Link>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             {credits && (
