@@ -35,18 +35,18 @@ const features = [
 ]
 
 const workflowPreview = [
-  { title: 'Type your idea', subtitle: '' },
-  { title: 'Pick your look', subtitle: '' },
-  { title: 'Share in seconds', subtitle: '' },
+  { title: 'Drop your idea', subtitle: '' },
+  { title: 'Choose your style', subtitle: '' },
+  { title: 'Publish instantly', subtitle: '' },
 ]
 
 const comparisonData = [
   { metric: 'Speed', manual: '15–30 min', postMyNote: '~2 min' },
-  { metric: 'Workflow', manual: 'Manual design', postMyNote: 'AI-generated' },
-  { metric: 'Skill', manual: 'Needs design sense', postMyNote: 'No skills needed' },
+  { metric: 'Workflow', manual: 'Manual design', postMyNote: 'Automated' },
+  { metric: 'Skill', manual: 'Design needed', postMyNote: 'None needed' },
   { metric: 'Volume', manual: 'One post', postMyNote: 'Batch create' },
   { metric: 'Revisions', manual: 'Manual edits', postMyNote: '1-click regenerate' },
-  { metric: 'Purpose', manual: 'General design', postMyNote: 'Built for carousel posts' },
+  { metric: 'Purpose', manual: 'General design', postMyNote: 'Made for creators and founders' },
 ]
 
 const testimonials = [
@@ -243,7 +243,7 @@ export default function LandingPage() {
               marginBottom: '24px',
             }}
           >
-            Turn your ideas into<br />viral posts
+            Create better content, faster.
         </h1>
           <p
             style={{
@@ -255,11 +255,12 @@ export default function LandingPage() {
           margin: '0 auto 48px',
             }}
           >
-            Post My Note transforms your idea into ready-to-post content so you can focus on what you love doing.
+            Turn your ideas into post-ready content in minutes. No design skills or marketing team needed.
           </p>
           <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
         <Link
           href={user ? "/" : "/signup"}
+              className="cta-button"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -300,7 +301,7 @@ export default function LandingPage() {
               marginBottom: '16px',
             }}
           >
-            Create a full carousel from one line
+            Create a full carousel from one idea
           </h2>
         </div>
         {/* First Row - Scroll Left */}
@@ -419,7 +420,7 @@ export default function LandingPage() {
                 maxWidth: '700px',
               }}
             >
-              From idea to post in under two minutes, no design skills needed.
+              From idea to post in under two minutes, no design, no overthinking.
             </p>
           </div>
           <div style={{ flex: '1 1 400px', maxWidth: '520px', display: 'flex', justifyContent: 'center' }}>
@@ -512,7 +513,7 @@ export default function LandingPage() {
                 maxWidth: '700px',
               }}
             >
-              Skip the hours of manual design. Post My Note turns your ideas into polished posts in minutes.
+              Post My Note turns your thoughts into clean, on-brand carousels so you can share faster and stay consistent.
             </p>
           </div>
           <div
