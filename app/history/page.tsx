@@ -23,7 +23,7 @@ export default function HistoryPage() {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push('/landing')
+      router.push('/')
     }
   }, [user, authLoading, router])
 
@@ -103,7 +103,7 @@ export default function HistoryPage() {
       }
 
       // Navigate to main page
-      router.push('/')
+      router.push('/app')
     } catch (error) {
       console.error('Error loading generation:', error)
     }

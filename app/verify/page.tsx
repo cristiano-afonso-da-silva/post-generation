@@ -26,7 +26,7 @@ export default function VerifyPage() {
 
   useEffect(() => {
     if (!loading && user && user.email_confirmed_at) {
-      router.push('/')
+      router.push('/app')
     }
   }, [user, loading, router])
 
@@ -48,7 +48,7 @@ export default function VerifyPage() {
       if (data.user) {
         setSuccess('Email verified! Redirecting...')
         sessionStorage.removeItem('verificationEmail')
-        setTimeout(() => router.push('/'), 2000)
+        setTimeout(() => router.push('/app'), 2000)
       }
     } catch (error: any) {
       setError(error.message || 'Invalid verification code')

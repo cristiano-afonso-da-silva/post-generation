@@ -118,7 +118,7 @@ export default function AccountModal({
   const handleSignOut = async () => {
     await signOut()
     onClose()
-    router.push('/landing')
+    router.push('/')
   }
 
   const modalContent = (

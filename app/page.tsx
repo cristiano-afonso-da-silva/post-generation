@@ -1,299 +1,127 @@
 'use client'
-
-import { useState, useEffect, useRef, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import type { CSSProperties } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { History, Palette, Edit3, MessageSquare, ChevronLeft } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
-import './globals.css'
-import CarouselImageGenerator from './components/CarouselImageGenerator'
-import { FONT_COMBINATIONS, COLOR_THEMES } from './config/carouselThemes'
+import { Check, ArrowRight, Zap, Palette, Download } from 'lucide-react'
 import { useAuth } from './context/AuthContext'
 import AccountButton from './components/AccountButton'
-import UpgradePrompt from './components/UpgradePrompt'
-import SubscriptionModal from './components/SubscriptionModal'
+import './globals.css'
 
-const API_URL = ''
-
-type BackgroundOption = {
-  id: string
-  label: string
-  src: string
-}
-
-interface Note {
-  ideaTitle: string
-  carousels: Array<{
-    title: string
-    content: string
-    kind: 'HOOK' | 'MIDDLE' | 'CTA'
-  }>
-  caption: string
-  underlineWords?: Record<number, { underline: string; highlight: string; imageSearch?: string; imageUrl?: string | null; originalImageUrl?: string | null }>
-}
-
-// Component to handle search params with Suspense
-function SearchParamsHandler({ refreshCredits, router }: { refreshCredits: () => void; router: ReturnType<typeof useRouter> }) {
-  const searchParams = useSearchParams()
-  
-  useEffect(() => {
-    const success = searchParams.get('success')
-    const canceled = searchParams.get('canceled')
-    
-    if (success === 'true') {
-      // Refresh credits after successful subscription
-      refreshCredits()
-      // Clean URL
-      router.replace('/')
-    } else if (canceled === 'true') {
-      // Clean URL
-      router.replace('/')
-    }
-  }, [searchParams, refreshCredits, router])
-  
-  return null
-}
-
-export default function Home() {
-  const router = useRouter()
-  const { user, loading: authLoading, credits, refreshCredits } = useAuth()
-  
-  const [accountDescription, setAccountDescription] = useState('')
-  const [ideas, setIdeas] = useState<string[]>([])
-  const [note, setNote] = useState<Note | null>(null)
-  const [loadingIdeas, setLoadingIdeas] = useState(false)
-  const [loadingNote, setLoadingNote] = useState(false)
-  const [selectedIdea, setSelectedIdea] = useState<string | null>(null)
-  const [currentStep, setCurrentStep] = useState<'generating' | 'analysing' | 'rendering' | null>(null)
-  const [error, setError] = useState('')
-  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
-  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
-  const [includeImages, setIncludeImages] = useState(false)
-  const [useAIImages, setUseAIImages] = useState(false) // true = Pollinations.AI, false = Pexels
-  const [aiImageStyle, setAiImageStyle] = useState<'animated' | 'surreal'>('animated')
-  const [editedCarousels, setEditedCarousels] = useState<Note['carousels']>([])
-  const [carouselsDirty, setCarouselsDirty] = useState(false)
-  const [savingCarousels, setSavingCarousels] = useState(false)
-  const [editedCaption, setEditedCaption] = useState<string>('')
-  const [captionCopied, setCaptionCopied] = useState(false)
-  const [activeLeftTab, setActiveLeftTab] = useState<'design' | 'carousels' | 'caption'>('design')
-  const [expandedCarouselIndexes, setExpandedCarouselIndexes] = useState<number[]>([])
-  const [showCustomisation, setShowCustomisation] = useState(false)
-  const hasLoadedFromStorage = useRef(false)
-const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] = [
-  { id: 'design', label: 'Customize Design', icon: Palette },
-  { id: 'carousels', label: 'Edit Carousel', icon: Edit3 },
-  { id: 'caption', label: 'Post Caption', icon: MessageSquare }
+const exampleSlides = [
+  { src: '/slide1.png', alt: 'Example carousel slide 1' },
+  { src: '/slide2.png', alt: 'Example carousel slide 2' },
+  { src: '/slide3.png', alt: 'Example carousel slide 3' },
+  { src: '/slide4.png', alt: 'Example carousel slide 4' },
+  { src: '/slide5.png', alt: 'Example carousel slide 5' },
 ]
 
-  const showDebugPanel = false
-  const [backgroundOptions, setBackgroundOptions] = useState<BackgroundOption[]>([])
-  const [backgroundId, setBackgroundId] = useState<string>('')
-  
-  // Theme settings
-  const [fontCombinationId, setFontCombinationId] = useState('combination-1')
-  const [colorThemeId, setColorThemeId] = useState('purple-black')
+const features = [
+  {
+    icon: Zap,
+    title: 'AI-Powered Generation',
+    description: 'Transform a single idea into a complete carousel post with AI-generated content, hooks, and CTAs in seconds.',
+  },
+  {
+    icon: Palette,
+    title: 'Beautiful Design Templates',
+    description: 'Choose from professionally designed themes, fonts, and color combinations that match your brand perfectly.',
+  },
+  {
+    icon: Download,
+    title: 'Export & Share Instantly',
+    description: 'Download high-quality images ready to post on Instagram, LinkedIn, or any social platform immediately.',
+  },
+]
 
-  // Save theme changes to localStorage
-  useEffect(() => {
-    if (note) {
-      try {
-        localStorage.setItem('postGeneration_fontCombinationId', fontCombinationId)
-        localStorage.setItem('postGeneration_colorThemeId', colorThemeId)
-      } catch (error) {
-        console.error('Error saving theme to localStorage:', error)
-      }
-    }
-  }, [fontCombinationId, colorThemeId, note])
+const workflowPreview = [
+  { title: 'Drop your idea', subtitle: '' },
+  { title: 'Choose your style', subtitle: '' },
+  { title: 'Publish instantly', subtitle: '' },
+]
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/landing')
-    }
-  }, [user, authLoading, router])
+const comparisonData = [
+  { metric: 'Speed', manual: '15–30 min', postMyNote: '~2 min' },
+  { metric: 'Workflow', manual: 'Manual design', postMyNote: 'Automated' },
+  { metric: 'Skill', manual: 'Design needed', postMyNote: 'None needed' },
+  { metric: 'Volume', manual: 'One post', postMyNote: 'Batch create' },
+  { metric: 'Revisions', manual: 'Manual edits', postMyNote: '1-click regenerate' },
+  { metric: 'Purpose', manual: 'General design', postMyNote: 'Made for creators and founders' },
+]
 
-  // Sync editable carousels with generated note
-  useEffect(() => {
-    if (note) {
-      setEditedCarousels(note.carousels.map(carousel => ({ ...carousel })))
-      setEditedCaption(note.caption || '')
-      setCarouselsDirty(false)
-      setExpandedCarouselIndexes([])
-      // Auto-show customisation when note exists
-      setShowCustomisation(true)
-    } else {
-      setEditedCarousels([])
-      setEditedCaption('')
-      setCarouselsDirty(false)
-      setExpandedCarouselIndexes([])
-      setShowCustomisation(false)
-    }
-  }, [note])
+const testimonials = [
+  {
+    name: 'Sarah Chen',
+    role: 'Content Creator',
+    quote: 'I used to spend hours in Canva trying to make carousel posts look good. Now Post My Note help me do it in two minutes.',
+  },
+  {
+    name: 'Marcus Johnson',
+    role: 'Marketing Director',
+    quote: 'Our engagement jumped 40% after switching to carousel posts. It\'s never been this easy to create professional, on-brand content.',
+  },
+  {
+    name: 'Emily Rodriguez',
+    role: 'Founder, Studio Bloom',
+    quote: 'With zero design experience, I finally create posts that look like a big brand\'s. Total game-changer for small businesses.',
+  },
+  {
+    name: 'Daniel Lee',
+    role: 'Growth Strategist',
+    quote: 'What surprised me most is how good the ideas are. I just type a topic, and it gives me hooks, structure, and design — it\'s like an AI creative partner.',
+  },
+]
 
-  // Warn user before leaving page if there are unsaved changes
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (carouselsDirty) {
-        // Standard way to trigger browser's unsaved changes warning
-        e.preventDefault()
-        // Modern browsers ignore custom messages and show their own
-        e.returnValue = '' // Required for Chrome
-        return '' // Required for some browsers
-      }
-    }
+const pricingPlans = [
+  {
+    name: 'Starter',
+    price: '$9',
+    period: '/month',
+    features: ['10 carousel posts/month', 'All design themes', 'HD export quality', 'Email support'],
+    cta: 'Start Free Trial',
+    highlighted: false,
+  },
+  {
+    name: 'Pro',
+    price: '$29',
+    period: '/month',
+    features: ['50 carousel posts/month', 'All design themes', '4K export quality', 'Priority support', 'Custom branding', 'Advanced AI features'],
+    cta: 'Get Started',
+    highlighted: true,
+  },
+  {
+    name: 'Agency',
+    price: '$99',
+    period: '/month',
+    features: ['Unlimited carousel posts', 'All design themes', '4K export quality', 'Dedicated support', 'White-label options', 'Team collaboration', 'API access'],
+    cta: 'Contact Sales',
+    highlighted: false,
+  },
+]
 
-    window.addEventListener('beforeunload', handleBeforeUnload)
+const steps = [
+  {
+    number: '01',
+    title: 'Describe Your Idea',
+    description: 'Simply type what you want to share. Our AI understands your message and creates engaging content.',
+  },
+  {
+    number: '02',
+    title: 'Customize Your Design',
+    description: 'Choose from beautiful themes, adjust colors, and select fonts that match your brand identity.',
+  },
+  {
+    number: '03',
+    title: 'Export & Post',
+    description: 'Download your carousel in seconds and share it across all your social media platforms.',
+  },
+]
 
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-    }
-  }, [carouselsDirty])
+export default function LandingPage() {
+  const router = useRouter()
+  const { user, loading, credits } = useAuth()
 
-  const toggleCarouselExpansion = (index: number) => {
-    setExpandedCarouselIndexes(prev => {
-      if (prev.includes(index)) {
-        return prev.filter(i => i !== index)
-      }
-      return [...prev, index]
-    })
-  }
-
-  // Detect available background images (bg1.jpg, bg2.jpg, ...)
-  useEffect(() => {
-    let isMounted = true
-    const loadBackgrounds = async () => {
-      const detected: BackgroundOption[] = []
-      const maxBackgrounds = 10
-
-      await Promise.all(
-        Array.from({ length: maxBackgrounds }, (_, i) => i + 1).map(async (num) => {
-          const id = `bg${num}`
-          const src = `/backgrounds/${id}.jpg`
-          try {
-            const res = await fetch(src, { method: 'HEAD' })
-            if (res.ok) {
-              detected.push({
-                id,
-                label: `Background ${num}`,
-                src
-              })
-            }
-          } catch {
-            // Ignore missing files
-          }
-        })
-      )
-
-      if (isMounted) {
-        setBackgroundOptions(detected)
-
-        try {
-          const savedId = localStorage.getItem('postGeneration_backgroundId')
-          if (savedId && detected.some(option => option.id === savedId)) {
-            setBackgroundId(savedId)
-          } else if (detected.length > 0) {
-            setBackgroundId(detected[0].id)
-          } else {
-            setBackgroundId('')
-          }
-        } catch (error) {
-          console.warn('Unable to read background preference from localStorage:', error)
-          setBackgroundId(detected[0]?.id ?? '')
-        }
-      }
-    }
-
-    loadBackgrounds()
-    return () => {
-      isMounted = false
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!backgroundId) return
-    try {
-      localStorage.setItem('postGeneration_backgroundId', backgroundId)
-      // If note exists, trigger regeneration by updating a dependency
-      // The CarouselImageGenerator will detect the backgroundImageUrl change
-    } catch (error) {
-      console.warn('Unable to persist background preference to localStorage:', error)
-    }
-  }, [backgroundId])
-
-  // Reset hasLoadedFromStorage when user changes
-  useEffect(() => {
-    hasLoadedFromStorage.current = false
-  }, [user?.id])
-
-  // Load note from localStorage on initial mount only (not during generation)
-  useEffect(() => {
-    // Only load from localStorage once per user session, not when generating
-    // This allows reloading the page to restore the previous carousel
-    if (user && !authLoading && !hasLoadedFromStorage.current && !loadingNote && !loadingIdeas && !selectedIdea) {
-      hasLoadedFromStorage.current = true
-      try {
-        // Check if localStorage belongs to current user
-        const storedUserId = localStorage.getItem('postGeneration_userId')
-        if (storedUserId !== user.id) {
-          // User changed, clear localStorage
-          console.log('User changed, clearing localStorage')
-          localStorage.removeItem('postGeneration_note')
-          localStorage.removeItem('postGeneration_accountDescription')
-          localStorage.removeItem('postGeneration_fontCombinationId')
-          localStorage.removeItem('postGeneration_colorThemeId')
-          localStorage.removeItem('postGeneration_canvasImages')
-          localStorage.removeItem('postGeneration_contentHash')
-          localStorage.removeItem('postGeneration_generationId')
-          localStorage.removeItem('postGeneration_fullContentHash')
-          localStorage.removeItem('postGeneration_ideaTitle')
-          localStorage.setItem('postGeneration_userId', user.id)
-          return
-        }
-        
-        const savedNote = localStorage.getItem('postGeneration_note')
-        const savedAccountDescription = localStorage.getItem('postGeneration_accountDescription')
-        const savedFontCombination = localStorage.getItem('postGeneration_fontCombinationId')
-        const savedColorTheme = localStorage.getItem('postGeneration_colorThemeId')
-        
-        if (savedNote) {
-          const parsedNote = JSON.parse(savedNote)
-          // Handle backward compatibility: migrate 'slides' to 'carousels' if needed
-          if (parsedNote && Array.isArray(parsedNote.slides) && !parsedNote.carousels) {
-            parsedNote.carousels = parsedNote.slides
-            delete parsedNote.slides
-          }
-          // Verify note structure and carousels array integrity
-          if (parsedNote && Array.isArray(parsedNote.carousels) && parsedNote.carousels.length > 0) {
-            console.log('✅ Loaded note with', parsedNote.carousels.length, 'carousels from localStorage')
-            setNote(parsedNote)
-          } else {
-            console.warn('⚠️ Invalid note structure in localStorage, skipping')
-          }
-        }
-        
-        if (savedAccountDescription) {
-          setAccountDescription(savedAccountDescription)
-        }
-        
-        if (savedFontCombination) {
-          setFontCombinationId(savedFontCombination)
-        }
-        
-        if (savedColorTheme) {
-          setColorThemeId(savedColorTheme)
-        }
-      } catch (error) {
-        console.error('Error loading from localStorage:', error)
-        // Clear corrupted localStorage data
-        localStorage.removeItem('postGeneration_note')
-        localStorage.removeItem('postGeneration_canvasImages')
-        localStorage.removeItem('postGeneration_fullContentHash')
-      }
-    }
-  }, [user, authLoading, loadingNote, loadingIdeas, selectedIdea])
-
-  if (authLoading) {
+  if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div className="loading">
@@ -304,1180 +132,755 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     )
   }
 
-  if (!user) {
-    return null
-  }
-
-  const generateIdeas = async () => {
-    if (!accountDescription.trim()) {
-      setError('Please enter a business description')
-      return
-    }
-
-    setLoadingIdeas(true)
-    setError('')
-    setIdeas([])
-    setNote(null)
-    setSelectedIdea(null)
-
-    try {
-      const response = await fetch(`${API_URL}/api/social`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'ideas',
-          accountDescription: accountDescription.trim()
-        })
-      })
-
-      const result = await response.json()
-
-      if (result.success) {
-        setIdeas(result.data.ideas)
-        setError('')
-      } else {
-        setError(result.error || 'Failed to generate ideas')
-      }
-    } catch (err: any) {
-      console.error('Error:', err)
-      setError('Failed to connect to server. Please try again.')
-    } finally {
-      setLoadingIdeas(false)
-    }
-  }
-
-  const generateNote = async (idea: string) => {
-    if (!user?.id) {
-      setError('User not authenticated')
-      return
-    }
-
-    // Check credits - use context first (already loaded), then API as fallback
-    let hasCredits = false
-    let creditsRemaining = 0
-
-    // First, check context credits (fastest, already loaded)
-    if (credits && credits.credits_remaining !== undefined && credits.credits_remaining !== null) {
-      creditsRemaining = credits.credits_remaining
-      hasCredits = creditsRemaining > 0
-    } else {
-      // If context doesn't have credits, check via API
-      try {
-        const checkResponse = await fetch(`/api/credits/check?userId=${user.id}`)
-        if (checkResponse.ok) {
-          const checkData = await checkResponse.json()
-          creditsRemaining = checkData.creditsRemaining ?? 0
-          hasCredits = creditsRemaining > 0
-          
-          // Update context with fresh data
-          if (checkData.creditsRemaining !== undefined) {
-            await refreshCredits()
-          }
-        } else {
-          // If API fails, use context as fallback
-          creditsRemaining = credits?.credits_remaining ?? 0
-          hasCredits = creditsRemaining > 0
-        }
-      } catch (error) {
-        console.error('Error checking credits:', error)
-        // If check fails, use context credits as fallback
-        creditsRemaining = credits?.credits_remaining ?? 0
-        hasCredits = creditsRemaining > 0
-      }
-    }
-
-    // Check if user has enough credits based on whether images are included
-    // Text only: 1 credit, Text + Image (Pexels): 2 credits, Text + AI Image (Pollinations): 2 credits
-    const requiredCredits = includeImages ? 2 : 1
-    if (creditsRemaining < requiredCredits) {
-      console.log(`Not enough credits. Required: ${requiredCredits}, Available: ${creditsRemaining}`)
-      setShowUpgradePrompt(true)
-      return
-    }
-
-    setSelectedIdea(idea)
-    setLoadingNote(true)
-    setError('')
-    setNote(null)
-    setCurrentStep('generating')
-    // Clear localStorage note temporarily to prevent it from loading during generation
-    // We'll save the new note once it's generated
-    try {
-      localStorage.removeItem('postGeneration_note')
-      localStorage.removeItem('postGeneration_canvasImages')
-      localStorage.removeItem('postGeneration_fullContentHash')
-      localStorage.removeItem('postGeneration_contentHash')
-    } catch (error) {
-      console.error('Error clearing localStorage during generation:', error)
-    }
-
-    // Simulate step progression
-    setTimeout(() => setCurrentStep('analysing'), 1000)
-    setTimeout(() => setCurrentStep('rendering'), 2000)
-
-    // Log the includeImages value being sent to API
-    console.log('🖼️ Frontend: Sending includeImages =', includeImages, 'useAIImages =', useAIImages, 'aiImageStyle =', aiImageStyle)
-
-    try {
-      const response = await fetch(`${API_URL}/api/social`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'note',
-          ideaTitle: idea,
-          accountDescription: accountDescription.trim(),
-          includeImages: includeImages,
-          useAIImages: useAIImages,
-          aiImageStyle: aiImageStyle
-        })
-      })
-
-      const result = await response.json()
-
-      if (result.success) {
-        // Credit will be deducted when carousels are actually generated in CarouselImageGenerator
-        // Verify result data structure before saving
-        // Note: API still returns 'slides' but we map it to 'carousels' in our Note interface
-        if (result.data && Array.isArray(result.data.slides) && result.data.slides.length > 0) {
-          console.log('✅ Received note with', result.data.slides.length, 'carousels from API')
-          // Map API response 'slides' to 'carousels' for our Note interface
-          const noteData = {
-            ...result.data,
-            carousels: result.data.slides
-          }
-          setNote(noteData)
-          // Clear generation_id to force new generation creation (new ideaTitle = new generation)
-          try {
-            localStorage.removeItem('postGeneration_generationId')
-            localStorage.removeItem('postGeneration_contentHash')
-            localStorage.removeItem('postGeneration_ideaTitle') // Clear ideaTitle for new note
-            localStorage.setItem('postGeneration_note', JSON.stringify(noteData))
-            localStorage.setItem('postGeneration_accountDescription', accountDescription.trim())
-            localStorage.setItem('postGeneration_fontCombinationId', fontCombinationId)
-            localStorage.setItem('postGeneration_colorThemeId', colorThemeId)
-            if (user?.id) {
-              localStorage.setItem('postGeneration_userId', user.id)
-            }
-            console.log('✅ Saved note to localStorage')
-          } catch (error) {
-            console.error('Error saving to localStorage:', error)
-          }
-          setError('')
-          setCurrentStep(null)
-        } else {
-          console.error('❌ Invalid data structure received from API')
-          setError('Invalid data received from server')
-          setCurrentStep(null)
-        }
-      } else {
-        setError(result.error || 'Failed to generate note')
-        setCurrentStep(null)
-      }
-    } catch (err: any) {
-      console.error('Error:', err)
-      setError('Failed to connect to server. Please try again.')
-      setCurrentStep(null)
-    } finally {
-      setLoadingNote(false)
-    }
-  }
-
-  const handleCarouselFieldChange = (index: number, field: 'title' | 'content', value: string) => {
-    setEditedCarousels(prev => {
-      if (!prev[index]) return prev
-      const next = [...prev]
-      next[index] = {
-        ...next[index],
-        [field]: value
-      }
-      return next
-    })
-    setCarouselsDirty(true)
-  }
-
-  const resetEditedCarousels = () => {
-    if (note) {
-      setEditedCarousels(note.carousels.map(carousel => ({ ...carousel })))
-    } else {
-      setEditedCarousels([])
-    }
-    setCarouselsDirty(false)
-  }
-
-  const saveEditedCarousels = () => {
-    if (!note || savingCarousels) return
-
-    const cleanedCarousels = editedCarousels.map(carousel => ({
-      ...carousel,
-      title: (carousel.title ?? '').trim(),
-      content: (carousel.content ?? '').trim()
-    }))
-
-    setSavingCarousels(true)
-    setError('')
-
-    console.log('🖼️ Frontend: Refreshing slides with includeImages =', includeImages, 'useAIImages =', useAIImages, 'aiImageStyle =', aiImageStyle)
-
-    fetch(`${API_URL}/api/social`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'refreshSlides',
-        slides: cleanedCarousels,
-        includeImages,
-        useAIImages,
-        aiImageStyle
-      })
-    })
-      .then(async (response) => {
-        const data = await response.json()
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || 'Failed to refresh carousel enhancements')
-        }
-
-        const updatedUnderline: Note['underlineWords'] = data.data?.underlineWords || {}
-        const sanitizedCarousels: Note['carousels'] = (data.data?.slides || cleanedCarousels) as Note['carousels']
-
-        const updatedNote: Note = {
-          ...note,
-          carousels: sanitizedCarousels,
-          underlineWords: updatedUnderline
-        }
-
-        setNote(updatedNote)
-        setEditedCarousels(sanitizedCarousels.map(carousel => ({ ...carousel })))
-        setCarouselsDirty(false)
-
-        try {
-          localStorage.setItem('postGeneration_note', JSON.stringify(updatedNote))
-          localStorage.removeItem('postGeneration_canvasImages')
-          localStorage.removeItem('postGeneration_fullContentHash')
-          localStorage.removeItem('postGeneration_contentHash')
-        } catch (storageError) {
-          console.warn('Could not persist edited carousels to localStorage:', storageError)
-        }
-      })
-      .catch((err: any) => {
-        console.error('Error refreshing carousels:', err)
-        setError(err.message || 'Failed to refresh carousels. Please try again.')
-      })
-      .finally(() => {
-        setSavingCarousels(false)
-      })
-  }
-
-  const goBackToBusinessDetails = () => {
-    // Just switch to business details panel, keep the note
-    setShowCustomisation(false)
-  }
-
-  const goToCustomisation = () => {
-    // Switch to customisation panel
-    setShowCustomisation(true)
-  }
-
-  const reset = () => {
-    setAccountDescription('')
-    setIdeas([])
-    setNote(null)
-    setSelectedIdea(null)
-    setCurrentStep(null)
-    setError('')
-    // Clear localStorage
-    try {
-      localStorage.removeItem('postGeneration_note')
-      localStorage.removeItem('postGeneration_accountDescription')
-      localStorage.removeItem('postGeneration_fontCombinationId')
-      localStorage.removeItem('postGeneration_colorThemeId')
-      localStorage.removeItem('postGeneration_canvasImages')
-      localStorage.removeItem('postGeneration_contentHash')
-      localStorage.removeItem('postGeneration_generationId')
-      localStorage.removeItem('postGeneration_fullContentHash')
-    } catch (error) {
-      console.error('Error clearing localStorage:', error)
-    }
-  }
-
   return (
-    <div style={{ background: '#ffffff', minHeight: '100vh' }}>
-      {/* Handle search params with Suspense */}
-      <Suspense fallback={null}>
-        <SearchParamsHandler refreshCredits={refreshCredits} router={router} />
-      </Suspense>
-      
-      {/* Header */}
-      <header style={{
-        borderBottom: '2px solid #e5e5e5',
-        padding: '24px 0',
-        background: '#ffffff',
-        position: 'sticky',
-        top: 0,
-        zIndex: 100,
-      }}>
-        <div className="header-inner" style={{
+    <div style={{ minHeight: '100vh', background: '#ffffff' }}>
+      {/* Navigation */}
+      <nav
+        style={{
+          position: 'sticky',
+          top: '16px',
+          zIndex: 100,
+          padding: '0 24px',
+          marginBottom: '0',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '960px',
+            margin: '0 auto',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-        }}>
+            padding: '10px 20px',
+            background: 'rgba(255, 255, 255, 0.98)',
+            borderRadius: '999px',
+            border: '1px solid #e5e5e5',
+            backdropFilter: 'blur(8px)',
+          }}
+        >
           <Link 
-            href="/landing" 
+            href="/" 
             style={{ 
               display: 'flex',
               alignItems: 'center',
               gap: '12px',
-              fontSize: '24px', 
+              fontSize: '20px',
               fontWeight: '700', 
               color: '#000000', 
-              letterSpacing: '-0.5px',
-              cursor: 'pointer',
-              textDecoration: 'none'
+              textDecoration: 'none',
             }}
           >
             <Image src="/logo.svg" alt="Post My Note" width={32} height={32} priority style={{ width: '32px', height: '32px' }} />
             <span>Post My Note</span>
           </Link>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            {credits && (
-              <>
-                <Link 
-                  href="/history"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '50%',
-                    background: '#f5f5f5',
-                    border: '2px solid #e5e5e5',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    textDecoration: 'none',
-                  }}
-                  title="History"
-                >
-                  <History size={20} color="#000000" />
-                </Link>
-                <AccountButton
-                  credits={credits.credits_remaining}
-                  subscriptionStatus={credits.subscription_status}
-                  currentPlan={credits.current_plan}
-                />
-              </>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            {user ? (
+              <AccountButton
+                credits={credits?.credits_remaining ?? 0}
+                subscriptionStatus={credits?.subscription_status ?? null}
+                currentPlan={credits?.current_plan ?? null}
+              />
+            ) : (
+              <Link
+                href="/signup"
+                style={{
+                  padding: '10px 24px',
+                  borderRadius: '999px',
+                  background: 'transparent',
+                  border: '1px solid #e5e5e5',
+                  color: '#000000',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  textDecoration: 'none',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                Log In
+              </Link>
             )}
           </div>
         </div>
-      </header>
+      </nav>
 
-      <div
-        className="container"
+      {/* Hero Section */}
+      <section
         style={{
-          height: 'calc(100vh - 120px)',
+          minHeight: '85vh',
           display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden'
+          alignItems: 'center',
+          justifyContent: 'center',
+        padding: '20px 24px 80px',
+        textAlign: 'center',
+          position: 'relative',
+          overflow: 'hidden',
         }}
       >
-        {/* Mobile Stack Wrapper */}
-        <div className="mobile-stack" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {error && (
-            <div className="error" style={{ margin: '0 0 24px', flex: '0 0 auto' }}>
-              {error}
-            </div>
-          )}
-
-          {/* Two-Column Layout - Responsive Grid */}
-          <div 
-            className="responsive-grid"
-            style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'minmax(260px, 0.3fr) minmax(0, 0.7fr)', 
-              gap: '32px',
-              alignItems: 'stretch',
-              flex: 1,
-              overflow: 'hidden'
+        <div style={{ maxWidth: '900px', position: 'relative', zIndex: 10 }}>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '6px 18px',
+              background: '#fff9ed',
+              border: '1px solid #ffbd59',
+              borderRadius: '999px',
+              fontSize: '13px',
+              fontWeight: '600',
+              color: '#000000',
+              marginBottom: '32px',
             }}
           >
-            {/* LEFT COLUMN - Control Panel with Input, Tab Group, Buttons, and Customize Section */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', overflow: 'hidden', alignSelf: 'stretch' }}>
-              {!showCustomisation ? (
-                <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {/* Business details heading */}
-                  <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '8px', color: '#000000' }}>
-                    Idea
-                  </h3>
-                  
-                  {/* Textarea for business description */}
-                  <textarea
-                    className="input mobile-prompt"
-                    placeholder="Describe what you want to create"
-                    value={accountDescription}
-                    onChange={(e) => setAccountDescription(e.target.value)}
-                    rows={4}
-                    style={{ 
-                      width: '100%', 
-                      resize: 'vertical',
-                      maxHeight: '200px',
-                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
-                    }}
-                  />
-                  
-                  {/* Dropdown for Text / Text + Image / Text + AI Image styles */}
-                  <select
-                    value={includeImages ? (useAIImages ? (aiImageStyle === 'surreal' ? 'text-ai-surreal' : 'text-ai-animated') : 'text-image') : 'text'}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      if (value === 'text') {
-                        setIncludeImages(false)
-                        setUseAIImages(false)
-                        setAiImageStyle('animated')
-                      } else if (value === 'text-image') {
-                        setIncludeImages(true)
-                        setUseAIImages(false)
-                        setAiImageStyle('animated')
-                      } else if (value === 'text-ai-animated') {
-                        setIncludeImages(true)
-                        setUseAIImages(true)
-                        setAiImageStyle('animated')
-                      } else if (value === 'text-ai-surreal') {
-                        setIncludeImages(true)
-                        setUseAIImages(true)
-                        setAiImageStyle('surreal')
-                      }
-                    }}
-                    className="input"
-                    style={{ cursor: 'pointer', padding: '12px' }}
-                  >
-                    <option value="text">Text (1 credit)</option>
-                    <option value="text-image">Text + Image (2 credits)</option>
-                    <option value="text-ai-animated">Text + AI Animated Image (2 credits)</option>
-                    <option value="text-ai-surreal">Text + AI Surrealism Image (2 credits)</option>
-                  </select>
+            <span aria-hidden="true" style={{ color: '#ffbd59', letterSpacing: '2px' }}>★★★★★</span>
+            <span>Trusted by 2,500+ creators</span>
+          </div>
+          <h1
+            style={{
+              fontSize: 'clamp(48px, 8vw, 84px)',
+              fontWeight: '800',
+          lineHeight: '1.1',
+              letterSpacing: '-1px',
+          color: '#000000',
+              marginBottom: '24px',
+            }}
+          >
+            Create better content, faster.
+        </h1>
+          <p
+            style={{
+              fontSize: 'clamp(18px, 2.5vw, 22px)',
+          color: '#666666',
+          marginBottom: '48px',
+              lineHeight: '1.6',
+              maxWidth: '700px',
+          margin: '0 auto 48px',
+            }}
+          >
+            Turn your ideas into post-ready content in minutes. No design skills or marketing team needed.
+          </p>
+          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
+        <Link
+          href={user ? "/app" : "/signup"}
+              className="cta-button"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '20px 32px',
+                borderRadius: '999px',
+                background: '#ffbd59',
+                color: '#000000',
+                fontSize: '16px',
+                fontWeight: '600',
+                textDecoration: 'none',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {user ? "Go to app" : "Get Started Free"}
+              <ArrowRight size={18} />
+            </Link>
+          </div>
+        </div>
+      </section>
 
-                  {/* Show Customisation button if note exists */}
-                  {note && (
-                    <button
-                      className="button secondary"
-                      onClick={goToCustomisation}
-                      style={{ width: '100%' }}
-                    >
-                      Customise
-                    </button>
-                  )}
+      {/* Scrolling Images Section */}
+      <section
+        className="scrolling-carousel-section"
+        style={{
+          padding: '60px 0',
+          background: '#ffffff',
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ textAlign: 'center', marginBottom: '40px', padding: '0 24px' }}>
+          <h2
+            style={{
+              fontSize: 'clamp(32px, 5vw, 48px)',
+              fontWeight: '800',
+              color: '#000000',
+              letterSpacing: '-2px',
+              marginBottom: '16px',
+            }}
+          >
+            Create a full carousel from one idea
+          </h2>
+        </div>
+        {/* First Row - Scroll Left */}
+        <div
+          className="scroll-row-left"
+          style={{
+            display: 'flex',
+            gap: '24px',
+            marginBottom: '24px',
+            width: 'fit-content',
+            animation: 'scrollLeft 30s linear infinite',
+          }}
+        >
+          {[...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
+            <div
+              key={`left-${index}`}
+              className="carousel-card"
+              style={{
+                flexShrink: 0,
+                width: 'clamp(200px, 25vw, 300px)',
+                height: 'auto',
+                cursor: 'pointer',
+              }}
+            >
+              <Image
+                src={slide.src}
+                alt={slide.alt}
+                width={360}
+                height={460}
+                style={{
+                  width: '100%',
+                  height: 'auto',
+                  borderRadius: '24px',
+                  objectFit: 'cover',
+                  boxShadow: '0 20px 40px rgba(17, 24, 39, 0.1)',
+                  border: '5px solid #ffffff',
+                  background: '#ffffff',
+                }}
+              />
+            </div>
+          ))}
+        </div>
 
-                  {/* Generate button */}
-                  <button
-                    className="button mobile-generate"
-                    onClick={generateIdeas}
-                    disabled={loadingIdeas || !accountDescription.trim()}
-                    style={{ width: '100%' }}
+        {/* Second Row - Scroll Right */}
+        <div
+          className="scroll-row-right"
+          style={{
+            display: 'flex',
+            gap: '24px',
+            width: 'fit-content',
+            animation: 'scrollRight 30s linear infinite',
+          }}
+        >
+          {[...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
+            <div
+              key={`right-${index}`}
+              className="carousel-card"
+              style={{
+                flexShrink: 0,
+                width: 'clamp(200px, 25vw, 300px)',
+                height: 'auto',
+                cursor: 'pointer',
+              }}
+            >
+              <Image
+                src={slide.src}
+                alt={slide.alt}
+                width={360}
+                height={460}
+                style={{
+                  width: '100%',
+                  height: 'auto',
+                  borderRadius: '24px',
+                  objectFit: 'cover',
+                  boxShadow: '0 20px 40px rgba(17, 24, 39, 0.1)',
+                  border: '5px solid #ffffff',
+                  background: '#ffffff',
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Features */}
+      <section
+        style={{
+          padding: '120px 24px',
+          background: '#ffffff',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '1200px',
+            margin: '0 auto',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '64px',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <div className="features-heading" style={{ flex: '1 1 400px', maxWidth: '520px', display: 'flex', flexDirection: 'column' }}>
+            <h2
+              style={{
+                fontSize: 'clamp(36px, 6vw, 60px)',
+                fontWeight: '800',
+                color: '#000000',
+                letterSpacing: '-2px',
+              }}
+            >
+              Create content in 3 simple steps
+            </h2>
+            <p
+              style={{
+                fontSize: 'clamp(18px, 2.5vw, 22px)',
+                color: '#666666',
+                marginTop: '16px',
+                lineHeight: '1.6',
+                maxWidth: '700px',
+              }}
+            >
+              From idea to post in under two minutes, no design, no overthinking.
+            </p>
+          </div>
+          <div style={{ flex: '1 1 400px', maxWidth: '520px', display: 'flex', justifyContent: 'center' }}>
+            <div
+              style={{
+                width: '100%',
+                maxWidth: '420px',
+                borderRadius: '36px',
+                padding: '36px',
+                background: 'radial-gradient(140% 140% at 0% 0%, rgba(255,189,89,0.25), rgba(255,255,255,0.95))',
+                border: '1px solid #ffe3ad',
+                boxShadow: '0 40px 80px rgba(255, 189, 89, 0.25)',
+              }}
+            >
+              {workflowPreview.map((step, index) => (
+                <div key={step.title} style={{ textAlign: 'left' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '16px',
+                      padding: '16px',
+                      borderRadius: '20px',
+                      background: '#ffffff',
+                      boxShadow: '0 10px 30px rgba(17, 24, 39, 0.08)',
+                    }}
                   >
-                    {loadingIdeas ? 'Generating...' : 'Generate'}
-                  </button>
-                </div>
-              ) : (
-                <div className="card mobile-customize" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: '16px' }}>
-                  {/* Content area */}
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    {/* Back button */}
-                    <button
-                      onClick={goBackToBusinessDetails}
+                    <div
                       style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '12px',
+                        background: '#ffbd59',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '8px',
-                        background: 'none',
-                        border: 'none',
-                        padding: '8px 0',
-                        cursor: 'pointer',
-                        marginBottom: '24px',
+                        justifyContent: 'center',
+                        fontWeight: '700',
                         color: '#000000',
-                        fontSize: '16px',
-                        fontWeight: '600'
                       }}
                     >
-                      <ChevronLeft size={20} />
-                      <span>Back</span>
-                    </button>
-                    
-                    {/* Customisation heading */}
-                    <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px', color: '#000000' }}>
-                      Customisation
-                    </h3>
-                  
-                  {/* Tab buttons for Design / Carousels / Caption */}
-                  <div 
-                    style={{ 
-                      display: 'flex', 
-                      gap: '0',
-                      alignItems: 'stretch',
-                      border: '2px solid #e5e5e5',
-                      borderRadius: '12px',
-                      padding: '2px',
-                      background: '#ededed',
-                      height: 'fit-content',
-                      opacity: !note ? 0.5 : 1,
-                      pointerEvents: !note ? 'none' : 'auto',
-                      marginBottom: '24px'
-                    }}
-                  >
-                    {leftTabs.map(tab => {
-                      const TabIcon = tab.icon
-                      const isActive = activeLeftTab === tab.id
-                      return (
-                        <button
-                          key={tab.id}
-                          onClick={() => setActiveLeftTab(tab.id)}
-                          disabled={!note}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: '8px 16px',
-                            flex: 1,
-                            border: 'none',
-                            borderRadius: '10px',
-                            background: isActive ? '#d8d8d8' : '#ededed',
-                            cursor: !note ? 'not-allowed' : 'pointer',
-                            transition: 'all 0.2s ease'
-                          }}
-                          title={tab.label}
-                          aria-label={tab.label}
-                        >
-                          <TabIcon size={20} color="#000000" />
-                        </button>
-                      )
-                    })}
-                  </div>
-
-                {activeLeftTab === 'design' && (
-                  <div style={{ opacity: !note ? 0.5 : 1, pointerEvents: !note ? 'none' : 'auto', marginBottom: '24px' }}>
-                    <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
-                      Carousel Style
-                    </h4>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
-                      <div>
-                        <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
-                          Font Combination
-                        </label>
-                        <select
-                          value={fontCombinationId}
-                          onChange={(e) => setFontCombinationId(e.target.value)}
-                          className="input"
-                          style={{ cursor: 'pointer', padding: '12px' }}
-                        >
-                          {FONT_COMBINATIONS.map(combo => (
-                            <option key={combo.id} value={combo.id}>
-                              {combo.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
-                          Color Theme
-                        </label>
-                        <select
-                          value={colorThemeId}
-                          onChange={(e) => setColorThemeId(e.target.value)}
-                          className="input"
-                          style={{ cursor: 'pointer', padding: '12px' }}
-                        >
-                          {COLOR_THEMES.map(theme => (
-                            <option key={theme.id} value={theme.id}>
-                              {theme.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      {backgroundOptions.length > 0 && (
-                        <div>
-                          <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
-                            Background Texture
-                          </label>
-                          <select
-                            value={backgroundId}
-                            onChange={(e) => setBackgroundId(e.target.value)}
-                            className="input"
-                            style={{ cursor: 'pointer', padding: '12px' }}
-                          >
-                            {backgroundOptions.map(option => (
-                              <option key={option.id} value={option.id}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
+                      {index + 1}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '16px', fontWeight: '700', color: '#0b0b0b' }}>{step.title}</div>
+                      {step.subtitle && <div style={{ fontSize: '13px', color: '#6b6b6b' }}>{step.subtitle}</div>}
                     </div>
                   </div>
-                )}
-
-                {activeLeftTab === 'carousels' && (
-                  <div style={{ opacity: !note ? 0.5 : 1, pointerEvents: !note ? 'none' : 'auto', marginBottom: '24px' }}>
-                    <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
-                      Carousel Content
-                    </h3>
-                    {note && (
-                      <div style={{ display: 'grid', gap: '16px' }}>
-                    {editedCarousels.map((carousel, index) => {
-                      const kind = note.carousels[index]?.kind ?? 'MIDDLE'
-                      const isExpanded = expandedCarouselIndexes.includes(index)
-                      return (
-                        <div 
-                          key={index}
-                          className={`carousel-card ${kind === 'HOOK' ? 'hook' : kind === 'CTA' ? 'cta' : 'content'}`}
-                          style={{ padding: '0px' }}
-                        >
-                          <button
-                            onClick={() => toggleCarouselExpansion(index)}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              width: '100%',
-                              background: 'none',
-                              border: 'none',
-                              padding: '6px 0',
-                              margin: 0,
-                              cursor: 'pointer',
-                              textAlign: 'left'
-                            }}
-                          >
-                            <div style={{ 
-                              fontSize: '14px', 
-                              fontWeight: '500', 
-                              color: '#000000', 
-                              textTransform: 'none',
-                              letterSpacing: '0px'
-                            }}>
-                              Carousel {index + 1} • {kind === 'MIDDLE' ? 'Content' : kind === 'HOOK' ? 'Hook' : kind === 'CTA' ? 'CTA' : kind}
-                            </div>
-                            <span style={{ fontSize: '14px', color: '#000000', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
-                              ▾
-                            </span>
-                          </button>
-
-                          {isExpanded && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px', paddingTop: '12px' }}>
-                            <div>
-                              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7280', marginBottom: '6px' }}>
-                                Title
-                              </label>
-                              <input
-                                className="input"
-                                value={carousel.title ?? ''}
-                                onChange={(e) => handleCarouselFieldChange(index, 'title', e.target.value)}
-                                placeholder="Enter carousel title"
-                                style={{ width: '100%' }}
-                              />
-                            </div>
-                            <div>
-                              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7280', marginBottom: '6px' }}>
-                                Content
-                              </label>
-                              <textarea
-                                className="input"
-                                value={carousel.content ?? ''}
-                                onChange={(e) => handleCarouselFieldChange(index, 'content', e.target.value)}
-                                placeholder="Enter carousel content"
-                                rows={kind === 'CTA' ? 5 : 6}
-                                style={{ width: '100%', resize: 'vertical', minHeight: '120px' }}
-                              />
-                            </div>
-                          </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                  )}
-                  {note && (
-                  <div style={{ 
-                    display: 'flex', 
-                    flexDirection: 'column',
-                    gap: '12px',
-                    marginTop: '24px'
-                  }}>
-                    <button
-                      className="button secondary"
-                      onClick={resetEditedCarousels}
-                      disabled={!carouselsDirty || savingCarousels}
-                      style={{ width: '100%' }}
-                    >
-                      Reset
-                    </button>
-                    <button
-                      className="button"
-                      onClick={saveEditedCarousels}
-                      disabled={!carouselsDirty || savingCarousels}
-                      style={{ width: '100%' }}
-                    >
-                      {savingCarousels ? 'Saving...' : 'Save'}
-                    </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {activeLeftTab === 'caption' && (
-                  <div style={{ opacity: !note ? 0.5 : 1, pointerEvents: !note ? 'none' : 'auto', marginBottom: '24px' }}>
-                    <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
-                      Instagram Caption
-                    </h3>
-                    <textarea
-                      className="input"
-                      value={editedCaption}
-                      onChange={(e) => setEditedCaption(e.target.value)}
-                      placeholder="Generate a post to see the caption here"
-                      disabled={!note}
-                      style={{ 
-                        width: '100%',
-                        minHeight: '300px',
-                        padding: '20px', 
-                        background: '#fafafa',
-                        border: '2px solid #e5e5e5',
-                        borderRadius: '12px',
-                        fontSize: '15px',
-                        lineHeight: '1.8',
-                        color: '#000000',
-                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
-                        resize: 'vertical'
+                  {index < workflowPreview.length - 1 && (
+                    <div
+                      style={{
+                        width: '2px',
+                        height: '40px',
+                        background: 'rgba(255, 189, 89, 0.45)',
+                        margin: '12px auto',
                       }}
                     />
-                    {note && (
-                      <button
-                        className="button"
-                        onClick={async () => {
-                          try {
-                            await navigator.clipboard.writeText(editedCaption)
-                            setCaptionCopied(true)
-                            // Reset to "Copy" after 2 seconds
-                            setTimeout(() => {
-                              setCaptionCopied(false)
-                            }, 2000)
-                          } catch (err) {
-                            console.error('Failed to copy caption:', err)
-                          }
-                        }}
-                        style={{ width: '100%', marginTop: '12px' }}
-                      >
-                        {captionCopied ? 'Copied' : 'Copy'}
-                      </button>
-                    )}
-                  </div>
-                )}
+                  )}
                 </div>
-              </div>
-              )}
-            </div>
-
-            {/* RIGHT COLUMN - Output Section - Mobile Order 4 */}
-            <div className="mobile-output" style={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '24px', minHeight: 0, alignSelf: 'stretch' }}>
-              {/* Show loading state while generating ideas */}
-              {loadingIdeas && (
-                <div className="card" style={{ textAlign: 'center', padding: '48px 20px' }}>
-                  <div className="spinner" style={{ margin: '0 auto 20px', width: '48px', height: '48px' }}></div>
-                  <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '8px', color: '#000000' }}>
-                    Generating ideas...
-                  </h3>
-                  <p style={{ fontSize: '15px', color: '#666666' }}>
-                    Post my Note is crafting 10 fresh angles for you.
-                  </p>
-                </div>
-              )}
-
-              {/* Show Ideas if available and no note selected */}
-              {ideas.length > 0 && !selectedIdea && !note && !loadingIdeas && (
-                <div className="card" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-                  <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
-                    Choose an Idea
-                  </h3>
-                  <div style={{ display: 'grid', gap: '12px', flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '6px' }}>
-                    {ideas.map((idea, index) => (
-                      <button
-                        key={index}
-                        onClick={() => generateNote(idea)}
-                        disabled={loadingNote}
-                        className="idea-button"
-                      >
-                        <span className="idea-number">{index + 1}</span>
-                        <span style={{ flex: 1 }}>{idea}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Show Loading Steps if generating */}
-        {selectedIdea && loadingNote && (
-                <div className="card">
-              <h2 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '32px', color: '#000000' }}>
-                {selectedIdea}
-              </h2>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                {/* Generating Step */}
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '16px',
-                  padding: '16px',
-                  borderRadius: '8px',
-                  background: currentStep === 'generating' ? '#f5f5f5' : 'transparent',
-                  transition: 'background 0.2s'
-                }}>
-                  <div style={{ 
-                    width: '24px', 
-                    height: '24px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    {currentStep === 'generating' ? (
-                      <span className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></span>
-                    ) : currentStep && ['analysing', 'rendering'].includes(currentStep) ? (
-                      <span style={{ color: '#ffbd59', fontSize: '20px' }}>✓</span>
-                    ) : (
-                      <span style={{ color: '#999999', fontSize: '20px' }}>○</span>
-                    )}
-                  </div>
-                  <span style={{ 
-                    fontSize: '16px', 
-                    fontWeight: currentStep === 'generating' ? '600' : '400',
-                    color: currentStep === 'generating' ? '#000000' : currentStep && ['analysing', 'rendering'].includes(currentStep) ? '#ffbd59' : '#999999'
-                  }}>
-                    Generating
-                  </span>
-                </div>
-
-                {/* Analysing Step */}
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '16px',
-                  padding: '16px',
-                  borderRadius: '8px',
-                  background: currentStep === 'analysing' ? '#f5f5f5' : 'transparent',
-                  transition: 'background 0.2s'
-                }}>
-                  <div style={{ 
-                    width: '24px', 
-                    height: '24px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    {currentStep === 'analysing' ? (
-                      <span className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></span>
-                    ) : currentStep === 'rendering' ? (
-                      <span style={{ color: '#ffbd59', fontSize: '20px' }}>✓</span>
-                    ) : (
-                      <span style={{ color: '#999999', fontSize: '20px' }}>○</span>
-                    )}
-                  </div>
-                  <span style={{ 
-                    fontSize: '16px', 
-                    fontWeight: currentStep === 'analysing' ? '600' : '400',
-                    color: currentStep === 'analysing' ? '#000000' : currentStep === 'rendering' ? '#ffbd59' : '#999999'
-                  }}>
-                    Analysing
-                  </span>
-                </div>
-
-                {/* Rendering Step */}
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '16px',
-                  padding: '16px',
-                  borderRadius: '8px',
-                  background: currentStep === 'rendering' ? '#f5f5f5' : 'transparent',
-                  transition: 'background 0.2s'
-                }}>
-                  <div style={{ 
-                    width: '24px', 
-                    height: '24px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    {currentStep === 'rendering' ? (
-                      <span className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></span>
-                    ) : (
-                      <span style={{ color: '#999999', fontSize: '20px' }}>○</span>
-                    )}
-                  </div>
-                  <span style={{ 
-                    fontSize: '16px', 
-                    fontWeight: currentStep === 'rendering' ? '600' : '400',
-                    color: currentStep === 'rendering' ? '#000000' : '#999999'
-                  }}>
-                    Rendering
-                  </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-              {/* Show Generated Carousels if note exists */}
-        {note && !loadingNote && (
-                <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
-            <CarouselImageGenerator 
-              carousels={carouselsDirty && editedCarousels.length > 0 ? editedCarousels : note.carousels}
-              ideaTitle={note.ideaTitle}
-              underlineWords={note.underlineWords || {}}
-              fontCombinationId={fontCombinationId}
-              colorThemeId={colorThemeId}
-              accountDescription={accountDescription}
-              caption={note.caption}
-                    backgroundImageUrl={
-                      backgroundId
-                        ? backgroundOptions.find(option => option.id === backgroundId)?.src ?? null
-                        : null
-                    }
-                  />
-                </div>
-              )}
-
-              {/* Show Empty State if nothing to show */}
-              {!ideas.length && !note && !loadingNote && !loadingIdeas && (
-                <div className="card" style={{ textAlign: 'center', padding: '60px 20px', color: '#999' }}>
-                  <h3 style={{ 
-                    marginBottom: '16px', 
-                    fontSize: '24px',
-                    fontWeight: '700',
-                    color: '#000000'
-                  }}>
-                    Your carousel
-              </h3>
-                  <p style={{ fontSize: '15px', color: '#666' }}>
-                    Generate ideas to get started
-                  </p>
-                </div>
-              )}
+              ))}
             </div>
           </div>
         </div>
-
-        {/* Debug Panel - Full Width Below */}
-        {note && !loadingNote && (
-          <div>
-
-            {/* DEBUG: Gemini Output & Pexels Integration */}
-            {showDebugPanel && (
-            <div className="card" style={{ maxWidth: '900px', margin: '32px auto', background: '#1a1a1a', border: '2px solid #333' }}>
-              <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '20px', color: '#ffbd59' }}>
-                🐛 DEBUG: Gemini Output & Pexels Integration
-              </h3>
-              
-                    <div style={{ 
-                padding: '20px', 
-                background: '#0a0a0a',
-                border: '1px solid #333',
-                borderRadius: '8px',
-                fontFamily: 'monospace',
-                fontSize: '13px',
-                color: '#00ff00',
-                whiteSpace: 'pre-wrap',
-                overflowX: 'auto'
-              }}>
-                {note.carousels.map((carousel, index) => {
-                  const emphasis = (note as any).underlineWords?.[index];
-                  return (
-                    <div key={index} style={{ marginBottom: '30px', paddingBottom: '20px', borderBottom: index < note.carousels.length - 1 ? '1px solid #333' : 'none' }}>
-                      <div style={{ color: '#ffbd59', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
-                        ━━━ CAROUSEL {index + 1}/{note.carousels.length} • {carousel.kind} ━━━
-                    </div>
-                      
-                      <div style={{ marginLeft: '20px' }}>
-                        <div style={{ marginBottom: '8px' }}>
-                          <span style={{ color: '#888' }}>Title:</span> <span style={{ color: '#fff' }}>{carousel.title || '(empty)'}</span>
-                        </div>
-                        
-                        <div style={{ marginBottom: '8px' }}>
-                          <span style={{ color: '#888' }}>Content:</span> <span style={{ color: '#fff' }}>{carousel.content || '(empty)'}</span>
-                        </div>
-                        
-                        {emphasis && (
-                          <div style={{ marginTop: '15px', padding: '15px', background: '#1a1a2e', border: '1px solid #444', borderRadius: '6px' }}>
-                            <div style={{ color: '#00d4ff', fontWeight: 'bold', marginBottom: '10px' }}>
-                              🎨 GEMINI EXTRACTION:
-                            </div>
-                            
-                            <div style={{ marginLeft: '15px' }}>
-                              {emphasis.underline && (
-                                <div style={{ marginBottom: '6px' }}>
-                                  <span style={{ color: '#ff6b6b' }}>━ Underline:</span> <span style={{ color: '#fff' }}>{emphasis.underline}</span>
-                                </div>
-                              )}
-                              
-                              {emphasis.highlight && (
-                                <div style={{ marginBottom: '6px' }}>
-                                  <span style={{ color: '#ffd93d' }}>✨ Highlight:</span> <span style={{ color: '#fff' }}>{emphasis.highlight}</span>
-                                </div>
-                              )}
-                              
-                              {carousel.kind === 'MIDDLE' && (
-                                <>
-                                  <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed #444' }}>
-                                    <div style={{ color: '#a78bfa', fontWeight: 'bold', marginBottom: '8px' }}>
-                                      🖼️  Image data (content carousel only):
-                                    </div>
-                                    
-                                    <div style={{ marginLeft: '15px' }}>
-                                      <div style={{ marginBottom: '6px' }}>
-                                        <span style={{ color: '#888' }}>🔍 Image Search Keywords:</span>{' '}
-                                        <span style={{ color: emphasis.imageSearch ? '#00ff00' : '#ff4444' }}>
-                                          {emphasis.imageSearch || '❌ NO KEYWORDS EXTRACTED'}
-                                        </span>
-                                      </div>
-                                      
-                                      <div style={{ marginBottom: '6px' }}>
-                                        <span style={{ color: '#888' }}>🌐 Pexels API Call:</span>{' '}
-                                        <span style={{ color: emphasis.imageSearch ? '#00ff00' : '#ff4444' }}>
-                                          {emphasis.imageSearch ? '✅ SHOULD HAVE BEEN CALLED' : '❌ SKIPPED (no keywords)'}
-                                        </span>
-                                      </div>
-                                      
-                                      <div style={{ marginBottom: '6px' }}>
-                                        <span style={{ color: '#888' }}>📸 Image URL:</span>{' '}
-                                        {emphasis.imageUrl ? (
-                                          <div style={{ marginTop: '4px' }}>
-                                            <span style={{ color: '#00ff00' }}>✅ SUCCESS!</span>
-                      <div style={{ 
-                                              marginTop: '6px', 
-                                              padding: '8px', 
-                                              background: '#0a0a0a', 
-                                              border: '1px solid #00ff00',
-                                              borderRadius: '4px',
-                                              wordBreak: 'break-all'
-                                            }}>
-                                              {emphasis.imageUrl}
-                      </div>
-                                            <img 
-                                              src={emphasis.imageUrl} 
-                                              alt="Preview" 
-                                              style={{ 
-                                                marginTop: '10px', 
-                                                maxWidth: '200px', 
-                                                border: '2px solid #00ff00',
-                                                borderRadius: '6px'
-                                              }}
-                                              onError={(e) => {
-                                                (e.target as HTMLImageElement).style.border = '2px solid #ff4444';
-                                                (e.target as HTMLImageElement).alt = '❌ Image failed to load';
-                                              }}
-                                            />
-                                          </div>
-                                        ) : (
-                                          <span style={{ color: '#ff4444' }}>
-                                            ❌ NO IMAGE URL (Pexels returned null or failed)
-                                          </span>
-                                        )}
-                                      </div>
-                                      
-                                      {!emphasis.imageUrl && emphasis.imageSearch && (
-                      <div style={{ 
-                                          marginTop: '10px', 
-                                          padding: '10px', 
-                                          background: '#2a1a1a', 
-                                          border: '1px solid #ff4444',
-                                          borderRadius: '4px',
-                                          color: '#ff9999'
-                                        }}>
-                                          ⚠️  PROBLEM: Gemini provided keywords but Pexels returned no image.
-                                          <br />Possible causes:
-                                          <br />• PEXELS_API_KEY not set or invalid
-                                          <br />• Rate limit exceeded (200/hour)
-                                          <br />• Network error
-                                          <br />• No matching images for these keywords
-                      </div>
-                    )}
-                  </div>
-              </div>
-                                </>
-                              )}
-                              
-                              {carousel.kind !== 'MIDDLE' && (
-                                <div style={{ marginTop: '8px', color: '#888', fontSize: '12px' }}>
-                                  ℹ️  Images only available for content carousels
-            </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                        
-                        {!emphasis && (
-              <div style={{ 
-                            marginTop: '10px', 
-                            padding: '10px', 
-                            background: '#2a1a1a', 
-                            border: '1px solid #ff4444',
-                            borderRadius: '4px',
-                            color: '#ff9999'
-                          }}>
-                            ❌ NO GEMINI EXTRACTION DATA - This is a problem!
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-                
-                <div style={{ 
-                  marginTop: '30px', 
-                  paddingTop: '20px', 
-                  borderTop: '2px solid #333',
-                  color: '#888'
-                }}>
-                  <div style={{ color: '#ffbd59', fontWeight: 'bold', marginBottom: '10px' }}>
-                    📊 SUMMARY:
-                  </div>
-                  <div style={{ marginLeft: '15px' }}>
-                    <div>Total Carousels: {note.carousels.length}</div>
-                    <div>Content carousels: {note.carousels.filter(c => c.kind === 'MIDDLE').length}</div>
-                    <div>
-                      Images Found: {note.carousels.filter((c, i) => c.kind === 'MIDDLE' && (note as any).underlineWords?.[i]?.imageUrl).length} / {note.carousels.filter(c => c.kind === 'MIDDLE').length}
-                    </div>
-                    <div style={{ marginTop: '10px', color: '#fff' }}>
-                      Raw underlineWords data:
-                      <pre style={{ 
-                        marginTop: '6px', 
-                        padding: '10px', 
-                        background: '#0a0a0a', 
-                        border: '1px solid #333',
-                        borderRadius: '4px',
-                        fontSize: '11px',
-                        overflowX: 'auto'
-                      }}>
-                        {JSON.stringify((note as any).underlineWords, null, 2)}
-                      </pre>
-                    </div>
-                  </div>
-              </div>
-            </div>
-            </div>
-            )}
+      </section>
+      {/* Comparison Table */}
+      <section
+        style={{
+          padding: '120px 24px',
+          background: '#fafafa',
+        }}
+      >
+        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '80px' }}>
+            <h2
+              style={{
+                fontSize: 'clamp(36px, 6vw, 56px)',
+                fontWeight: '800',
+          color: '#000000',
+                letterSpacing: '-2px',
+                marginBottom: '16px',
+              }}
+            >
+              Create professional content instantly
+        </h2>
+            <p
+              style={{
+                fontSize: 'clamp(18px, 2.5vw, 22px)',
+                color: '#666666',
+                margin: '0 auto 48px',
+                lineHeight: '1.6',
+                maxWidth: '700px',
+              }}
+            >
+              Post My Note turns your thoughts into clean, on-brand carousels so you can share faster and stay consistent.
+            </p>
           </div>
-        )}
-      </div>
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '24px',
+              border: '1px solid #e5e5e5',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Header Row */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr 1fr',
+                padding: '0',
+                background: '#fafafa',
+                fontWeight: '700',
+                fontSize: 'clamp(12px, 2vw, 18px)',
+                color: '#000000',
+                letterSpacing: '0.5px',
+              }}
+            >
+              <div style={{ padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', borderBottom: '1px solid #f0f0f0' }}></div>
+              <div style={{ textAlign: 'center', padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', borderBottom: '1px solid #f0f0f0', wordWrap: 'break-word', overflowWrap: 'break-word' }}>Canva</div>
+              <div style={{ textAlign: 'center', background: '#ffbd59', padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', borderBottom: '0.5px solid rgba(240, 240, 240, 0.5)', wordWrap: 'break-word', overflowWrap: 'break-word' }}>Post My Note</div>
+            </div>
+            {/* Data Rows */}
+            {comparisonData.map((row, index) => (
+              <div
+                key={index}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr 1fr',
+                  padding: '0',
+                  alignItems: 'center',
+                }}
+              >
+                <div style={{ fontWeight: '600', color: '#000000', fontSize: 'clamp(13px, 2vw, 19px)', padding: 'clamp(16px, 3vw, 24px) 0 clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', borderTop: '1px solid #f0f0f0', wordWrap: 'break-word', overflowWrap: 'break-word' }}>{row.metric}</div>
+                <div style={{ textAlign: 'center', color: '#999999', fontSize: 'clamp(12px, 2vw, 17px)', padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', borderTop: '1px solid #f0f0f0', wordWrap: 'break-word', overflowWrap: 'break-word' }}>{row.manual}</div>
+                <div style={{ textAlign: 'center', color: '#000000', fontWeight: '600', fontSize: 'clamp(12px, 2vw, 17px)', background: '#ffbd59', padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', borderTop: '0.5px solid rgba(240, 240, 240, 0.5)', wordWrap: 'break-word', overflowWrap: 'break-word' }}>
+                  {row.postMyNote}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-      {/* Upgrade Prompt */}
-      <UpgradePrompt
-        isOpen={showUpgradePrompt}
-        onClose={() => setShowUpgradePrompt(false)}
-        currentPlan={credits?.current_plan || null}
-      />
+      {/* Testimonials */}
+      {/* <section
+        style={{
+          padding: '120px 24px',
+          background: '#fafafa',
+        }}
+      >
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '80px' }}>
+            <h2
+              style={{
+                fontSize: 'clamp(36px, 6vw, 56px)',
+                fontWeight: '800',
+                color: '#000000',
+                letterSpacing: '-2px',
+                marginBottom: '16px',
+              }}
+            >
+              Why creators love Post My Note
+            </h2>
+          </div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+              gap: '24px',
+            }}
+          >
+            {testimonials.map((testimonial, index) => (
+              <div
+                key={index}
+                style={{
+                  padding: '32px',
+                  background: '#ffffff',
+                  borderRadius: '20px',
+                  border: '1px solid #e5e5e5',
+                }}
+              >
+                <p style={{ color: '#333333', lineHeight: '1.7', fontSize: '15px', marginBottom: '24px' }}>
+                  {testimonial.quote}
+                </p>
+                <div>
+                  <div style={{ fontSize: '15px', fontWeight: '700', color: '#000000', marginBottom: '4px' }}>
+                    {testimonial.name}
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#999999' }}>{testimonial.role}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section> */}
 
-      {/* Subscription Modal */}
-      <SubscriptionModal
-        isOpen={showSubscriptionModal}
-        onClose={() => setShowSubscriptionModal(false)}
-        currentPlan={credits?.current_plan || null}
-        credits={credits?.credits_remaining}
-        subscriptionStatus={credits?.subscription_status || null}
-      />
+      {/* Pricing */}
+      {/* <section
+        style={{
+          padding: '120px 24px',
+          background: '#ffffff',
+        }}
+      >
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '80px' }}>
+            <h2
+              style={{
+                fontSize: 'clamp(36px, 6vw, 56px)',
+                fontWeight: '800',
+          color: '#000000',
+                letterSpacing: '-2px',
+                marginBottom: '16px',
+              }}
+            >
+              Pricing
+        </h2>
+            <p style={{ fontSize: '18px', color: '#666666' }}>
+              Choose the plan that fits your content creation needs
+            </p>
+          </div>
+          <div
+            style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+          gap: '32px',
+              maxWidth: '1100px',
+              margin: '0 auto',
+            }}
+          >
+            {pricingPlans.map((plan, index) => (
+              <div
+                key={index}
+                style={{
+                  padding: '48px 32px',
+                  background: plan.highlighted ? '#ffbd59' : '#fafafa',
+                  borderRadius: '24px',
+                  border: plan.highlighted ? '2px solid #ffbd59' : '1px solid #e5e5e5',
+                  position: 'relative',
+                  transform: plan.highlighted ? 'scale(1.05)' : 'scale(1)',
+                  transition: 'all 0.3s ease',
+                }}
+              >
+                {plan.highlighted && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '16px',
+                      right: '16px',
+                      padding: '4px 12px',
+                      background: '#000000',
+                      color: '#ffffff',
+                      borderRadius: '999px',
+                      fontSize: '11px',
+                      fontWeight: '700',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                    }}
+                  >
+                    POPULAR
+                  </div>
+                )}
+                <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '8px', color: '#000000' }}>{plan.name}</h3>
+                <div style={{ marginBottom: '32px' }}>
+                  <span style={{ fontSize: '48px', fontWeight: '800', color: '#000000' }}>{plan.price}</span>
+                  <span style={{ fontSize: '16px', color: '#666666' }}>{plan.period}</span>
+                </div>
+                <ul style={{ listStyle: 'none', marginBottom: '32px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {plan.features.map((feature, fIndex) => (
+                    <li key={fIndex} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <Check size={18} color={plan.highlighted ? '#000000' : '#ffbd59'} strokeWidth={3} />
+                      <span style={{ color: '#333333', fontSize: '14px' }}>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/signup"
+                  style={{
+                    display: 'block',
+                    textAlign: 'center',
+                    padding: '14px',
+                    borderRadius: '12px',
+                    background: plan.highlighted ? '#000000' : '#ffffff',
+                    color: plan.highlighted ? '#ffffff' : '#000000',
+              fontSize: '15px',
+              fontWeight: '600',
+                    textDecoration: 'none',
+                    border: plan.highlighted ? 'none' : '1px solid #e5e5e5',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  {plan.cta}
+                </Link>
+            </div>
+            ))}
+          </div>
+        </div>
+      </section> */}
+
+      {/* CTA Section */}
+      <section
+        style={{
+          padding: '120px 24px',
+          background: '#000000',
+          textAlign: 'center',
+        }}
+      >
+        <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+          <h2
+            style={{
+              fontSize: 'clamp(36px, 6vw, 56px)',
+              fontWeight: '800',
+              color: '#ffffff',
+              letterSpacing: '-2px',
+              marginBottom: '24px',
+            }}
+          >
+            Ready to create smarter?
+          </h2>
+          <Link
+            href={user ? "/app" : "/signup"}
+            className="cta-button"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '20px 40px',
+              borderRadius: '999px',
+              background: '#ffbd59',
+              color: '#000000',
+              fontSize: '16px',
+              fontWeight: '600',
+              textDecoration: 'none',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            {user ? "Go to app" : "Get Started Free"}
+            <ArrowRight size={18} />
+          </Link>
+            </div>
+      </section>
+
+      {/* Footer */}
+      <footer
+        style={{
+          padding: '48px 24px',
+          background: '#000000',
+          borderTop: '1px solid #222222',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '1200px',
+            margin: '0 auto',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '24px',
+          }}
+        >
+          <div style={{ color: '#666666', fontSize: '14px' }}>© 2025 Post My Note. All rights reserved.</div>
+          <div style={{ display: 'flex', gap: '32px' }}>
+            <Link href="/" style={{ color: '#999999', fontSize: '14px', textDecoration: 'none' }}>
+              Home
+            </Link>
+            <Link href="/signup" style={{ color: '#999999', fontSize: '14px', textDecoration: 'none' }}>
+              Get Started
+            </Link>
+          </div>
+        </div>
+      </footer>
+      <style jsx global>{`
+        @keyframes ringSpin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        @keyframes ringCounterSpin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(-360deg);
+          }
+        }
+
+        @keyframes scrollLeft {
+          from {
+            transform: translateX(0);
+          }
+          to {
+            transform: translateX(calc(-100% / 3));
+          }
+        }
+
+        @keyframes scrollRight {
+          from {
+            transform: translateX(calc(-100% / 3));
+          }
+          to {
+            transform: translateX(0);
+          }
+        }
+
+        .scroll-row-left:hover,
+        .scroll-row-right:hover {
+          animation-play-state: paused;
+        }
+
+        .scrolling-carousel-section:hover .scroll-row-left,
+        .scrolling-carousel-section:hover .scroll-row-right {
+          animation-play-state: paused;
+        }
+
+        .carousel-card:hover {
+          transform: scale(1.02);
+          transition: transform 0.2s ease;
+        }
+
+        .carousel-card:active {
+          transform: scale(0.98);
+        }
+
+        .carousel-card:hover ~ *,
+        .carousel-card:active ~ * {
+          animation-play-state: paused;
+        }
+
+        .scroll-row-left:has(.carousel-card:hover),
+        .scroll-row-right:has(.carousel-card:hover) {
+          animation-play-state: paused;
+        }
+
+        .scroll-row-left:has(.carousel-card:active),
+        .scroll-row-right:has(.carousel-card:active) {
+          animation-play-state: paused;
+        }
+
+        .features-heading {
+          text-align: center;
+        }
+
+        @media (min-width: 768px) {
+          .features-heading {
+            text-align: left;
+          }
+        }
+
+        .cta-button:hover {
+          background: #ffa929 !important;
+        }
+      `}</style>
     </div>
   )
 }

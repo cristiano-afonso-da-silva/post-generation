@@ -239,7 +239,7 @@ export default function LandingPage() {
               fontSize: 'clamp(48px, 8vw, 84px)',
               fontWeight: '800',
           lineHeight: '1.1',
-              letterSpacing: '-3px',
+              letterSpacing: '-1px',
           color: '#000000',
               marginBottom: '24px',
             }}
@@ -319,10 +319,12 @@ export default function LandingPage() {
           {[...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
             <div
               key={`left-${index}`}
+              className="carousel-card"
               style={{
                 flexShrink: 0,
                 width: 'clamp(200px, 25vw, 300px)',
                 height: 'auto',
+                cursor: 'pointer',
               }}
             >
               <Image
@@ -357,10 +359,12 @@ export default function LandingPage() {
           {[...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
             <div
               key={`right-${index}`}
+              className="carousel-card"
               style={{
                 flexShrink: 0,
                 width: 'clamp(200px, 25vw, 300px)',
                 height: 'auto',
+                cursor: 'pointer',
               }}
             >
               <Image
@@ -836,6 +840,30 @@ export default function LandingPage() {
 
         .scrolling-carousel-section:hover .scroll-row-left,
         .scrolling-carousel-section:hover .scroll-row-right {
+          animation-play-state: paused;
+        }
+
+        .carousel-card:hover {
+          transform: scale(1.02);
+          transition: transform 0.2s ease;
+        }
+
+        .carousel-card:active {
+          transform: scale(0.98);
+        }
+
+        .carousel-card:hover ~ *,
+        .carousel-card:active ~ * {
+          animation-play-state: paused;
+        }
+
+        .scroll-row-left:has(.carousel-card:hover),
+        .scroll-row-right:has(.carousel-card:hover) {
+          animation-play-state: paused;
+        }
+
+        .scroll-row-left:has(.carousel-card:active),
+        .scroll-row-right:has(.carousel-card:active) {
           animation-play-state: paused;
         }
 

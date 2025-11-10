@@ -16,7 +16,7 @@ export default function SignInPage() {
 
   useEffect(() => {
     if (!loading && user) {
-      router.push('/')
+      router.push('/app')
     }
   }, [user, loading, router])
 
@@ -53,10 +53,18 @@ export default function SignInPage() {
     setIsLoading(true)
 
     try {
+      // Use custom domain for production, fallback to current origin for development
+      const isProduction = typeof window !== 'undefined' && 
+        (window.location.hostname === 'postmynote.app' || 
+         window.location.hostname === 'www.postmynote.app')
+      const redirectUrl = isProduction 
+        ? 'https://postmynote.app/' 
+        : `${window.location.origin}/`
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/`,
+          redirectTo: redirectUrl,
         },
       })
 
