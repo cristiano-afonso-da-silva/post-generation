@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
 import SubscriptionModal from './SubscriptionModal'
@@ -120,24 +121,24 @@ export default function AccountModal({
     router.push('/landing')
   }
 
-  return (
-    <>
-      <div
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1001,
-          padding: '20px',
-        }}
-        onClick={onClose}
-      >
+  const modalContent = (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+        padding: '20px',
+        overflow: 'auto',
+      }}
+      onClick={onClose}
+    >
         <div
           style={{
             background: '#ffffff',
@@ -435,20 +436,29 @@ export default function AccountModal({
             </button>
           </div>
         </div>
-      </div>
-
-      {showSubscriptionModal && (
-        <SubscriptionModal
-          isOpen={showSubscriptionModal}
-          onClose={() => {
-            setShowSubscriptionModal(false)
-          }}
-          currentPlan={currentPlan}
-          credits={credits}
-          subscriptionStatus={subscriptionStatus}
-        />
-      )}
-    </>
+    </div>
   )
+
+  // Use portal to render modal at document body level
+  if (typeof window !== 'undefined') {
+    return (
+      <>
+        {createPortal(modalContent, document.body)}
+        {showSubscriptionModal && (
+          <SubscriptionModal
+            isOpen={showSubscriptionModal}
+            onClose={() => {
+              setShowSubscriptionModal(false)
+            }}
+            currentPlan={currentPlan}
+            credits={credits}
+            subscriptionStatus={subscriptionStatus}
+          />
+        )}
+      </>
+    )
+  }
+  
+  return null
 }
 

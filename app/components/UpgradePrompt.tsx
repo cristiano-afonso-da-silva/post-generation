@@ -1,5 +1,6 @@
 'use client'
 
+import { createPortal } from 'react-dom'
 import SubscriptionModal from './SubscriptionModal'
 import { useState, useEffect } from 'react'
 
@@ -21,25 +22,24 @@ export default function UpgradePrompt({ isOpen, onClose, currentPlan }: UpgradeP
 
   if (!isOpen && !showSubscriptionModal) return null
 
-  return (
-    <>
-      {isOpen && !showSubscriptionModal && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '20px',
-          }}
-          onClick={onClose}
-        >
+  const modalContent = isOpen && !showSubscriptionModal ? (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9998,
+        padding: '20px',
+        overflow: 'auto',
+      }}
+      onClick={onClose}
+    >
         <div
           style={{
             background: '#ffffff',
@@ -87,18 +87,26 @@ export default function UpgradePrompt({ isOpen, onClose, currentPlan }: UpgradeP
           </div>
         </div>
       </div>
-      )}
+  ) : null
 
-      {showSubscriptionModal && (
-        <SubscriptionModal
-          isOpen={showSubscriptionModal}
-          onClose={() => {
-            setShowSubscriptionModal(false)
-          }}
-          currentPlan={currentPlan}
-        />
-      )}
-    </>
-  )
+  // Use portal to render modal at document body level
+  if (typeof window !== 'undefined') {
+    return (
+      <>
+        {modalContent && createPortal(modalContent, document.body)}
+        {showSubscriptionModal && (
+          <SubscriptionModal
+            isOpen={showSubscriptionModal}
+            onClose={() => {
+              setShowSubscriptionModal(false)
+            }}
+            currentPlan={currentPlan}
+          />
+        )}
+      </>
+    )
+  }
+  
+  return null
 }
 

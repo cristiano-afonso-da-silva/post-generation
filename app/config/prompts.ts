@@ -18,13 +18,14 @@ Generate 10 highly specific, compelling post idea titles for this account:
 "${accountDescription}"
 
 REQUIREMENTS
-✓ Each title must be 8-12 words maximum
+✓ Each title must be 6-10 words maximum
 ✓ Titles should be specific and actionable (not vague)
 ✓ Cover diverse angles: how-to, mistakes, frameworks, case studies, experiments, myths, mindset shifts
 ✓ No emojis, no numbering, no quotes
 ✓ Each must be clearly distinct from others (no semantic overlap)
 ✓ Use plain, direct language
 ✓ Focus on value delivery and curiosity
+✓ NO dashes (-) or semicolons (;) anywhere in the generated content
 
 EXAMPLES OF GOOD TITLES
 - "Why Your Morning Routine Is Sabotaging Your Productivity"
@@ -97,7 +98,7 @@ LAST CAROUSEL: CALL TO ACTION (CTA)
 - kind: "CTA"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-INSTAGRAM CAPTION (150-250 words)
+INSTAGRAM CAPTION (80-120 words)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Structure:
 1. Opening hook (1-2 sentences that expand on the post idea)
@@ -146,6 +147,7 @@ QUALITY CHECKLIST
 ✓ Caption is 150-250 words
 ✓ No asterisks, no markdown formatting
 ✓ Simple, clear English throughout
+✓ NO dashes (-) or semicolons (;) anywhere in titles, content, or captions
 `.trim();
 
 /**

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../context/AuthContext'
 import { STRIPE_PLANS, getPlanById } from '../config/stripeConfig'
 import { loadStripe } from '@stripe/stripe-js'
@@ -165,7 +166,7 @@ export default function SubscriptionModal({
     }
   }
 
-  return (
+  const modalContent = (
     <div
       style={{
         position: 'fixed',
@@ -177,8 +178,9 @@ export default function SubscriptionModal({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 1001,
+        zIndex: 10000,
         padding: '20px',
+        overflow: 'auto',
       }}
       onClick={onClose}
     >
@@ -451,5 +453,12 @@ export default function SubscriptionModal({
       </div>
     </div>
   )
+
+  // Use portal to render modal at document body level
+  if (typeof window !== 'undefined') {
+    return createPortal(modalContent, document.body)
+  }
+  
+  return null
 }
 
