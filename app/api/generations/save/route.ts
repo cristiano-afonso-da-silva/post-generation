@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
     console.log(`⚡ Starting parallel upload of ${images.length} images...`)
     const uploadStartTime = Date.now()
     
-    const uploadPromises = images.map(async (imageData, i) => {
+    const uploadPromises = images.map(async (imageData: string, i: number) => {
       const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '')
       const buffer = Buffer.from(base64Data, 'base64')
       
