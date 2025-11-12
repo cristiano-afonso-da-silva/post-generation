@@ -647,8 +647,8 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                   
                   {/* Textarea for business description */}
                   <textarea
-                    className="input mobile-prompt"
-                    placeholder="Describe what you want to create"
+                    className="input mobile-prompt idea-textarea"
+                    placeholder="Type your idea here..."
                     value={accountDescription}
                     onChange={(e) => setAccountDescription(e.target.value)}
                     rows={4}
@@ -656,7 +656,13 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                       width: '100%', 
                       resize: 'vertical',
                       maxHeight: '200px',
-                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif'
+                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
+                      border: '2px solid #ffbd59',
+                      borderRadius: '12px',
+                      padding: '16px',
+                      background: '#ffffff',
+                      boxShadow: '0 2px 8px rgba(255, 189, 89, 0.1)',
+                      transition: 'all 0.2s ease'
                     }}
                   />
                   
@@ -725,10 +731,14 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
 
                   {/* Generate button */}
                   <button
-                    className="button mobile-generate"
+                    className="button mobile-generate generate-button-pop"
                     onClick={generateIdeas}
                     disabled={loadingIdeas || !accountDescription.trim()}
-                    style={{ width: '100%' }}
+                    style={{ 
+                      width: '100%',
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                      transition: 'all 0.2s ease'
+                    }}
                   >
                     {loadingIdeas ? 'Generating...' : 'Generate'}
                   </button>

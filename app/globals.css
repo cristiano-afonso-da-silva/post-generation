@@ -44,6 +44,23 @@ a {
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
+   SERIF FONT STYLING
+   ════════════════════════════════════════════════════════════════════════════ */
+
+h1[style*="font-family"][style*="serif"],
+h2[style*="font-family"][style*="serif"],
+h3[style*="font-family"][style*="serif"],
+h4[style*="font-family"][style*="serif"],
+h5[style*="font-family"][style*="serif"],
+h6[style*="font-family"][style*="serif"],
+*[style*="font-family"][style*="playfair"],
+*[style*="font-family"][style*="serif"] {
+  letter-spacing: 0.01em !important;
+  line-height: 1.2 !important;
+  max-width: 65ch !important;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
    TEXT SELECTION
    ════════════════════════════════════════════════════════════════════════════ */
 
@@ -504,6 +521,12 @@ textarea.input {
   .mobile-generate {
     width: 100% !important;
     min-width: 0 !important;
+    background: rgb(242, 242, 242) !important;
+    color: rgb(0, 0, 0) !important;
+  }
+
+  .mobile-generate:hover:not(:disabled) {
+    background: rgb(230, 230, 230) !important;
   }
 
   .mobile-reset {
@@ -610,5 +633,47 @@ textarea.input {
   .right-pane {
     flex: 1 1 auto;
   }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   POP ANIMATION & ENHANCED STYLING
+   ════════════════════════════════════════════════════════════════════════════ */
+
+@keyframes pop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.generate-button-pop {
+  position: relative;
+}
+
+.generate-button-pop:active:not(:disabled) {
+  animation: pop 0.2s ease;
+  box-shadow: 0 2px 6px rgba(255, 189, 89, 0.4) !important;
+}
+
+.generate-button-pop:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(255, 189, 89, 0.4) !important;
+}
+
+.idea-textarea:focus {
+  outline: none;
+  border-color: #ffbd59 !important;
+  box-shadow: 0 4px 12px rgba(255, 189, 89, 0.2) !important;
+  transform: translateY(-1px);
+}
+
+.idea-textarea::placeholder {
+  color: #999999;
+  font-style: italic;
 }
 
