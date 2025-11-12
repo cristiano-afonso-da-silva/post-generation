@@ -266,9 +266,24 @@ const NOTE_SCHEMA = {
       items: {
         type: SchemaType.OBJECT,
         properties: {
+          topic: {
+            type: SchemaType.STRING,
+            description: "Category label (1-2 words, all caps, only for HOOK carousel)",
+            nullable: true
+          },
           title: {
             type: SchemaType.STRING,
             description: "Carousel title (2-5 words for MIDDLE, ≤10 words for HOOK)"
+          },
+          subtitle: {
+            type: SchemaType.STRING,
+            description: "Subtitle text (3-8 words, only for HOOK carousel)",
+            nullable: true
+          },
+          cta: {
+            type: SchemaType.STRING,
+            description: "CTA button text (2-3 words, only for HOOK carousel)",
+            nullable: true
           },
           content: {
             type: SchemaType.STRING,

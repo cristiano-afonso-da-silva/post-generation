@@ -61,10 +61,17 @@ Create a complete note with carousels and caption that follows these EXACT speci
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CAROUSEL 1: HOOK (FIRST CAROUSEL)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- topic: Short category label (1-2 words, all caps)
+  * Example: "ENTREPRENEURSHIP", "PRODUCTIVITY", "MARKETING"
 - title: The hook text itself (maximum 10 words)
   * Use simple English - easy to understand, clear, and direct
   * Avoid complex words or jargon
   * Make it attention-grabbing and engaging
+- subtitle: Short descriptive text (3-8 words)
+  * Provides context or intrigue
+  * Example: "How I Stay Focused & Sane", "The Secret Nobody Tells You"
+- cta: Call-to-action button text (2-3 words)
+  * Example: "Check details", "Learn more", "Read now"
 - content: "" (leave empty)
 - kind: "HOOK"
 
@@ -132,7 +139,7 @@ Required JSON structure:
 {
   "ideaTitle": "string (the original post idea)",
   "slides": [
-    {"title": "string", "content": "string", "kind": "HOOK"},
+    {"topic": "string", "title": "string", "subtitle": "string", "cta": "string", "content": "", "kind": "HOOK"},
     {"title": "string", "content": "string", "kind": "MIDDLE"},
     {"title": "string", "content": "string", "kind": "MIDDLE"},
     {"title": "string", "content": "string", "kind": "CTA"}
@@ -140,11 +147,13 @@ Required JSON structure:
   "caption": "string (full Instagram caption with hashtags)"
 }
 
+IMPORTANT: The first slide (HOOK) MUST include topic, subtitle, and cta fields. Middle and CTA slides do NOT need these fields.
+
 The "slides" array is REQUIRED and MUST contain at least 3 carousels.
 Each carousel MUST have: title, content, and kind properties.
 
 QUALITY CHECKLIST
-✓ Hook carousel has compelling title (max 10 words), empty content
+✓ Hook carousel has topic (1-2 words), compelling title (max 10 words), subtitle (3-8 words), cta (2-3 words), empty content
 ✓ Middle carousels have 2-5 word titles and 18-32 word content
 ✓ Content flows logically and tells a story
 ✓ CTA is specific and actionable

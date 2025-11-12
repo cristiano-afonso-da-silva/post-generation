@@ -10,7 +10,7 @@ interface Generation {
   caption: string
   underline_words: any
   account_description: string
-  font_combination_id: string
+  template_id: string
   color_theme_id: string
   image_urls: string[]
 }

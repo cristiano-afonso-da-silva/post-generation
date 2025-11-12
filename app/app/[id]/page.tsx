@@ -8,7 +8,8 @@ import { History, Palette, Edit3, MessageSquare, ChevronLeft, Plus } from 'lucid
 import type { LucideIcon } from 'lucide-react'
 import '../../globals.css'
 import CarouselImageGenerator from '../../components/CarouselImageGenerator'
-import { FONT_COMBINATIONS, COLOR_THEMES } from '../../config/carouselThemes'
+import { COLOR_THEMES } from '../../config/carouselThemes'
+import { getTemplateOptions } from '../../config/carouselTemplates'
 import { useAuth } from '../../context/AuthContext'
 import { useGeneration } from '../../hooks/useGenerations'
 import AccountButton from '../../components/AccountButton'
@@ -17,18 +18,15 @@ import SubscriptionModal from '../../components/SubscriptionModal'
 
 const API_URL = ''
 
-type BackgroundOption = {
-  id: string
-  label: string
-  src: string
-}
-
 interface Note {
   ideaTitle: string
   carousels: Array<{
     title: string
     content: string
     kind: 'HOOK' | 'MIDDLE' | 'CTA'
+    topic?: string
+    subtitle?: string
+    cta?: string
   }>
   caption: string
   underlineWords?: Record<number, { underline: string; highlight: string; imageSearch?: string; imageUrl?: string | null; originalImageUrl?: string | null }>
@@ -94,10 +92,9 @@ export default function GenerationPage() {
   const [activeLeftTab, setActiveLeftTab] = useState<'design' | 'carousels' | 'caption'>('design')
   const [expandedCarouselIndexes, setExpandedCarouselIndexes] = useState<number[]>([])
   const [showCustomisation, setShowCustomisation] = useState(true)
-  const [backgroundId, setBackgroundId] = useState<string>('')
   
   // Theme settings
-  const [fontCombinationId, setFontCombinationId] = useState('combination-1')
+  const [templateId, setTemplateId] = useState('template1')
   const [colorThemeId, setColorThemeId] = useState('purple-black')
 
   const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] = [
@@ -128,7 +125,7 @@ export default function GenerationPage() {
     setEditedCarousels(generation.slides.map((slide: any) => ({ ...slide })))
     setEditedCaption(generation.caption || '')
     setAccountDescription(generation.account_description || '')
-    setFontCombinationId(generation.font_combination_id || 'combination-1')
+    setTemplateId(generation.template_id || 'template1')
     setColorThemeId(generation.color_theme_id || 'purple-black')
       
     // Store minimal data in localStorage for CarouselImageGenerator
@@ -147,27 +144,6 @@ export default function GenerationPage() {
       }
     }
   }, [generation, user])
-
-  // Memoize available background images - only compute once
-  const backgroundOptions = useMemo<BackgroundOption[]>(() => {
-    // Pre-defined list instead of fetching - much faster
-    const backgrounds = []
-    for (let i = 1; i <= 10; i++) {
-      backgrounds.push({
-        id: `bg${i}`,
-        label: `Background ${i}`,
-        src: `/backgrounds/bg${i}.jpg`
-      })
-    }
-    return backgrounds
-  }, [])
-  
-  // Set default background
-  useEffect(() => {
-    if (backgroundOptions.length > 0 && !backgroundId) {
-      setBackgroundId(backgroundOptions[0].id)
-    }
-  }, [backgroundOptions, backgroundId])
 
   // Sync editable carousels with generated note
   useEffect(() => {
@@ -488,17 +464,17 @@ export default function GenerationPage() {
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
                         <div>
                           <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
-                            Font Combination
+                            Template
                           </label>
                           <select
-                            value={fontCombinationId}
-                            onChange={(e) => setFontCombinationId(e.target.value)}
+                            value={templateId}
+                            onChange={(e) => setTemplateId(e.target.value)}
                             className="input"
                             style={{ cursor: 'pointer', padding: '12px' }}
                           >
-                            {FONT_COMBINATIONS.map(combo => (
-                              <option key={combo.id} value={combo.id}>
-                                {combo.name}
+                            {getTemplateOptions().map(template => (
+                              <option key={template.id} value={template.id}>
+                                {template.name}
                               </option>
                             ))}
                           </select>
@@ -520,25 +496,6 @@ export default function GenerationPage() {
                             ))}
                           </select>
                         </div>
-                        {backgroundOptions.length > 0 && (
-                          <div>
-                            <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
-                              Background Texture
-                            </label>
-                            <select
-                              value={backgroundId}
-                              onChange={(e) => setBackgroundId(e.target.value)}
-                              className="input"
-                              style={{ cursor: 'pointer', padding: '12px' }}
-                            >
-                              {backgroundOptions.map(option => (
-                                <option key={option.id} value={option.id}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
                       </div>
                     </div>
                   )}
@@ -707,15 +664,10 @@ export default function GenerationPage() {
                     carousels={carouselsDirty && editedCarousels.length > 0 ? editedCarousels : note.carousels}
                     ideaTitle={note.ideaTitle}
                     underlineWords={note.underlineWords || {}}
-                    fontCombinationId={fontCombinationId}
+                    templateId={templateId}
                     colorThemeId={colorThemeId}
                     accountDescription={accountDescription}
                     caption={note.caption}
-                    backgroundImageUrl={
-                      backgroundId
-                        ? backgroundOptions.find(option => option.id === backgroundId)?.src ?? null
-                        : null
-                    }
                     onGenerationComplete={() => {
                       // Navigate to /app/{generationId} after saving
                       const savedGenerationId = localStorage.getItem('postGeneration_generationId')

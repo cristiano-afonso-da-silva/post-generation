@@ -26,6 +26,7 @@ export interface ColorTheme {
   textColor: string
   highlightColor: string  // Used for hook first line and important words
   underlineColor: string
+  primaryColor: string  // Used for CTA boxes, arrows, and accent elements
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -69,49 +70,56 @@ export const COLOR_THEMES: ColorTheme[] = [
     name: 'Purple + Black',
     textColor: '#000000',
     highlightColor: 'rgba(119, 119, 255, 0.5)',
-    underlineColor: '#000000'
+    underlineColor: '#000000',
+    primaryColor: '#7777FF'
   },
   {
     id: 'blue-black',
     name: 'Blue + Black',
     textColor: '#000000',
     highlightColor: 'rgba(59, 130, 246, 0.5)',
-    underlineColor: '#000000'
+    underlineColor: '#000000',
+    primaryColor: '#3B82F6'
   },
   {
     id: 'pink-black',
     name: 'Pink + Black',
     textColor: '#000000',
     highlightColor: 'rgba(236, 72, 153, 0.5)',
-    underlineColor: '#000000'
+    underlineColor: '#000000',
+    primaryColor: '#EC4899'
   },
   {
     id: 'orange-black',
     name: 'Orange + Black',
     textColor: '#000000',
     highlightColor: 'rgba(249, 115, 22, 0.5)',
-    underlineColor: '#000000'
+    underlineColor: '#000000',
+    primaryColor: '#F97316'
   },
   {
     id: 'coral-navy',
     name: 'Coral + Black',
     textColor: '#000000',
     highlightColor: 'rgba(255, 107, 107, 0.5)',
-    underlineColor: '#000000'
+    underlineColor: '#000000',
+    primaryColor: '#FF6B6B'
   },
   {
     id: 'gold-green',
     name: 'Gold + Black',
     textColor: '#000000',
     highlightColor: 'rgba(255, 195, 0, 0.5)',
-    underlineColor: '#000000'
+    underlineColor: '#000000',
+    primaryColor: '#FFC300'
   },
   {
     id: 'mint-gray',
     name: 'Mint + Black',
     textColor: '#000000',
     highlightColor: 'rgba(0, 230, 118, 0.5)',
-    underlineColor: '#000000'
+    underlineColor: '#000000',
+    primaryColor: '#00E676'
   }
 ]
 

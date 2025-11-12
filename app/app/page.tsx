@@ -8,7 +8,8 @@ import { History, Palette, Edit3, MessageSquare, ChevronLeft, Plus } from 'lucid
 import type { LucideIcon } from 'lucide-react'
 import '../globals.css'
 import CarouselImageGenerator from '../components/CarouselImageGenerator'
-import { FONT_COMBINATIONS, COLOR_THEMES } from '../config/carouselThemes'
+import { COLOR_THEMES } from '../config/carouselThemes'
+import { getTemplateOptions } from '../config/carouselTemplates'
 import { useAuth } from '../context/AuthContext'
 import AccountButton from '../components/AccountButton'
 import UpgradePrompt from '../components/UpgradePrompt'
@@ -16,18 +17,15 @@ import SubscriptionModal from '../components/SubscriptionModal'
 
 const API_URL = ''
 
-type BackgroundOption = {
-  id: string
-  label: string
-  src: string
-}
-
 interface Note {
   ideaTitle: string
   carousels: Array<{
     title: string
     content: string
     kind: 'HOOK' | 'MIDDLE' | 'CTA'
+    topic?: string
+    subtitle?: string
+    cta?: string
   }>
   caption: string
   underlineWords?: Record<number, { underline: string; highlight: string; imageSearch?: string; imageUrl?: string | null; originalImageUrl?: string | null }>
@@ -87,36 +85,22 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
 ]
 
   const showDebugPanel = false
-  const [backgroundId, setBackgroundId] = useState<string>('')
   
   // Theme settings
-  const [fontCombinationId, setFontCombinationId] = useState('combination-1')
+  const [templateId, setTemplateId] = useState('template1')
   const [colorThemeId, setColorThemeId] = useState('purple-black')
   
-  // Memoize available background images - only compute once, no network requests
-  const backgroundOptions = useMemo<BackgroundOption[]>(() => {
-    const backgrounds = []
-    for (let i = 1; i <= 10; i++) {
-      backgrounds.push({
-        id: `bg${i}`,
-        label: `Background ${i}`,
-        src: `/backgrounds/bg${i}.jpg`
-      })
-    }
-    return backgrounds
-  }, [])
-
   // Save theme changes to localStorage
   useEffect(() => {
     if (note) {
       try {
-        localStorage.setItem('postGeneration_fontCombinationId', fontCombinationId)
+        localStorage.setItem('postGeneration_templateId', templateId)
         localStorage.setItem('postGeneration_colorThemeId', colorThemeId)
       } catch (error) {
         console.error('Error saving theme to localStorage:', error)
       }
     }
-  }, [fontCombinationId, colorThemeId, note])
+  }, [templateId, colorThemeId, note])
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -169,35 +153,6 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
       return [...prev, index]
     })
   }, [])
-  
-  // Set default background on mount
-  useEffect(() => {
-    if (backgroundOptions.length > 0 && !backgroundId) {
-      try {
-        const savedId = localStorage.getItem('postGeneration_backgroundId')
-        if (savedId && backgroundOptions.some(option => option.id === savedId)) {
-          setBackgroundId(savedId)
-        } else {
-          setBackgroundId(backgroundOptions[0].id)
-        }
-      } catch (error) {
-        console.warn('Unable to read background preference from localStorage:', error)
-        setBackgroundId(backgroundOptions[0].id)
-      }
-    }
-  }, [backgroundOptions, backgroundId])
-
-  useEffect(() => {
-    if (!backgroundId) return
-    try {
-      localStorage.setItem('postGeneration_backgroundId', backgroundId)
-      // If note exists, trigger regeneration by updating a dependency
-      // The CarouselImageGenerator will detect the backgroundImageUrl change
-    } catch (error) {
-      console.warn('Unable to persist background preference to localStorage:', error)
-    }
-  }, [backgroundId])
-
 
   // Clear localStorage and reset all state on mount - /app is always a fresh/new idea page
   useEffect(() => {
@@ -206,7 +161,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
       try {
         localStorage.removeItem('postGeneration_note')
         localStorage.removeItem('postGeneration_accountDescription')
-        localStorage.removeItem('postGeneration_fontCombinationId')
+        localStorage.removeItem('postGeneration_templateId')
         localStorage.removeItem('postGeneration_colorThemeId')
         localStorage.removeItem('postGeneration_canvasImages')
         localStorage.removeItem('postGeneration_contentHash')
@@ -233,7 +188,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
       setEditedCarousels([])
       setEditedCaption('')
       setCarouselsDirty(false)
-      setFontCombinationId('combination-1')
+      setTemplateId('template1')
       setColorThemeId('purple-black')
     }
   }, [user, authLoading])
@@ -398,7 +353,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
             localStorage.removeItem('postGeneration_ideaTitle') // Clear ideaTitle for new note
             localStorage.setItem('postGeneration_note', JSON.stringify(noteData))
             localStorage.setItem('postGeneration_accountDescription', accountDescription.trim())
-            localStorage.setItem('postGeneration_fontCombinationId', fontCombinationId)
+            localStorage.setItem('postGeneration_templateId', templateId)
             localStorage.setItem('postGeneration_colorThemeId', colorThemeId)
             if (user?.id) {
               localStorage.setItem('postGeneration_userId', user.id)
@@ -532,7 +487,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     try {
       localStorage.removeItem('postGeneration_note')
       localStorage.removeItem('postGeneration_accountDescription')
-      localStorage.removeItem('postGeneration_fontCombinationId')
+      localStorage.removeItem('postGeneration_templateId')
       localStorage.removeItem('postGeneration_colorThemeId')
       localStorage.removeItem('postGeneration_canvasImages')
       localStorage.removeItem('postGeneration_contentHash')
@@ -596,7 +551,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                   localStorage.removeItem('postGeneration_ideaTitle')
                   localStorage.removeItem('postGeneration_fromHistory')
                   localStorage.removeItem('postGeneration_accountDescription')
-                  localStorage.removeItem('postGeneration_fontCombinationId')
+                  localStorage.removeItem('postGeneration_templateId')
                   localStorage.removeItem('postGeneration_colorThemeId')
                 } catch (error) {
                   console.error('Error clearing localStorage:', error)
@@ -705,7 +660,27 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                     }}
                   />
                   
+                  {/* Dropdown for Template selection */}
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: '#000000' }}>
+                    Choose Template
+                  </label>
+                  <select
+                    value={templateId}
+                    onChange={(e) => setTemplateId(e.target.value)}
+                    className="input"
+                    style={{ cursor: 'pointer', padding: '12px', marginBottom: '16px' }}
+                  >
+                    {getTemplateOptions().map(template => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                  
                   {/* Dropdown for Text / Text + Image / Text + AI Image styles */}
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: '#000000' }}>
+                    Content Style
+                  </label>
                   <select
                     value={includeImages ? (useAIImages ? (aiImageStyle === 'surreal' ? 'text-ai-surreal' : 'text-ai-animated') : 'text-image') : 'text'}
                     onChange={(e) => {
@@ -841,17 +816,17 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
                       <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
-                          Font Combination
+                          Template
                         </label>
                         <select
-                          value={fontCombinationId}
-                          onChange={(e) => setFontCombinationId(e.target.value)}
+                          value={templateId}
+                          onChange={(e) => setTemplateId(e.target.value)}
                           className="input"
                           style={{ cursor: 'pointer', padding: '12px' }}
                         >
-                          {FONT_COMBINATIONS.map(combo => (
-                            <option key={combo.id} value={combo.id}>
-                              {combo.name}
+                          {getTemplateOptions().map(template => (
+                            <option key={template.id} value={template.id}>
+                              {template.name}
                             </option>
                           ))}
                         </select>
@@ -873,25 +848,6 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                           ))}
                         </select>
                       </div>
-                      {backgroundOptions.length > 0 && (
-                        <div>
-                          <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
-                            Background Texture
-                          </label>
-                          <select
-                            value={backgroundId}
-                            onChange={(e) => setBackgroundId(e.target.value)}
-                            className="input"
-                            style={{ cursor: 'pointer', padding: '12px' }}
-                          >
-                            {backgroundOptions.map(option => (
-                              <option key={option.id} value={option.id}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
                     </div>
                   </div>
                 )}
@@ -1210,15 +1166,10 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
               carousels={carouselsDirty && editedCarousels.length > 0 ? editedCarousels : note.carousels}
               ideaTitle={note.ideaTitle}
               underlineWords={note.underlineWords || {}}
-              fontCombinationId={fontCombinationId}
+              templateId={templateId}
               colorThemeId={colorThemeId}
               accountDescription={accountDescription}
               caption={note.caption}
-                    backgroundImageUrl={
-                      backgroundId
-                        ? backgroundOptions.find(option => option.id === backgroundId)?.src ?? null
-                        : null
-                    }
                     onGenerationComplete={() => {
                       // Navigate to /app/{generationId} after saving
                       const savedGenerationId = localStorage.getItem('postGeneration_generationId')

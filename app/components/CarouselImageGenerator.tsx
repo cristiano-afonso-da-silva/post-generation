@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { getFontCombination, getColorTheme } from '../config/carouselThemes'
+import { getCarouselTemplate } from '../config/carouselTemplates'
+import { getColorTheme } from '../config/carouselThemes'
 import { useAuth } from '../context/AuthContext'
 import JSZip from 'jszip'
 
@@ -41,26 +42,73 @@ function ensureColorAlpha(color: string, alpha = 0.5): string {
   return trimmed
 }
 
+const isWhitespace = (char: string): boolean => /\s/.test(char)
+
+const measureTextWithLetterSpacing = (
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  letterSpacing: number
+): number => {
+  if (!text) return 0
+  let width = 0
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+    width += ctx.measureText(char).width
+    if (i < text.length - 1) {
+      const nextChar = text[i + 1]
+      if (!isWhitespace(char) && !isWhitespace(nextChar)) {
+        width += letterSpacing
+      }
+    }
+  }
+  return width
+}
+
+const drawTextWithLetterSpacing = (
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  letterSpacing: number
+): number => {
+  if (!text) return 0
+  let currentX = x
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+    ctx.fillText(char, currentX, y)
+    currentX += ctx.measureText(char).width
+    if (i < text.length - 1) {
+      const nextChar = text[i + 1]
+      if (!isWhitespace(char) && !isWhitespace(nextChar)) {
+        currentX += letterSpacing
+      }
+    }
+  }
+  return currentX - x
+}
+
 interface Carousel {
   title: string
   content: string
   kind: 'HOOK' | 'MIDDLE' | 'CTA'
+  topic?: string
+  subtitle?: string
+  cta?: string
 }
 
 interface Props {
   carousels: Carousel[]
   ideaTitle: string
   underlineWords?: Record<number, { underline: string; highlight: string; imageUrl?: string | null; originalImageUrl?: string | null }>
-  fontCombinationId?: string
+  templateId?: string
   colorThemeId?: string
   accountDescription?: string
   caption?: string
-  backgroundImageUrl?: string | null
   onGenerationComplete?: () => void
 }
 
 // Initialize images from localStorage before rendering
-const getInitialImages = (carousels: Carousel[], ideaTitle: string, underlineWords: Record<number, any>, fontCombinationId: string, colorThemeId: string, backgroundImageUrl: string | null): string[] => {
+const getInitialImages = (carousels: Carousel[], ideaTitle: string, underlineWords: Record<number, any>, templateId: string, colorThemeId: string): string[] => {
   try {
     // If there's no generationId in localStorage, we're on a fresh /app page - don't load from cache
     const storedGenerationId = localStorage.getItem('postGeneration_generationId')
@@ -79,9 +127,8 @@ const getInitialImages = (carousels: Carousel[], ideaTitle: string, underlineWor
       ideaTitle, 
       carousels, 
       underlineWords, 
-      fontCombinationId, 
-      colorThemeId, 
-      backgroundImageUrl: backgroundImageUrl || null 
+      templateId, 
+      colorThemeId
     })
     
     if (savedImages && savedHash && savedHash === currentFullContentHash) {
@@ -105,11 +152,10 @@ export default function CarouselImageGenerator({
   carousels, 
   ideaTitle, 
   underlineWords = {},
-  fontCombinationId = 'combination-1',
-  colorThemeId = 'black',
+  templateId = 'template1',
+  colorThemeId = 'purple-black',
   accountDescription = '',
   caption = '',
-  backgroundImageUrl = null,
   onGenerationComplete
 }: Props) {
   // Debug: Log underlineWords on component mount/update
@@ -138,10 +184,10 @@ export default function CarouselImageGenerator({
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([])
   const [generating, setGenerating] = useState(false)
   const [carouselImages, setCarouselImages] = useState<string[]>(() => 
-    getInitialImages(carousels, ideaTitle, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl)
+    getInitialImages(carousels, ideaTitle, underlineWords, templateId, colorThemeId)
   )
   // Keep previous images visible during regeneration to prevent layout shifts
-  const initialImages = getInitialImages(carousels, ideaTitle, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl)
+  const initialImages = getInitialImages(carousels, ideaTitle, underlineWords, templateId, colorThemeId)
   const previousImagesRef = useRef<string[]>(initialImages)
   const { user, refreshCredits } = useAuth()
   // Initialize hasDeductedCredit from localStorage - check by ideaTitle, not content hash
@@ -164,21 +210,15 @@ export default function CarouselImageGenerator({
   const hasDeductedCredit = useRef<boolean>(getInitialCreditDeductionStatus())
   const isInitialMount = useRef(true)
   // Initialize prevDesignSettings immediately with initial prop values
-  const prevDesignSettings = useRef<{ fontCombinationId: string; colorThemeId: string; backgroundImageUrl: string | null }>({
-    fontCombinationId,
-    colorThemeId,
-    backgroundImageUrl
+  const prevDesignSettings = useRef<{ templateId: string; colorThemeId: string }>({
+    templateId,
+    colorThemeId
   })
   const hasInitialized = useRef(false)
   // Track previous carousel content for detecting edits
   const prevCarouselsContent = useRef<string>(JSON.stringify(carousels))
   // Track if a save is in progress to prevent duplicate saves
   const isSavingRef = useRef<boolean>(false)
-  
-  // Debug: Log background image URL
-  useEffect(() => {
-    console.log('Background image URL prop changed:', backgroundImageUrl)
-  }, [backgroundImageUrl])
   
   // Use refs for values that should not trigger re-renders when changed
   const accountDescriptionRef = useRef(accountDescription)
@@ -190,8 +230,8 @@ export default function CarouselImageGenerator({
     captionRef.current = caption
   }, [accountDescription, caption])
 
-  // Get selected font combination and color theme
-  const FONT_CONFIG = getFontCombination(fontCombinationId)
+  // Get selected template and color theme
+  const TEMPLATE = getCarouselTemplate(templateId)
   const COLOR_THEME = getColorTheme(colorThemeId)
 
 
@@ -251,7 +291,7 @@ export default function CarouselImageGenerator({
           slides: carousels,
           caption: captionRef.current,
           underlineWords,
-          fontCombinationId,
+          templateId,
           colorThemeId,
           images: imageDataUrls
         })
@@ -285,18 +325,17 @@ export default function CarouselImageGenerator({
       // Always reset the saving flag, even if there was an error
       isSavingRef.current = false
     }
-  }, [ideaTitle, carousels, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl, user?.id])
+  }, [ideaTitle, carousels, underlineWords, templateId, colorThemeId, user?.id])
 
-  const generateAllCarousels = useCallback(async (overrideFontId?: string, overrideColorId?: string, overrideBgUrl?: string | null) => {
+  const generateAllCarousels = useCallback(async (overrideTemplateId?: string, overrideColorId?: string) => {
     setGenerating(true)
     
     // Use override values if provided (for design changes), otherwise use current props
-    const currentFontId = overrideFontId ?? fontCombinationId
+    const currentTemplateId = overrideTemplateId ?? templateId
     const currentColorId = overrideColorId ?? colorThemeId
-    const currentBgUrl = overrideBgUrl !== undefined ? overrideBgUrl : backgroundImageUrl
     
     // Compute configs with current values
-    const currentFontConfig = getFontCombination(currentFontId)
+    const currentTemplate = getCarouselTemplate(currentTemplateId)
     const currentColorTheme = getColorTheme(currentColorId)
     
     // Ensure canvasRefs array has correct length
@@ -309,7 +348,7 @@ export default function CarouselImageGenerator({
     
     // Generate all carousels first without updating state (prevents layout shifts)
     for (let i = 0; i < carousels.length; i++) {
-      await generateCarouselImage(i, currentFontConfig, currentColorTheme, currentBgUrl)
+      await generateCarouselImage(i, currentTemplate, currentColorTheme)
       // Save canvas to data URL at the specific index to maintain order
       const canvas = canvasRefs.current[i]
       if (canvas) {
@@ -336,14 +375,13 @@ export default function CarouselImageGenerator({
       return imageDataUrls
     })
     
-    // Create full content hash (includes theme/font) for image matching - deterministic order
+    // Create full content hash (includes template/theme) for image matching - deterministic order
     const fullContentHash = JSON.stringify({ 
       ideaTitle, 
       carousels, 
       underlineWords, 
-      fontCombinationId: currentFontId, 
-      colorThemeId: currentColorId, 
-      backgroundImageUrl: currentBgUrl || null 
+      templateId: currentTemplateId, 
+      colorThemeId: currentColorId
     })
     // Create content hash (only ideaTitle + carousels) for generation update detection
     const contentHash = JSON.stringify({ ideaTitle, carousels })
@@ -444,7 +482,8 @@ export default function CarouselImageGenerator({
     if (onGenerationComplete) {
       onGenerationComplete()
     }
-  }, [carousels, ideaTitle, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl, user?.id, refreshCredits, onGenerationComplete, saveToDatabase])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carousels, ideaTitle, underlineWords, templateId, colorThemeId, user?.id])
 
   // Generate carousels if not loaded from storage
   useEffect(() => {
@@ -470,20 +509,18 @@ export default function CarouselImageGenerator({
 
     const prev = prevDesignSettings.current
     const hasChanged =
-      prev.fontCombinationId !== fontCombinationId ||
-      prev.colorThemeId !== colorThemeId ||
-      prev.backgroundImageUrl !== backgroundImageUrl
+      prev.templateId !== templateId ||
+      prev.colorThemeId !== colorThemeId
 
     if (!hasChanged) return
 
     console.log('🎨 Design change detected → regenerating', {
       from: prev,
-      to: { fontCombinationId, colorThemeId, backgroundImageUrl }
+      to: { templateId, colorThemeId }
     })
 
-    const currentFontId = fontCombinationId
+    const currentTemplateId = templateId
     const currentColorId = colorThemeId
-    const currentBgUrl = backgroundImageUrl
 
     const wasDeducted = hasDeductedCredit.current
     hasDeductedCredit.current = true
@@ -496,9 +533,8 @@ export default function CarouselImageGenerator({
           ideaTitle,
           carousels,
           underlineWords,
-          fontCombinationId: currentFontId,
-          colorThemeId: currentColorId,
-          backgroundImageUrl: currentBgUrl || null
+          templateId: currentTemplateId,
+          colorThemeId: currentColorId
         })
       )
       // Store user ID to ensure localStorage is user-specific
@@ -511,11 +547,10 @@ export default function CarouselImageGenerator({
 
     const run = async () => {
       try {
-        await generateAllCarousels(currentFontId, currentColorId, currentBgUrl)
+        await generateAllCarousels(currentTemplateId, currentColorId)
         prevDesignSettings.current = {
-          fontCombinationId: currentFontId,
-          colorThemeId: currentColorId,
-          backgroundImageUrl: currentBgUrl
+          templateId: currentTemplateId,
+          colorThemeId: currentColorId
         }
       } catch (error) {
         console.error('❌ Regeneration failed:', error)
@@ -525,7 +560,7 @@ export default function CarouselImageGenerator({
     }
     run()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fontCombinationId, colorThemeId, backgroundImageUrl])
+  }, [templateId, colorThemeId])
   
   // Regenerate when carousel content changes (edits) - without deducting credits
   useEffect(() => {
@@ -557,9 +592,8 @@ export default function CarouselImageGenerator({
             ideaTitle, 
             carousels, 
             underlineWords, 
-            fontCombinationId, 
-            colorThemeId, 
-            backgroundImageUrl: backgroundImageUrl || null 
+            templateId, 
+            colorThemeId
           })
           localStorage.setItem('postGeneration_fullContentHash', fullContentHash)
           // Store user ID to ensure localStorage is user-specific
@@ -592,10 +626,11 @@ export default function CarouselImageGenerator({
       // No content change - keep prevCarouselsContent in sync
       prevCarouselsContent.current = currentCarouselsContent
     }
-  }, [carousels, ideaTitle, underlineWords, fontCombinationId, colorThemeId, backgroundImageUrl, generateAllCarousels])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carousels, ideaTitle, underlineWords, templateId, colorThemeId])
   
   // Reset credit deduction flag when carousels change (new note)
-  // Note: Design settings (fontCombinationId, colorThemeId, backgroundImageUrl) are NOT in dependencies
+  // Note: Design settings (templateId, colorThemeId) are NOT in dependencies
   // because changing styles should NOT reset credits - credits should only reset for new content
   useEffect(() => {
     // Check if credits were already deducted for this ideaTitle (not content hash)
@@ -627,11 +662,11 @@ export default function CarouselImageGenerator({
     isInitialMount.current = true
     hasInitialized.current = false
     // Reset design settings tracking with current values
-    prevDesignSettings.current = { fontCombinationId, colorThemeId, backgroundImageUrl }
+    prevDesignSettings.current = { templateId, colorThemeId }
     // Reset carousel content tracking
     prevCarouselsContent.current = JSON.stringify(carousels)
     console.log('🔄 Reset for new note, prevDesignSettings:', prevDesignSettings.current)
-  }, [ideaTitle, carousels.length])
+  }, [ideaTitle, carousels.length, templateId, colorThemeId])
 
   const loadImage = (src: string): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
@@ -652,44 +687,58 @@ export default function CarouselImageGenerator({
     })
   }
 
-  const loadFonts = async () => {
+  const loadFonts = async (template: typeof TEMPLATE) => {
     try {
-      // Load Poppins Bold for titles
-      const poppinsBold = new FontFace('Poppins', 'url(/fonts/Poppins-Bold.ttf)', {
-        weight: 'bold',
-        style: 'normal'
+      // Load fonts from template
+      const hookFont = new FontFace(template.fonts.hook.family, `url(${template.fonts.hook.file})`, {
+        weight: template.fonts.hook.weight,
+        style: template.fonts.hook.style
       })
       
-      // Load Dreaming Outloud Sans for content
-      const dreamingSans = new FontFace('DreamingOutloudSans', 'url(/fonts/DreamingOutloudSans-Regular.otf)', {
-        weight: 'normal',
-        style: 'normal'
+      const titleFont = new FontFace(template.fonts.title.family, `url(${template.fonts.title.file})`, {
+        weight: template.fonts.title.weight,
+        style: template.fonts.title.style
       })
       
-      const loadedPoppins = await poppinsBold.load()
-      const loadedDreaming = await dreamingSans.load()
+      const contentFont = new FontFace(template.fonts.content.family, `url(${template.fonts.content.file})`, {
+        weight: template.fonts.content.weight,
+        style: template.fonts.content.style
+      })
       
-      document.fonts.add(loadedPoppins)
-      document.fonts.add(loadedDreaming)
+      const loadedHook = await hookFont.load()
+      const loadedTitle = await titleFont.load()
+      const loadedContent = await contentFont.load()
       
-      console.log('✓ Custom fonts loaded successfully')
+      document.fonts.add(loadedHook)
+      document.fonts.add(loadedTitle)
+      document.fonts.add(loadedContent)
+      
+      console.log('✓ Template fonts loaded successfully')
     } catch (error) {
-      console.warn('⚠️  Failed to load custom fonts, using fallback:', error)
+      console.warn('⚠️  Failed to load template fonts, using fallback:', error)
     }
   }
 
   const generateCarouselImage = async (
     index: number, 
-    fontConfig = FONT_CONFIG, 
-    colorTheme = COLOR_THEME, 
-    bgImageUrl = backgroundImageUrl
+    template = TEMPLATE, 
+    colorTheme = COLOR_THEME
   ) => {
     const canvas = canvasRefs.current[index]
     if (!canvas) return
 
-    const carousel = carousels[index]
     const ctx = canvas.getContext('2d')
     if (!ctx) return
+
+    const carousel = carousels[index]
+
+    const getLetterSpacingFor = (section: 'hook' | 'hookTopic' | 'hookSubtitle' | 'hookCTA' | 'title' | 'content' | 'cta'): number => {
+      return template.styles?.letterSpacing?.[section] ?? 0
+    }
+
+    const getTextAlignFor = (section: 'hook' | 'hookTopic' | 'hookSubtitle' | 'hookCTA' | 'title' | 'content' | 'cta'): CanvasTextAlign => {
+      return template.styles?.textAlign?.[section] ?? 'left'
+    }
 
     // Ensure global alpha reset before drawing
     ctx.globalAlpha = 1
@@ -703,7 +752,7 @@ export default function CarouselImageGenerator({
 
     // Load fonts before rendering
     if (index === 0) {
-      await loadFonts()
+      await loadFonts(template)
     }
 
     // Instagram note dimensions (4:5 ratio)
@@ -712,31 +761,26 @@ export default function CarouselImageGenerator({
     canvas.width = width
     canvas.height = height
 
-    // Draw background image or white background
-    if (bgImageUrl) {
+    // Draw template background or fallback to white
+    const backgroundConfig = template.background
+    if (backgroundConfig?.type === 'image') {
       try {
-        console.log(`Loading background image: ${bgImageUrl}`)
-        const bgImage = await loadImage(bgImageUrl)
-        console.log(`Background image loaded: ${bgImage.width}x${bgImage.height}`)
-        
-        // Fill entire canvas with background (cover mode - fill entire area)
+        const bgImage = await loadImage(backgroundConfig.src)
         const scale = Math.max(width / bgImage.width, height / bgImage.height)
         const scaledWidth = bgImage.width * scale
         const scaledHeight = bgImage.height * scale
         const offsetX = (width - scaledWidth) / 2
         const offsetY = (height - scaledHeight) / 2
-
-        // Draw background image covering entire canvas
         ctx.drawImage(bgImage, offsetX, offsetY, scaledWidth, scaledHeight)
-        console.log(`Background image drawn at ${offsetX}, ${offsetY} with size ${scaledWidth}x${scaledHeight}`)
       } catch (error) {
-        console.error(`Unable to load background ${backgroundImageUrl}:`, error)
-        // Fallback to white background
+        console.error(`Unable to load template background ${backgroundConfig.src}:`, error)
         ctx.fillStyle = '#FFFFFF'
         ctx.fillRect(0, 0, width, height)
       }
+    } else if (backgroundConfig?.type === 'color') {
+      ctx.fillStyle = backgroundConfig.value
+      ctx.fillRect(0, 0, width, height)
     } else {
-      // No background image - use white
       ctx.fillStyle = '#FFFFFF'
       ctx.fillRect(0, 0, width, height)
     }
@@ -748,23 +792,217 @@ export default function CarouselImageGenerator({
     const safeWidth = width - (safeMarginSides * 2)
     const safeHeight = height - safeMarginTop - safeMarginBottom
 
+    const getLineStartX = (align: CanvasTextAlign, lineWidth: number): number => {
+      if (align === 'center') {
+        return (width / 2) - (lineWidth / 2)
+      }
+      if (align === 'right') {
+        return width - safeMarginSides - lineWidth
+      }
+      return safeMarginSides
+    }
+
     // Center content area
     const centerY = safeMarginTop + (safeHeight / 2)
 
     const highlightFillStyle = ensureColorAlpha(colorTheme.highlightColor, 0.5)
 
-    // For HOOK carousel - just show the hook text with word highlighting
     if (cleanCarousel.kind === 'HOOK') {
+      // Check if this template uses the new hook layout (template 3)
+      if (template.hookLayout?.showTopic || template.hookLayout?.showSubtitle || template.hookLayout?.showCTA) {
+        // NEW TEMPLATE 3 LAYOUT: topic, title, subtitle, CTA with colored box and arrow
+        const topicText = cleanCarousel.topic || ''
+        const titleText = cleanCarousel.title || ''
+        const subtitleText = cleanCarousel.subtitle || ''
+        const ctaText = cleanCarousel.cta || ''
+
+        // Pre-calculate heights for vertical centering
+        const hookLetterSpacing = getLetterSpacingFor('hook')
+        
+        // Calculate topic height
+        let topicHeight = 0
+        if (template.hookLayout.showTopic && topicText && template.fonts.hookTopic) {
+          topicHeight = template.fonts.hookTopic.size + 50
+        }
+
+        // Calculate hook height
+        let hookHeight = 0
+        let hookWrappedLines: string[] = []
+        if (titleText) {
+          ctx.font = template.fonts.hook.cssFont
+          const words = titleText.split(' ')
+          let currentLine = ''
+
+          for (const word of words) {
+            const testLine = currentLine ? `${currentLine} ${word}` : word
+            const lineWidth = measureTextWithLetterSpacing(ctx, testLine, hookLetterSpacing)
+
+            if (lineWidth > safeWidth && currentLine) {
+              hookWrappedLines.push(currentLine)
+              currentLine = word
+            } else {
+              currentLine = testLine
+            }
+          }
+          if (currentLine) hookWrappedLines.push(currentLine)
+
+          hookHeight = hookWrappedLines.length * template.fonts.hook.lineHeight + 60
+        }
+
+        // Calculate CTA box height
+        let ctaBoxHeight = 0
+        let ctaBoxWidth = 0
+        if (template.hookLayout.showCTA && ctaText && template.fonts.hookCTA && template.styles?.ctaBox) {
+          ctx.font = template.fonts.hookCTA.cssFont
+          const ctaLetterSpacing = getLetterSpacingFor('hookCTA')
+          const ctaTextWidth = measureTextWithLetterSpacing(ctx, ctaText, ctaLetterSpacing)
+          const boxConfig = template.styles.ctaBox
+          ctaBoxWidth = ctaTextWidth + boxConfig.paddingX * 2
+          ctaBoxHeight = template.fonts.hookCTA.size + boxConfig.paddingY * 2
+        }
+
+        // Total content height
+        const totalContentHeight = topicHeight + hookHeight + ctaBoxHeight
+
+        // Start Y position to center the content block
+        let y = safeMarginTop + (safeHeight - totalContentHeight) / 2
+
+        // Render TOPIC (centered, all caps)
+        if (template.hookLayout.showTopic && topicText && template.fonts.hookTopic) {
+          ctx.font = template.fonts.hookTopic.cssFont
+          ctx.fillStyle = colorTheme.primaryColor
+          ctx.textAlign = 'left'
+          const topicLetterSpacing = getLetterSpacingFor('hookTopic')
+          const topicValue = topicText.toUpperCase()
+          const topicWidth = measureTextWithLetterSpacing(ctx, topicValue, topicLetterSpacing)
+          const topicX = (width - topicWidth) / 2
+          drawTextWithLetterSpacing(ctx, topicValue, topicX, y, topicLetterSpacing)
+          y += template.fonts.hookTopic!.lineHeight + 50
+        }
+
+        // Render HOOK (large, centered)
+        if (titleText && hookWrappedLines.length > 0) {
+          ctx.font = template.fonts.hook.cssFont
+          ctx.fillStyle = colorTheme.textColor
+          ctx.textAlign = 'left'
+
+          hookWrappedLines.forEach(line => {
+            const lineWidth = measureTextWithLetterSpacing(ctx, line, hookLetterSpacing)
+            const lineX = (width - lineWidth) / 2
+            drawTextWithLetterSpacing(ctx, line, lineX, y, hookLetterSpacing)
+            y += template.fonts.hook.lineHeight
+          })
+
+          y += 60
+        }
+
+        // Render CTA box & arrow centered below hook
+        if (template.hookLayout.showCTA && ctaText && template.fonts.hookCTA && template.styles?.ctaBox) {
+          const boxConfig = template.styles.ctaBox
+          ctx.font = template.fonts.hookCTA.cssFont
+          ctx.fillStyle = boxConfig.useThemeColor ? colorTheme.primaryColor : colorTheme.textColor
+          ctx.textAlign = 'left'
+          const ctaLetterSpacing = getLetterSpacingFor('hookCTA')
+
+          const boxX = (width - ctaBoxWidth) / 2
+          const boxY = y
+
+          ctx.beginPath()
+          const radius = Math.min(boxConfig.borderRadius, ctaBoxHeight / 2, ctaBoxWidth / 2)
+          ctx.moveTo(boxX + radius, boxY)
+          ctx.lineTo(boxX + ctaBoxWidth - radius, boxY)
+          ctx.quadraticCurveTo(boxX + ctaBoxWidth, boxY, boxX + ctaBoxWidth, boxY + radius)
+          ctx.lineTo(boxX + ctaBoxWidth, boxY + ctaBoxHeight - radius)
+          ctx.quadraticCurveTo(boxX + ctaBoxWidth, boxY + ctaBoxHeight, boxX + ctaBoxWidth - radius, boxY + ctaBoxHeight)
+          ctx.lineTo(boxX + radius, boxY + ctaBoxHeight)
+          ctx.quadraticCurveTo(boxX, boxY + ctaBoxHeight, boxX, boxY + ctaBoxHeight - radius)
+          ctx.lineTo(boxX, boxY + radius)
+          ctx.quadraticCurveTo(boxX, boxY, boxX + radius, boxY)
+          ctx.closePath()
+          ctx.fill()
+
+          ctx.fillStyle = '#FFFFFF'
+          const textX = boxX + boxConfig.paddingX
+          const textY = boxY + boxConfig.paddingY + template.fonts.hookCTA!.size
+          drawTextWithLetterSpacing(ctx, ctaText, textX, textY, ctaLetterSpacing)
+
+          if (template.styles.arrow) {
+            const arrowConfig = template.styles.arrow
+            const arrowColor = arrowConfig.color === 'theme' ? colorTheme.primaryColor : arrowConfig.color
+            const arrowStartX = boxX + ctaBoxWidth + 24
+            const arrowEndX = Math.min(width - safeMarginSides, arrowStartX + arrowConfig.width)
+            const arrowY = boxY + ctaBoxHeight / 2
+
+            if (arrowEndX - arrowStartX > 8) {
+              const adjustedWidth = arrowEndX - arrowStartX
+
+              ctx.strokeStyle = arrowColor
+              ctx.lineWidth = arrowConfig.lineWidth
+              ctx.lineCap = 'round'
+              ctx.beginPath()
+              ctx.moveTo(arrowStartX, arrowY)
+              ctx.lineTo(arrowStartX + adjustedWidth, arrowY)
+              ctx.stroke()
+
+              ctx.beginPath()
+              ctx.moveTo(arrowStartX + adjustedWidth, arrowY)
+              ctx.lineTo(arrowStartX + adjustedWidth - arrowConfig.height / 2, arrowY - arrowConfig.height / 2)
+              ctx.moveTo(arrowStartX + adjustedWidth, arrowY)
+              ctx.lineTo(arrowStartX + adjustedWidth - arrowConfig.height / 2, arrowY + arrowConfig.height / 2)
+              ctx.stroke()
+            }
+          }
+        }
+
+        // Render SUBTITLE near bottom center
+        if (template.hookLayout.showSubtitle && subtitleText && template.fonts.hookSubtitle) {
+          ctx.font = template.fonts.hookSubtitle.cssFont
+          ctx.fillStyle = colorTheme.textColor
+          ctx.textAlign = 'left'
+          const subtitleLetterSpacing = getLetterSpacingFor('hookSubtitle')
+
+          const words = subtitleText.split(' ')
+          const wrappedLines: string[] = []
+          let currentLine = ''
+
+          for (const word of words) {
+            const testLine = currentLine ? `${currentLine} ${word}` : word
+            const lineWidth = measureTextWithLetterSpacing(ctx, testLine, subtitleLetterSpacing)
+
+            if (lineWidth > safeWidth && currentLine) {
+              wrappedLines.push(currentLine)
+              currentLine = word
+            } else {
+              currentLine = testLine
+            }
+          }
+          if (currentLine) wrappedLines.push(currentLine)
+
+          const subtitleLineHeight = template.fonts.hookSubtitle!.lineHeight
+          const subtitleTotalHeight = wrappedLines.length * subtitleLineHeight
+          let subtitleY = height - safeMarginBottom - subtitleTotalHeight + template.fonts.hookSubtitle!.size
+
+          wrappedLines.forEach(line => {
+            const lineWidth = measureTextWithLetterSpacing(ctx, line, subtitleLetterSpacing)
+            const lineX = (width - lineWidth) / 2
+            drawTextWithLetterSpacing(ctx, line, lineX, subtitleY, subtitleLetterSpacing)
+            subtitleY += subtitleLineHeight
+          })
+        }
+
+      } else {
+        // ORIGINAL HOOK LAYOUT (templates 1 & 2): Simple centered hook with highlight
       const hookText = cleanCarousel.title || cleanCarousel.content
+        const hookLetterSpacing = getLetterSpacingFor('hook')
+        const hookAlign = getTextAlignFor('hook')
       
-      const hookFontMatch = fontConfig.hook.font.match(/(\d+\.?\d*)px/)
-      const hookBaseFontSize = hookFontMatch ? parseFloat(hookFontMatch[1]) : 130
-      const hookLineHeightRatio = fontConfig.hook.lineHeight / Math.max(1, hookBaseFontSize)
+        const hookBaseFontSize = template.fonts.hook.size
+        const hookLineHeightRatio = template.fonts.hook.lineHeight / Math.max(1, hookBaseFontSize)
       const highlightOffsetRatio = 100 / Math.max(1, hookBaseFontSize)
       const highlightHeightRatio = 120 / Math.max(1, hookBaseFontSize)
 
       const buildHookFont = (size: number) =>
-        fontConfig.hook.font.replace(/(\d+\.?\d*)px/, `${size}px`)
+          template.fonts.hook.cssFont.replace(/(\d+\.?\d*)px/, `${size}px`)
 
       const wrapHookText = (fontSize: number) => {
         ctx.font = buildHookFont(fontSize)
@@ -774,9 +1012,9 @@ export default function CarouselImageGenerator({
       
       for (const word of words) {
         const testLine = currentLine ? `${currentLine} ${word}` : word
-        const metrics = ctx.measureText(testLine)
+          const lineWidth = measureTextWithLetterSpacing(ctx, testLine, hookLetterSpacing)
         
-        if (metrics.width > safeWidth && currentLine) {
+          if (lineWidth > safeWidth && currentLine) {
             wrappedLines.push(currentLine)
           currentLine = word
         } else {
@@ -793,8 +1031,8 @@ export default function CarouselImageGenerator({
 
         let maxWidth = 0
         wrappedLines.forEach(line => {
-          const metrics = ctx.measureText(line)
-          if (metrics.width > maxWidth) maxWidth = metrics.width
+          const width = measureTextWithLetterSpacing(ctx, line, hookLetterSpacing)
+          if (width > maxWidth) maxWidth = width
         })
 
         return {
@@ -839,7 +1077,7 @@ export default function CarouselImageGenerator({
 
       // Get highlight word
       const emphasisData = underlineWords[index] || { underline: '', highlight: '' }
-      const highlightWord = emphasisData.highlight.toLowerCase().replace(/[.,!?;:–—\-'"]/g, '').trim()
+      const highlightWord = emphasisData.highlight.toLowerCase().replace(/[.,!?;:–—\-'"`]/g, '').trim()
       
       // Find last occurrence of highlight word
       let lastHighlightLineIndex = -1
@@ -849,7 +1087,7 @@ export default function CarouselImageGenerator({
         for (let lineIdx = hookLines.length - 1; lineIdx >= 0; lineIdx--) {
           const lineWords = hookLines[lineIdx].split(' ')
           for (let wordIdx = lineWords.length - 1; wordIdx >= 0; wordIdx--) {
-            const cleanWord = lineWords[wordIdx].toLowerCase().replace(/[.,!?;:–—\-'"]/g, '').trim()
+            const cleanWord = lineWords[wordIdx].toLowerCase().replace(/[.,!?;:–—\-'"`]/g, '').trim()
             if (cleanWord === highlightWord) {
               lastHighlightLineIndex = lineIdx
               lastHighlightWordIndex = wordIdx
@@ -862,64 +1100,67 @@ export default function CarouselImageGenerator({
       
       // Start Y position - center the entire text block
       let y = centerY - (hookTotalHeight / 2) + (hookLines.length > 0 ? hookFontSize : 0)
-      const x = safeMarginSides
+      const spaceWidth = ctx.measureText(' ').width
       
       // Draw each line
       hookLines.forEach((line, lineIndex) => {
+        const lineWidth = measureTextWithLetterSpacing(ctx, line, hookLetterSpacing)
+        const startX = hookAlign === 'center'
+          ? (width / 2) - (lineWidth / 2)
+          : safeMarginSides
         const lineWords = line.split(' ')
         
         // First pass: Draw highlight backgrounds
-        let tempX = x
+        let tempX = startX
         lineWords.forEach((word, wordIndex) => {
-          const cleanWord = word.toLowerCase().replace(/[.,!?;:–—\-'"]/g, '').trim()
-          const wordMetrics = ctx.measureText(word)
-          
+          const cleanWord = word.toLowerCase().replace(/[.,!?;:–—\-'"`]/g, '').trim()
           if (cleanWord === highlightWord && lineIndex === lastHighlightLineIndex && wordIndex === lastHighlightWordIndex) {
-            const cleanedWord = word.replace(/^[.,!?;:–—\-'"]+|[.,!?;:–—\-'"]+$/g, '')
-            const cleanedMetrics = ctx.measureText(cleanedWord)
-            const leadingPuncMatch = word.match(/^[.,!?;:–—\-'"]+/)
-            const leadingPuncWidth = leadingPuncMatch ? ctx.measureText(leadingPuncMatch[0]).width : 0
-            
-            const bgX = tempX + leadingPuncWidth
+            const cleanedWord = word.replace(/^[.,!?;:–—\-'"`]+|[.,!?;:–—\-'"`]+$/g, '')
+            const leadingPuncMatch = word.match(/^[.,!?;:–—\-'"`]+/)
+            const leadingPunc = leadingPuncMatch ? leadingPuncMatch[0] : ''
+
+            const leadingWidth = measureTextWithLetterSpacing(ctx, leadingPunc, hookLetterSpacing)
+            const cleanedWidth = measureTextWithLetterSpacing(ctx, cleanedWord, hookLetterSpacing)
+
+            const bgX = tempX + leadingWidth
             const bgY = y - highlightOffset
-            const bgWidth = cleanedMetrics.width
-            
             ctx.fillStyle = highlightFillStyle
-            ctx.fillRect(bgX, bgY, bgWidth, highlightHeight)
+            ctx.fillRect(bgX, bgY, cleanedWidth, highlightHeight)
           }
-          
-          const spaceWidth = ctx.measureText(' ').width
-          tempX += wordMetrics.width + spaceWidth
+
+          const wordWidth = measureTextWithLetterSpacing(ctx, word, hookLetterSpacing)
+          tempX += wordWidth
+          if (wordIndex < lineWords.length - 1) {
+            tempX += spaceWidth
+          }
         })
         
         // Second pass: Draw text
-        let currentX = x
+        let currentX = startX
         lineWords.forEach((word, wordIndex) => {
           ctx.fillStyle = colorTheme.textColor
-          ctx.fillText(word, currentX, y)
-          
-          const wordMetrics = ctx.measureText(word)
-          currentX += wordMetrics.width
+          const drawnWidth = drawTextWithLetterSpacing(ctx, word, currentX, y, hookLetterSpacing)
+          currentX += drawnWidth
           if (wordIndex < lineWords.length - 1) {
-            currentX += ctx.measureText(' ').width
+            currentX += spaceWidth
           }
         })
         
         y += hookLineHeight
       })
+      }  // End of else block for original HOOK layout
       
     } else if (cleanCarousel.kind === 'CTA') {
-      // CTA content with underlines and line breaks
-      ctx.font = fontConfig.content.font
+      const ctaLetterSpacing = getLetterSpacingFor('cta')
+      const ctaAlign = getTextAlignFor('cta')
+
+      ctx.font = template.fonts.content.cssFont
       ctx.fillStyle = colorTheme.textColor
       ctx.textAlign = 'left'
-      const x = safeMarginSides
       
-      // Split by sentences
       const sentences = cleanCarousel.content.split(/([.!?])\s+/).filter(s => s.trim())
       const lines: string[] = []
       
-      // Process sentences and add empty lines between them
       for (let i = 0; i < sentences.length; i += 2) {
         const sentence = sentences[i]
         const punctuation = i + 1 < sentences.length ? sentences[i + 1] : ''
@@ -932,9 +1173,9 @@ export default function CarouselImageGenerator({
         
         for (const word of sentenceWords) {
           const testLine = currentLine ? `${currentLine} ${word}` : word
-          const metrics = ctx.measureText(testLine)
+          const lineWidth = measureTextWithLetterSpacing(ctx, testLine, ctaLetterSpacing)
           
-          if (metrics.width > safeWidth && currentLine) {
+          if (lineWidth > safeWidth && currentLine) {
             lines.push(currentLine)
             currentLine = word
           } else {
@@ -943,37 +1184,31 @@ export default function CarouselImageGenerator({
         }
         if (currentLine) lines.push(currentLine)
         
-        // Add empty line after sentence (except for last)
         if (i + 2 < sentences.length || (i + 1 < sentences.length && punctuation)) {
           lines.push('')
         }
       }
       
-      // Get underline words
       const emphasisData = underlineWords[index] || { underline: '', highlight: '' }
       const underlinePhrases = emphasisData.underline.split(',').map(p => p.trim()).filter(p => p)
       
-      // Calculate true vertical center
-      const lineHeight = fontConfig.content.lineHeight
-      const totalHeight = (lines.length - 1) * lineHeight  // Height between lines
+      const spaceWidth = ctx.measureText(' ').width
+      const lineHeight = template.fonts.content.lineHeight
+      const totalHeight = (lines.length - 1) * lineHeight
       let y = centerY - (totalHeight / 2)
       
-      // Draw CTA text with underlines
       lines.forEach(line => {
-        // Skip empty lines (just add spacing)
         if (!line.trim()) {
           y += lineHeight
           return
         }
         
         const words = line.split(' ')
-        
-        // Build underline map
         const underlineMap: boolean[] = new Array(words.length).fill(false)
         
         for (const phrase of underlinePhrases) {
-          const phraseWords = phrase.toLowerCase().split(/\s+/).map(w => w.replace(/[.,!?;:–—\-'"]/g, '').trim())
-          const cleanLineWords = words.map(w => w.toLowerCase().replace(/[.,!?;:–—\-'"]/g, '').trim())
+          const phraseWords = phrase.toLowerCase().split(/\s+/).map(w => w.replace(/[.,!?;:–—\-'"`]/g, '').trim())
+          const cleanLineWords = words.map(w => w.toLowerCase().replace(/[.,!?;:–—\-'"`]/g, '').trim())
           
           for (let i = 0; i <= cleanLineWords.length - phraseWords.length; i++) {
             let matches = true
@@ -991,72 +1226,69 @@ export default function CarouselImageGenerator({
           }
         }
         
-        // Draw text
-        let currentX = x
+        const lineWidth = measureTextWithLetterSpacing(ctx, line, ctaLetterSpacing)
+        const startX = ctaAlign === 'center'
+          ? (width / 2) - (lineWidth / 2)
+          : safeMarginSides
+        const wordPositions: Array<{ start: number; end: number }> = []
+
+        let currentX = startX
         words.forEach((word, wordIndex) => {
-          ctx.fillStyle = colorTheme.textColor
-          ctx.fillText(word, currentX, y)
-          
-          const wordMetrics = ctx.measureText(word)
-          currentX += wordMetrics.width
+          const startPos = currentX
+          const drawnWidth = drawTextWithLetterSpacing(ctx, word, currentX, y, ctaLetterSpacing)
+          const endPos = startPos + drawnWidth
+          wordPositions.push({ start: startPos, end: endPos })
+          currentX = endPos
           if (wordIndex < words.length - 1) {
-            currentX += ctx.measureText(' ').width
+            currentX += spaceWidth
           }
         })
         
-        // Draw underlines
         let underlineStart = -1
-        let underlineX = x
-        let currentXPos = x
-        
-        words.forEach((word, wordIndex) => {
-          const wordMetrics = ctx.measureText(word)
-          const spaceWidth = ctx.measureText(' ').width
-          
-          if (underlineMap[wordIndex]) {
+        const segments: Array<{ start: number; end: number }> = []
+
+        underlineMap.forEach((shouldUnderline, wordIndex) => {
+          if (shouldUnderline) {
             if (underlineStart === -1) {
               underlineStart = wordIndex
-              underlineX = currentXPos
             }
-          } else {
-            if (underlineStart !== -1) {
-              const underlineY = y + 8
-              ctx.strokeStyle = colorTheme.underlineColor
-              ctx.lineWidth = 2
-              ctx.beginPath()
-              ctx.moveTo(underlineX, underlineY)
-              ctx.lineTo(currentXPos - spaceWidth, underlineY)
-              ctx.stroke()
+          } else if (underlineStart !== -1) {
+            const startPos = wordPositions[underlineStart]?.start ?? 0
+            const endPos = wordPositions[wordIndex - 1]?.end ?? startPos
+            segments.push({ start: startPos, end: endPos })
               underlineStart = -1
             }
-          }
-          
-          currentXPos += wordMetrics.width + (wordIndex < words.length - 1 ? spaceWidth : 0)
         })
         
-        // Draw final underline
         if (underlineStart !== -1) {
+          const startPos = wordPositions[underlineStart]?.start ?? 0
+          const endPos = wordPositions[wordPositions.length - 1]?.end ?? startPos
+          segments.push({ start: startPos, end: endPos })
+        }
+
           const underlineY = y + 8
+        segments.forEach(segment => {
           ctx.strokeStyle = colorTheme.underlineColor
           ctx.lineWidth = 2
           ctx.beginPath()
-          ctx.moveTo(underlineX, underlineY)
-          ctx.lineTo(currentXPos, underlineY)
+          ctx.moveTo(segment.start, underlineY)
+          ctx.lineTo(segment.end, underlineY)
           ctx.stroke()
-        }
+        })
         
         y += lineHeight
       })
       
     } else {
-      // MIDDLE carousel - title + content, left-aligned
+      const titleLetterSpacing = getLetterSpacingFor('title')
+      const contentLetterSpacing = getLetterSpacingFor('content')
+      const titleAlign = getTextAlignFor('title')
+      const contentAlign = getTextAlignFor('content')
+
       ctx.textAlign = 'left'
-      const x = safeMarginSides
       
-      // Parse emphasis words to check for image
       const emphasisData = underlineWords[index] || { underline: '', highlight: '', imageUrl: null, originalImageUrl: null }
       
-      // Debug: Log image data for MIDDLE carousels
       if (cleanCarousel.kind === 'MIDDLE') {
         console.log(`\n🖼️ Carousel ${index + 1} Image Check:`)
         console.log('  Emphasis data:', emphasisData)
@@ -1068,7 +1300,6 @@ export default function CarouselImageGenerator({
       
       const imageSourceUrl = emphasisData.imageUrl || emphasisData.originalImageUrl || null
       
-      // Pre-load image if available to include in height calculation
       let imageHeight = 0
       let imageWidth = 0
       let loadedImage: HTMLImageElement | null = null
@@ -1089,15 +1320,16 @@ export default function CarouselImageGenerator({
         console.warn(`   This might mean images weren't fetched from Pexels or includeImages was false`)
       }
       
-      // Minimum spacing requirements (20px minimum)
       const minTitleContentGap = 20
       const minImageGap = 20
       
-      // Try to fit content with flexible sizing
-      let titleFontSize = 75  // From FONT_CONFIG
-      let titleLineHeight = 90
-      let contentFontSize = 55
-      let contentLineHeight = 70
+      const buildTitleFont = (size: number) => template.fonts.title.cssFont.replace(/(\d+\.?\d*)px/, `${size}px`)
+      const buildContentFont = (size: number) => template.fonts.content.cssFont.replace(/(\d+\.?\d*)px/, `${size}px`)
+
+      let titleFontSize = template.fonts.title.size
+      let titleLineHeight = template.fonts.title.lineHeight
+      let contentFontSize = template.fonts.content.size
+      let contentLineHeight = template.fonts.content.lineHeight
       let titleContentGap = Math.max(70, minTitleContentGap)
       let imageGap = imageHeight > 0 ? Math.max(40, minImageGap) : 0
       
@@ -1106,19 +1338,17 @@ export default function CarouselImageGenerator({
       let totalHeight = 0
       let scaleFactor = 1.0
       
-      // Function to calculate layout with given font sizes
       const calculateLayout = (titleSize: number, contentSize: number) => {
-        // Title wrapping
-        ctx.font = `bold ${titleSize}px Poppins, sans-serif`
+        ctx.font = buildTitleFont(titleSize)
         const titleWords = cleanCarousel.title ? cleanCarousel.title.split(' ') : []
         const wrappedTitle: string[] = []
         let currentLine = ''
         
         for (const word of titleWords) {
           const testLine = currentLine ? `${currentLine} ${word}` : word
-          const metrics = ctx.measureText(testLine)
+          const lineWidth = measureTextWithLetterSpacing(ctx, testLine, titleLetterSpacing)
           
-          if (metrics.width > safeWidth && currentLine) {
+          if (lineWidth > safeWidth && currentLine) {
             wrappedTitle.push(currentLine)
             currentLine = word
           } else {
@@ -1127,17 +1357,16 @@ export default function CarouselImageGenerator({
         }
         if (currentLine) wrappedTitle.push(currentLine)
         
-        // Content wrapping
-        ctx.font = `${contentSize}px DreamingOutloudSans, sans-serif`
+        ctx.font = buildContentFont(contentSize)
         const contentWords = cleanCarousel.content.split(' ')
         const wrappedContent: string[] = []
         currentLine = ''
         
         for (const word of contentWords) {
           const testLine = currentLine ? `${currentLine} ${word}` : word
-          const metrics = ctx.measureText(testLine)
+          const lineWidth = measureTextWithLetterSpacing(ctx, testLine, contentLetterSpacing)
           
-          if (metrics.width > safeWidth && currentLine) {
+          if (lineWidth > safeWidth && currentLine) {
             wrappedContent.push(currentLine)
             currentLine = word
           } else {
@@ -1146,17 +1375,14 @@ export default function CarouselImageGenerator({
         }
         if (currentLine) wrappedContent.push(currentLine)
         
-        // Calculate heights based on baseline-to-baseline distance
-        // Plus add font size for the visual height of text
-        const titleLH = titleSize * 1.2  // Proportional line height
+        const titleLH = titleSize * 1.2
         const contentLH = contentSize * 1.27
         
-        // Height = first line font size + spacing between lines + last line descender space
         const titleH = wrappedTitle.length > 0 
-          ? titleSize + (wrappedTitle.length - 1) * titleLH + (titleSize * 0.2)  // font + spacing + descender
+          ? titleSize + (wrappedTitle.length - 1) * titleLH + (titleSize * 0.2)
           : 0
         const contentH = wrappedContent.length > 0
-          ? contentSize + (wrappedContent.length - 1) * contentLH + (contentSize * 0.2)  // font + spacing + descender  
+          ? contentSize + (wrappedContent.length - 1) * contentLH + (contentSize * 0.2)
           : 0
         const total = titleH + titleContentGap + contentH + imageGap + imageHeight
         
@@ -1169,33 +1395,27 @@ export default function CarouselImageGenerator({
         }
       }
       
-      // Calculate initial layout
       let layout = calculateLayout(titleFontSize, contentFontSize)
       
-      // If content exceeds safe height, scale down
       if (layout.totalHeight > safeHeight) {
         console.log(`⚠️  Content too long (${layout.totalHeight}px > ${safeHeight}px), scaling down...`)
         
-        // Reduce gaps to minimum first
         titleContentGap = minTitleContentGap
         imageGap = imageHeight > 0 ? minImageGap : 0
         
-        // Recalculate with minimum gaps
         layout = calculateLayout(titleFontSize, contentFontSize)
         
-        // If still too long, scale down font sizes
         if (layout.totalHeight > safeHeight) {
           scaleFactor = safeHeight / layout.totalHeight
-          scaleFactor = Math.max(0.5, Math.min(0.95, scaleFactor))  // Between 50% and 95%
+          scaleFactor = Math.max(0.5, Math.min(0.95, scaleFactor))
           
-          titleFontSize = Math.floor(75 * scaleFactor)  // Always scale from original
-          contentFontSize = Math.floor(55 * scaleFactor)
+          titleFontSize = Math.floor(template.fonts.title.size * scaleFactor)
+          contentFontSize = Math.floor(template.fonts.content.size * scaleFactor)
           
           console.log(`   Scaling fonts: title ${titleFontSize}px, content ${contentFontSize}px (${Math.round(scaleFactor * 100)}%)`)
           
           layout = calculateLayout(titleFontSize, contentFontSize)
           
-          // Final warning if still doesn't fit after scaling
           if (layout.totalHeight > safeHeight) {
             console.warn(`⚠️  WARNING: Content still exceeds safe height even at minimum scale!`)
             console.warn(`   Total: ${Math.round(layout.totalHeight)}px, Safe: ${safeHeight}px`)
@@ -1212,45 +1432,35 @@ export default function CarouselImageGenerator({
       
       console.log(`📏 Layout: ${titleLines.length} title lines, ${contentLines.length} content lines, total: ${Math.round(totalHeight)}px, safe: ${safeHeight}px`)
       
-      // Start Y at center minus half total height, plus first line's font size (for baseline)
       const firstLineFontSize = titleLines.length > 0 ? titleFontSize : contentFontSize
       let y = centerY - (totalHeight / 2) + firstLineFontSize
         
-        // Draw title with calculated font size
-        ctx.font = `bold ${titleFontSize}px Poppins, sans-serif`
+      ctx.font = buildTitleFont(titleFontSize)
         ctx.fillStyle = colorTheme.textColor
+
         titleLines.forEach(line => {
-          ctx.fillText(line, x, y)
+        const lineWidth = measureTextWithLetterSpacing(ctx, line, titleLetterSpacing)
+        const startX = getLineStartX(titleAlign, lineWidth)
+        drawTextWithLetterSpacing(ctx, line, startX, y, titleLetterSpacing)
           y += titleLineHeight
         })
         
         y += titleContentGap
         
-        // Draw content with calculated font size
-        ctx.font = `${contentFontSize}px DreamingOutloudSans, sans-serif`
+      ctx.font = buildContentFont(contentFontSize)
         ctx.fillStyle = colorTheme.textColor
+      const spaceWidth = ctx.measureText(' ').width
         
-        // Use emphasisData already parsed above (no need to re-parse)
         const underlinePhrases = emphasisData.underline.split(',').map(p => p.trim()).filter(p => p)
-        const highlightWord = emphasisData.highlight.toLowerCase().replace(/[.,!?;:–—\-'"]/g, '').trim()
-        
-        // Debug logging
-        if (cleanCarousel.kind === 'MIDDLE') {
-          console.log(`\n━━━ Carousel ${index + 1} Debug ━━━`)
-          console.log('Emphasis data:', emphasisData)
-          console.log('Underline phrases:', underlinePhrases)
-          console.log('Highlight word:', highlightWord)
-          console.log('Carousel content:', cleanCarousel.content)
-        }
-        
-        // Find the last occurrence of highlight word across ALL content lines
+      const highlightWord = emphasisData.highlight.toLowerCase().replace(/[.,!?;:–—\-'"`]/g, '').trim()
+
         let lastHighlightLineIndex = -1
         let lastHighlightWordIndex = -1
         
         if (highlightWord) {
           for (let lineIdx = contentLines.length - 1; lineIdx >= 0; lineIdx--) {
             const lineWords = contentLines[lineIdx].split(' ')
-            const cleanLineWords = lineWords.map(w => w.toLowerCase().replace(/[.,!?;:–—\-'"]/g, '').trim())
+          const cleanLineWords = lineWords.map(w => w.toLowerCase().replace(/[.,!?;:–—\-'"`]/g, '').trim())
             for (let wordIdx = cleanLineWords.length - 1; wordIdx >= 0; wordIdx--) {
               if (cleanLineWords[wordIdx] === highlightWord) {
                 lastHighlightLineIndex = lineIdx
@@ -1264,18 +1474,12 @@ export default function CarouselImageGenerator({
         
         contentLines.forEach((line, lineIndex) => {
           const words = line.split(' ')
-          let currentX = x
-          
-          // Build underline map for this line
           const underlineMap: boolean[] = new Array(words.length).fill(false)
-          const highlightMap: boolean[] = new Array(words.length).fill(false)
           
-          // Mark words that should be underlined (check for phrases)
           for (const phrase of underlinePhrases) {
-            const phraseWords = phrase.toLowerCase().split(/\s+/).map(w => w.replace(/[.,!?;:–—\-'"]/g, '').trim())
-            const cleanLineWords = words.map(w => w.toLowerCase().replace(/[.,!?;:–—\-'"]/g, '').trim())
+          const phraseWords = phrase.toLowerCase().split(/\s+/).map(w => w.replace(/[.,!?;:–—\-'"`]/g, '').trim())
+          const cleanLineWords = words.map(w => w.toLowerCase().replace(/[.,!?;:–—\-'"`]/g, '').trim())
             
-            // Find consecutive matching sequences
             for (let i = 0; i <= cleanLineWords.length - phraseWords.length; i++) {
               let matches = true
               for (let j = 0; j < phraseWords.length; j++) {
@@ -1285,7 +1489,6 @@ export default function CarouselImageGenerator({
                 }
               }
               if (matches) {
-                // Mark all words in this phrase for underlining
                 for (let j = 0; j < phraseWords.length; j++) {
                   underlineMap[i + j] = true
                 }
@@ -1293,107 +1496,83 @@ export default function CarouselImageGenerator({
             }
           }
           
-          // Mark word that should be highlighted (only the last occurrence across all lines)
-          if (highlightWord && lineIndex === lastHighlightLineIndex && lastHighlightWordIndex !== -1) {
-            highlightMap[lastHighlightWordIndex] = true
-            // Remove underline from highlighted word
+        if (lineIndex === lastHighlightLineIndex && lastHighlightWordIndex !== -1) {
             underlineMap[lastHighlightWordIndex] = false
           }
           
-          // First pass: Draw highlight backgrounds
-          let tempX = x
+        const lineWidth = measureTextWithLetterSpacing(ctx, line, contentLetterSpacing)
+        const startX = getLineStartX(contentAlign, lineWidth)
+        const wordPositions: Array<{ start: number; end: number }> = []
+
+        let tempX = startX
           words.forEach((word, wordIndex) => {
-            const wordMetrics = ctx.measureText(word)
-            
-            if (highlightMap[wordIndex]) {
-              // Strip punctuation from word for accurate highlight width
-              const cleanedWord = word.replace(/^[.,!?;:–—\-'"]+|[.,!?;:–—\-'"]+$/g, '')
-              const cleanedMetrics = ctx.measureText(cleanedWord)
-              
-              // Calculate offset if word starts with punctuation
-              const leadingPuncMatch = word.match(/^[.,!?;:–—\-'"]+/)
-              const leadingPuncWidth = leadingPuncMatch ? ctx.measureText(leadingPuncMatch[0]).width : 0
-              
-              // Scale highlight background proportionally to font size
-              const bgOffsetY = contentFontSize * 0.91  // ~91% of font size above baseline
-              const bgHeight = contentFontSize * 1.09  // ~109% of font size for height
-              
-              const bgX = tempX + leadingPuncWidth
-              const bgY = y - bgOffsetY
-              const bgWidth = cleanedMetrics.width
+          if (lineIndex === lastHighlightLineIndex && wordIndex === lastHighlightWordIndex) {
+            const cleanedWord = word.replace(/^[.,!?;:–—\-'"`]+|[.,!?;:–—\-'"`]+$/g, '')
+            const leadingPuncMatch = word.match(/^[.,!?;:–—\-'"`]+/)
+            const leadingPunc = leadingPuncMatch ? leadingPuncMatch[0] : ''
+
+            const leadingWidth = measureTextWithLetterSpacing(ctx, leadingPunc, contentLetterSpacing)
+            const cleanedWidth = measureTextWithLetterSpacing(ctx, cleanedWord, contentLetterSpacing)
               
               ctx.fillStyle = highlightFillStyle
-              ctx.fillRect(bgX, bgY, bgWidth, bgHeight)
-              console.log(`  ✨ Highlighting word: "${cleanedWord}" (font: ${contentFontSize}px)`)
-            }
-            
-            const spaceWidth = ctx.measureText(' ').width
-            tempX += wordMetrics.width + (wordIndex < words.length - 1 ? spaceWidth : 0)
-          })
-          
-          // Second pass: Draw text
-          currentX = x
+            ctx.fillRect(tempX + leadingWidth, y - contentFontSize * 0.91, cleanedWidth, contentFontSize * 1.09)
+          }
+
+          const wordWidth = measureTextWithLetterSpacing(ctx, word, contentLetterSpacing)
+          tempX += wordWidth
+          if (wordIndex < words.length - 1) {
+            tempX += spaceWidth
+          }
+        })
+
+        let currentX = startX
           words.forEach((word, wordIndex) => {
-            const wordMetrics = ctx.measureText(word)
-            
             ctx.fillStyle = colorTheme.textColor
-            ctx.fillText(word, currentX, y)
-            
-            currentX += wordMetrics.width
+          const startPos = currentX
+          const drawnWidth = drawTextWithLetterSpacing(ctx, word, currentX, y, contentLetterSpacing)
+          const endPos = startPos + drawnWidth
+          wordPositions.push({ start: startPos, end: endPos })
+          currentX = endPos
             if (wordIndex < words.length - 1) {
-              currentX += ctx.measureText(' ').width
+            currentX += spaceWidth
             }
           })
           
-          // Third pass: Draw continuous underlines for consecutive words
           let underlineStart = -1
-          let underlineX = x
-          let currentXPos = x
-          
-          words.forEach((word, wordIndex) => {
-            const wordMetrics = ctx.measureText(word)
-            const spaceWidth = ctx.measureText(' ').width
-            
-            if (underlineMap[wordIndex]) {
+        const segments: Array<{ start: number; end: number }> = []
+
+        underlineMap.forEach((shouldUnderline, wordIndex) => {
+          if (shouldUnderline) {
               if (underlineStart === -1) {
-                // Start new underline
                 underlineStart = wordIndex
-                underlineX = currentXPos
-              }
-            } else {
-              if (underlineStart !== -1) {
-                // End underline
-                const underlineY = y + 8
-                ctx.strokeStyle = colorTheme.underlineColor
-                ctx.lineWidth = 2
-                ctx.beginPath()
-                ctx.moveTo(underlineX, underlineY)
-                ctx.lineTo(currentXPos - spaceWidth, underlineY)
-                ctx.stroke()
-                console.log(`  ━ Underlining words ${underlineStart + 1}-${wordIndex}`)
+            }
+          } else if (underlineStart !== -1) {
+            const startPos = wordPositions[underlineStart]?.start ?? 0
+            const endPos = wordPositions[wordIndex - 1]?.end ?? startPos
+            segments.push({ start: startPos, end: endPos })
                 underlineStart = -1
               }
-            }
-            
-            currentXPos += wordMetrics.width + (wordIndex < words.length - 1 ? spaceWidth : 0)
           })
           
-          // Draw final underline if line ends with underlined word
           if (underlineStart !== -1) {
+          const startPos = wordPositions[underlineStart]?.start ?? 0
+          const endPos = wordPositions[wordPositions.length - 1]?.end ?? startPos
+          segments.push({ start: startPos, end: endPos })
+        }
+
             const underlineY = y + 8
+        segments.forEach(segment => {
             ctx.strokeStyle = colorTheme.underlineColor
             ctx.lineWidth = 2
             ctx.beginPath()
-            ctx.moveTo(underlineX, underlineY)
-            ctx.lineTo(currentXPos, underlineY)
+          ctx.moveTo(segment.start, underlineY)
+          ctx.lineTo(segment.end, underlineY)
             ctx.stroke()
-            console.log(`  ━ Underlining words ${underlineStart + 1}-${words.length}`)
-          }
+        })
           
           y += contentLineHeight
         })
         
-        // Draw image for MIDDLE carousels if available (using pre-loaded image)
         if (loadedImage && imageWidth > 0 && imageHeight > 0) {
           try {
             console.log(`\n🖼️  Rendering pre-loaded image for carousel ${index + 1}`)
@@ -1401,31 +1580,23 @@ export default function CarouselImageGenerator({
             console.log(`   Target size: ${imageWidth}x${imageHeight}`)
             console.log(`   Y position: ${y}`)
             
-            // Add spacing between content and image
             y += imageGap
             
-            // Position image at left margin (same as content)
             const imageX = safeMarginSides
             
-            // Calculate source rectangle for 16:9 crop (center crop)
             const sourceAspect = loadedImage.width / loadedImage.height
             const targetAspect = 16 / 9
             
             let sx = 0, sy = 0, sWidth = loadedImage.width, sHeight = loadedImage.height
             
             if (sourceAspect > targetAspect) {
-              // Image is wider than 16:9 - crop width
               sWidth = loadedImage.height * targetAspect
-              sx = (loadedImage.width - sWidth) / 2  // Center horizontally
+            sx = (loadedImage.width - sWidth) / 2
             } else {
-              // Image is taller than 16:9 - crop height
               sHeight = loadedImage.width / targetAspect
-              sy = (loadedImage.height - sHeight) / 2  // Center vertically
+            sy = (loadedImage.height - sHeight) / 2
             }
             
-            console.log(`   Crop: source (${Math.round(sx)},${Math.round(sy)} ${Math.round(sWidth)}x${Math.round(sHeight)}) → dest (${imageX},${y} ${imageWidth}x${imageHeight})`)
-            
-            // Draw image with rounded corners and 16:9 crop
             const borderRadius = 56
             ctx.save()
             ctx.beginPath()
@@ -1441,11 +1612,10 @@ export default function CarouselImageGenerator({
             ctx.closePath()
             ctx.clip()
             
-            // Draw cropped image using source rectangle
             ctx.drawImage(
               loadedImage,
-              sx, sy, sWidth, sHeight,  // Source rectangle (crop)
-              imageX, y, imageWidth, imageHeight  // Destination rectangle (16:9)
+            sx, sy, sWidth, sHeight,
+            imageX, y, imageWidth, imageHeight
             )
             ctx.restore()
             
@@ -1461,7 +1631,31 @@ export default function CarouselImageGenerator({
             console.warn(`   Image URL exists but failed to load:`, imageSourceUrl)
           }
         }
-    }  // Close else (MIDDLE carousel)
+    }
+
+    const arrowConfig = template.styles?.arrow
+    if (arrowConfig?.type === 'right' && cleanCarousel.kind !== 'CTA' && !template.hookLayout?.showCTA) {
+      const arrowEndX = width - safeMarginSides - arrowConfig.offsetRight
+      const arrowStartX = Math.max(safeMarginSides, arrowEndX - arrowConfig.width)
+      const arrowY = height - safeMarginBottom - arrowConfig.offsetBottom
+
+      // Use theme color if arrow.color is 'theme', otherwise use the specified color
+      const arrowColor = arrowConfig.color === 'theme' ? colorTheme.primaryColor : arrowConfig.color
+      ctx.strokeStyle = arrowColor
+      ctx.lineWidth = arrowConfig.lineWidth
+      ctx.lineCap = 'round'
+      ctx.beginPath()
+      ctx.moveTo(arrowStartX, arrowY)
+      ctx.lineTo(arrowEndX, arrowY)
+      ctx.stroke()
+
+      ctx.beginPath()
+      ctx.moveTo(arrowEndX, arrowY)
+      ctx.lineTo(arrowEndX - arrowConfig.height / 2, arrowY - arrowConfig.height / 2)
+      ctx.moveTo(arrowEndX, arrowY)
+      ctx.lineTo(arrowEndX - arrowConfig.height / 2, arrowY + arrowConfig.height / 2)
+      ctx.stroke()
+    }
   }  // Close generateCarouselImage function
 
   const downloadCarousel = (index: number) => {
