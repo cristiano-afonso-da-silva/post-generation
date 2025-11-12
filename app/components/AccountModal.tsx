@@ -191,7 +191,7 @@ export default function AccountModal({
               style={{
                 width: '48px',
                 height: '48px',
-                borderRadius: '50%',
+                borderRadius: '8px',
                 background: subscriptionStatus === 'active' ? '#ffbd59' : '#e5e5e5',
                 display: 'flex',
                 alignItems: 'center',

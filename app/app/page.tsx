@@ -80,6 +80,17 @@ export default function Home() {
   const [activeLeftTab, setActiveLeftTab] = useState<'design' | 'carousels' | 'caption'>('design')
   const [expandedCarouselIndexes, setExpandedCarouselIndexes] = useState<number[]>([])
   const [showCustomisation, setShowCustomisation] = useState(false)
+  // Initialize fromHistory synchronously to prevent flash
+  const [fromHistory, setFromHistory] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return localStorage.getItem('postGeneration_fromHistory') === 'true'
+      } catch {
+        return false
+      }
+    }
+    return false
+  })
 const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] = [
   { id: 'design', label: 'Customize Design', icon: Palette },
   { id: 'carousels', label: 'Edit Carousel', icon: Edit3 },
@@ -117,8 +128,13 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
       setEditedCaption(note.caption || '')
       setCarouselsDirty(false)
       setExpandedCarouselIndexes([])
-      // Auto-show customisation when note exists
-      setShowCustomisation(true)
+      // Auto-show customisation when note exists, but NOT when coming from history
+      if (!fromHistory) {
+        setShowCustomisation(true)
+      } else {
+        // When coming from history, hide customization panel entirely
+        setShowCustomisation(false)
+      }
     } else {
       setEditedCarousels([])
       setEditedCaption('')
@@ -126,7 +142,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
       setExpandedCarouselIndexes([])
       setShowCustomisation(false)
     }
-  }, [note])
+  }, [note, fromHistory])
 
   // Warn user before leaving page if there are unsaved changes
   useEffect(() => {
@@ -191,13 +207,50 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     }
   }, [user, authLoading])
 
+  // Check if coming from history page on mount
+  useEffect(() => {
+    if (user && !authLoading) {
+      try {
+        const fromHistoryFlag = localStorage.getItem('postGeneration_fromHistory')
+        if (fromHistoryFlag === 'true') {
+          setFromHistory(true)
+          // Clear the flag after reading it so it doesn't persist
+          localStorage.removeItem('postGeneration_fromHistory')
+        } else {
+          setFromHistory(false)
+        }
+      } catch (error) {
+        console.error('Error checking fromHistory flag:', error)
+        setFromHistory(false)
+      }
+    }
+  }, [user, authLoading])
+
+  // Load ideas from localStorage on mount if they exist
+  useEffect(() => {
+    if (user && !authLoading) {
+      try {
+        const storedIdeas = localStorage.getItem('postGeneration_ideas')
+        const storedAccountDescription = localStorage.getItem('postGeneration_accountDescription')
+        if (storedIdeas && storedAccountDescription) {
+          const parsedIdeas = JSON.parse(storedIdeas)
+          if (Array.isArray(parsedIdeas) && parsedIdeas.length > 0) {
+            setIdeas(parsedIdeas)
+            setAccountDescription(storedAccountDescription)
+          }
+        }
+      } catch (error) {
+        console.error('Error loading ideas from localStorage:', error)
+      }
+    }
+  }, [user, authLoading])
+
   // Clear localStorage and reset all state on mount - /app is always a fresh/new idea page
   useEffect(() => {
     if (user && !authLoading) {
-      // Clear all localStorage to ensure fresh state (but keep previous ideas)
+      // Clear all localStorage to ensure fresh state (but keep previous ideas, stored ideas, and fromHistory flag)
       try {
         localStorage.removeItem('postGeneration_note')
-        localStorage.removeItem('postGeneration_accountDescription')
         localStorage.removeItem('postGeneration_templateId')
         localStorage.removeItem('postGeneration_colorThemeId')
         localStorage.removeItem('postGeneration_canvasImages')
@@ -205,7 +258,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
         localStorage.removeItem('postGeneration_generationId')
         localStorage.removeItem('postGeneration_fullContentHash')
         localStorage.removeItem('postGeneration_ideaTitle')
-        localStorage.removeItem('postGeneration_fromHistory')
+        // Don't remove fromHistory, ideas, or accountDescription here - we check/load them above
         // Keep userId for user-specific operations
         if (user?.id) {
           localStorage.setItem('postGeneration_userId', user.id)
@@ -214,10 +267,8 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
         console.error('Error clearing localStorage:', error)
       }
       
-      // Reset all state to ensure fresh page
+      // Reset all state to ensure fresh page (but preserve fromHistory state and loaded ideas)
       setNote(null)
-      setAccountDescription('')
-      setIdeas([])
       setSelectedIdea(null)
       setCurrentStep(null)
       setError('')
@@ -257,6 +308,13 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
       if (result.success) {
         setIdeas(result.data.ideas)
         setError('')
+        // Store ideas in localStorage so they persist when going back
+        try {
+          localStorage.setItem('postGeneration_ideas', JSON.stringify(result.data.ideas))
+          localStorage.setItem('postGeneration_accountDescription', accountDescription.trim())
+        } catch (error) {
+          console.error('Error saving ideas to localStorage:', error)
+        }
       } else {
         setError(result.error || 'Failed to generate ideas')
       }
@@ -332,11 +390,16 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
       return
     }
 
+    const startTime = performance.now()
+    console.log('🚀 [STEP 1: GENERATING] Starting generation for idea:', idea)
+    console.log('   ⏱️ Timestamp:', new Date().toISOString())
+    
     setSelectedIdea(idea)
     setLoadingNote(true)
     setError('')
     setNote(null)
     setCurrentStep('generating')
+    
     // Clear localStorage note temporarily to prevent it from loading during generation
     // We'll save the new note once it's generated
     try {
@@ -344,17 +407,31 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
       localStorage.removeItem('postGeneration_canvasImages')
       localStorage.removeItem('postGeneration_fullContentHash')
       localStorage.removeItem('postGeneration_contentHash')
+      console.log('   ✅ Cleared localStorage')
     } catch (error) {
-      console.error('Error clearing localStorage during generation:', error)
+      console.error('   ❌ Error clearing localStorage during generation:', error)
     }
 
     // Simulate step progression
-    setTimeout(() => setCurrentStep('analysing'), 1000)
-    setTimeout(() => setCurrentStep('rendering'), 2000)
+    setTimeout(() => {
+      console.log('📊 [STEP 2: ANALYSING] Step transition to analysing')
+      console.log('   ⏱️ Elapsed:', (performance.now() - startTime).toFixed(2), 'ms')
+      setCurrentStep('analysing')
+    }, 1000)
+    
+    setTimeout(() => {
+      console.log('🎨 [STEP 3: RENDERING] Step transition to rendering')
+      console.log('   ⏱️ Elapsed:', (performance.now() - startTime).toFixed(2), 'ms')
+      setCurrentStep('rendering')
+    }, 2000)
 
     // Log the includeImages value being sent to API
     console.log('🖼️ Frontend: Sending includeImages =', includeImages, 'useAIImages =', useAIImages, 'aiImageStyle =', aiImageStyle)
 
+    const apiStartTime = performance.now()
+    console.log('📡 [API CALL] Starting API request to /api/social')
+    console.log('   ⏱️ Timestamp:', new Date().toISOString())
+    
     try {
       const response = await fetch(`${API_URL}/api/social`, {
         method: 'POST',
@@ -369,6 +446,12 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
         })
       })
 
+      const apiEndTime = performance.now()
+      const apiDuration = apiEndTime - apiStartTime
+      console.log('📡 [API CALL] Response received')
+      console.log('   ⏱️ API Duration:', apiDuration.toFixed(2), 'ms')
+      console.log('   ⏱️ Total Elapsed:', (apiEndTime - startTime).toFixed(2), 'ms')
+      
       const result = await response.json()
 
       if (result.success) {
@@ -376,18 +459,25 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
         // Verify result data structure before saving
         // Note: API still returns 'slides' but we map it to 'carousels' in our Note interface
         if (result.data && Array.isArray(result.data.slides) && result.data.slides.length > 0) {
-          console.log('✅ Received note with', result.data.slides.length, 'carousels from API')
+          console.log('✅ [API RESPONSE] Received note with', result.data.slides.length, 'carousels from API')
+          console.log('   ⏱️ Timestamp:', new Date().toISOString())
           // Map API response 'slides' to 'carousels' for our Note interface
           const noteData = {
             ...result.data,
             carousels: result.data.slides
           }
+          
+          const beforeSetNote = performance.now()
+          console.log('📝 [SET NOTE] Setting note state, will trigger CarouselImageGenerator')
           setNote(noteData)
+          const afterSetNote = performance.now()
+          console.log('   ⏱️ setNote() call took:', (afterSetNote - beforeSetNote).toFixed(2), 'ms')
           // Clear generation_id to force new generation creation (new ideaTitle = new generation)
           try {
             localStorage.removeItem('postGeneration_generationId')
             localStorage.removeItem('postGeneration_contentHash')
             localStorage.removeItem('postGeneration_ideaTitle') // Clear ideaTitle for new note
+            localStorage.removeItem('postGeneration_fromHistory') // Clear fromHistory when generating new content
             localStorage.setItem('postGeneration_note', JSON.stringify(noteData))
             localStorage.setItem('postGeneration_accountDescription', accountDescription.trim())
             localStorage.setItem('postGeneration_templateId', templateId)
@@ -395,6 +485,8 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
             if (user?.id) {
               localStorage.setItem('postGeneration_userId', user.id)
             }
+            // Clear fromHistory state when generating new content
+            setFromHistory(false)
             console.log('✅ Saved note to localStorage')
             
             // Save idea to previous ideas (keep last 10)
@@ -406,22 +498,31 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
             console.error('Error saving to localStorage:', error)
           }
           setError('')
+          const finalTime = performance.now()
+          console.log('✅ [COMPLETE] Generation flow completed')
+          console.log('   ⏱️ Total Duration:', (finalTime - startTime).toFixed(2), 'ms')
+          console.log('   ⏱️ Timestamp:', new Date().toISOString())
           setCurrentStep(null)
         } else {
-          console.error('❌ Invalid data structure received from API')
+          console.error('❌ [ERROR] Invalid data structure received from API')
+          console.error('   ⏱️ Total Duration:', (performance.now() - startTime).toFixed(2), 'ms')
           setError('Invalid data received from server')
           setCurrentStep(null)
         }
       } else {
+        console.error('❌ [ERROR] API returned error:', result.error)
+        console.error('   ⏱️ Total Duration:', (performance.now() - startTime).toFixed(2), 'ms')
         setError(result.error || 'Failed to generate note')
         setCurrentStep(null)
       }
     } catch (err: any) {
-      console.error('Error:', err)
+      console.error('❌ [ERROR] Exception during generation:', err)
+      console.error('   ⏱️ Total Duration:', (performance.now() - startTime).toFixed(2), 'ms')
       setError('Failed to connect to server. Please try again.')
       setCurrentStep(null)
     } finally {
       setLoadingNote(false)
+      console.log('🏁 [FINALLY] Loading state set to false')
     }
   }
 
@@ -510,8 +611,21 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
   }
 
   const goBackToBusinessDetails = () => {
-    // Just switch to business details panel, keep the note
+    // Go back to ideas list, keep the note and ideas
     setShowCustomisation(false)
+    setSelectedIdea(null) // Clear selected idea so ideas list shows
+    // Ensure ideas are loaded from localStorage if they exist
+    try {
+      const storedIdeas = localStorage.getItem('postGeneration_ideas')
+      if (storedIdeas) {
+        const parsedIdeas = JSON.parse(storedIdeas)
+        if (Array.isArray(parsedIdeas) && parsedIdeas.length > 0) {
+          setIdeas(parsedIdeas)
+        }
+      }
+    } catch (error) {
+      console.error('Error loading ideas when going back:', error)
+    }
   }
 
   const goToCustomisation = () => {
@@ -596,10 +710,12 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                   localStorage.removeItem('postGeneration_accountDescription')
                   localStorage.removeItem('postGeneration_templateId')
                   localStorage.removeItem('postGeneration_colorThemeId')
+                  localStorage.removeItem('postGeneration_ideas') // Clear stored ideas when creating new
                 } catch (error) {
                   console.error('Error clearing localStorage:', error)
                 }
-                router.push('/app')
+                // Force a full page reload to ensure fresh state
+                window.location.href = '/app'
               }}
               style={{
                 display: 'flex',
@@ -607,12 +723,18 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                 justifyContent: 'center',
                 width: '36px',
                 height: '36px',
-                borderRadius: '50%',
+                borderRadius: '8px',
                 background: '#ffbd59',
                 border: 'none',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
                 textDecoration: 'none',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#ffa929'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#ffbd59'
               }}
               title="Create New Idea"
             >
@@ -628,12 +750,20 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                     justifyContent: 'center',
                     width: '36px',
                     height: '36px',
-                    borderRadius: '50%',
-                    background: '#f5f5f5',
-                    border: 'none',
+                    borderRadius: '8px',
+                    background: '#e5e5e5',
+                    border: '2px solid #e5e5e5',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',
                     textDecoration: 'none',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#d0d0d0'
+                    e.currentTarget.style.borderColor = '#d0d0d0'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#e5e5e5'
+                    e.currentTarget.style.borderColor = '#e5e5e5'
                   }}
                   title="History"
                 >
@@ -700,17 +830,15 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                       resize: 'vertical',
                       maxHeight: '200px',
                       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
-                      border: '2px solid #ffbd59',
+                      border: '2px solid #e5e5e5',
                       borderRadius: '12px',
                       padding: '16px',
-                      background: '#ffffff',
-                      boxShadow: '0 2px 8px rgba(255, 189, 89, 0.1)',
-                      transition: 'all 0.2s ease'
+                      background: '#ffffff'
                     }}
                   />
                   
                   {/* Dropdown for Template selection */}
-                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: '#000000' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: '500', color: '#000000' }}>
                     Choose Template
                   </label>
                   <select
@@ -727,7 +855,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                   </select>
                   
                   {/* Dropdown for Text / Text + Image / Text + AI Image styles */}
-                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: '#000000' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: '500', color: '#000000' }}>
                     Content Style
                   </label>
                   <select
@@ -774,13 +902,11 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
 
                   {/* Generate button */}
                   <button
-                    className="button mobile-generate generate-button-pop"
+                    className="button mobile-generate"
                     onClick={generateIdeas}
                     disabled={loadingIdeas || !accountDescription.trim()}
                     style={{ 
-                      width: '100%',
-                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                      transition: 'all 0.2s ease'
+                      width: '100%'
                     }}
                   >
                     {loadingIdeas ? 'Generating...' : 'Generate'}
@@ -790,26 +916,28 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                 <div className="card mobile-customize" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: '16px' }}>
                   {/* Content area */}
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    {/* Back button */}
-                    <button
-                      onClick={goBackToBusinessDetails}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        background: 'none',
-                        border: 'none',
-                        padding: '8px 0',
-                        cursor: 'pointer',
-                        marginBottom: '24px',
-                        color: '#000000',
-                        fontSize: '16px',
-                        fontWeight: '600'
-                      }}
-                    >
-                      <ChevronLeft size={20} />
-                      <span>Back</span>
-                    </button>
+                    {/* Back button - only show if NOT coming from history */}
+                    {!fromHistory && (
+                      <button
+                        onClick={goBackToBusinessDetails}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          background: 'none',
+                          border: 'none',
+                          padding: '8px 0',
+                          cursor: 'pointer',
+                          marginBottom: '24px',
+                          color: '#000000',
+                          fontSize: '16px',
+                          fontWeight: '600'
+                        }}
+                      >
+                        <ChevronLeft size={20} />
+                        <span>Back</span>
+                      </button>
+                    )}
                     
                     {/* Customisation heading */}
                     <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px', color: '#000000' }}>
@@ -1079,8 +1207,8 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                 </div>
               )}
 
-              {/* Show Ideas if available and no note selected */}
-              {ideas.length > 0 && !selectedIdea && !note && !loadingIdeas && (
+              {/* Show Ideas if available - show when going back from customization or when no note selected */}
+              {ideas.length > 0 && !selectedIdea && (!note || !showCustomisation) && !loadingIdeas && (
                 <div className="card" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
                   <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
                     Choose an Idea
@@ -1212,129 +1340,22 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
           </div>
         )}
 
-              {/* Show Generated Carousels if note exists and was generated on this page */}
-        {note && !loadingNote && note.carousels && note.carousels.length > 0 && (
+              {/* Show Generated Carousels if note exists and was generated on this page, but not when showing ideas list */}
+        {note && !loadingNote && note.carousels && note.carousels.length > 0 && showCustomisation && (
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* Header with current idea and previous ideas button */}
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'space-between',
-              padding: '0 8px'
-            }}>
-              <div style={{ flex: 1 }}>
-                <h3 style={{ 
-                  fontSize: '20px', 
-                  fontWeight: '600', 
-                  color: '#000000',
-                  marginBottom: '4px'
-                }}>
-                  Your Carousel
-                </h3>
-                {selectedIdea && (
-                  <p style={{ 
-                    fontSize: '14px', 
-                    color: '#666',
-                    margin: 0
-                  }}>
-                    {selectedIdea}
-                  </p>
-                )}
-              </div>
-              {previousIdeas.length > 0 && (
-                <div style={{ position: 'relative' }} data-previous-ideas-dropdown>
-                  <button
-                    onClick={() => setShowPreviousIdeas(!showPreviousIdeas)}
-                    style={{
-                      padding: '8px 16px',
-                      background: '#f5f5f5',
-                      border: '1px solid #e0e0e0',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      fontWeight: '500',
-                      color: '#000000',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      transition: 'all 0.2s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#e8e8e8'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = '#f5f5f5'
-                    }}
-                  >
-                    <History size={16} />
-                    Previous Ideas
-                  </button>
-                  {showPreviousIdeas && (
-                    <div style={{
-                      position: 'absolute',
-                      top: 'calc(100% + 8px)',
-                      right: 0,
-                      background: '#ffffff',
-                      border: '1px solid #e0e0e0',
-                      borderRadius: '12px',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                      minWidth: '300px',
-                      maxWidth: '400px',
-                      maxHeight: '400px',
-                      overflowY: 'auto',
-                      zIndex: 1000,
-                      padding: '8px'
-                    }}>
-                      {previousIdeas.map((item, index) => (
-                        <button
-                          key={index}
-                          onClick={() => {
-                            setShowPreviousIdeas(false)
-                            generateNote(item.idea)
-                          }}
-                          style={{
-                            width: '100%',
-                            padding: '12px',
-                            textAlign: 'left',
-                            background: 'transparent',
-                            border: 'none',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            fontSize: '14px',
-                            color: '#000000',
-                            transition: 'background 0.2s ease',
-                            display: 'block'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#f5f5f5'
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'transparent'
-                          }}
-                        >
-                          {item.idea}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
             <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
             <CarouselImageGenerator 
               carousels={carouselsDirty && editedCarousels.length > 0 ? editedCarousels : note.carousels}
               ideaTitle={note.ideaTitle}
+              ideaIndex={selectedIdea ? ideas.findIndex(idea => idea === selectedIdea) + 1 : null}
               underlineWords={note.underlineWords || {}}
               templateId={templateId}
               colorThemeId={colorThemeId}
               accountDescription={accountDescription}
               caption={note.caption}
                     onGenerationComplete={() => {
-                      // Navigate to /app/{generationId} after saving
-                      const savedGenerationId = localStorage.getItem('postGeneration_generationId')
-                      if (savedGenerationId) {
-                        router.push(`/app/${savedGenerationId}`)
-                      }
+                      // Generation complete - stay on current page
+                      // Removed redirect to prevent flash/duplicate page issue
                     }}
                   />
                 </div>
@@ -1343,7 +1364,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
 
               {/* Show Empty State if nothing to show */}
               {!ideas.length && !note && !loadingNote && !loadingIdeas && (
-                <div className="card" style={{ textAlign: 'center', padding: '60px 20px', color: '#999' }}>
+                <div className="card empty-state-card" style={{ textAlign: 'center', padding: '60px 20px', color: '#999' }}>
                   <h3 style={{ 
                     marginBottom: '16px', 
                     fontSize: '24px',
@@ -1582,3 +1603,4 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     </div>
   )
 }
+

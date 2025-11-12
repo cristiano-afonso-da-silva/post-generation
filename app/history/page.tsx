@@ -70,6 +70,12 @@ export default function HistoryPage() {
   }, [generations])
 
   const loadGeneration = (id: string) => {
+    // Set flag to indicate we're coming from history page
+    try {
+      localStorage.setItem('postGeneration_fromHistory', 'true')
+    } catch (error) {
+      console.error('Error setting fromHistory flag:', error)
+    }
     // Simply navigate to the generation page - let it handle data fetching
     // This is much faster and cleaner
     router.push(`/app/${id}`)
@@ -126,12 +132,18 @@ export default function HistoryPage() {
                 justifyContent: 'center',
                 width: '36px',
                 height: '36px',
-                borderRadius: '50%',
+                borderRadius: '8px',
                 background: '#ffbd59',
                 border: 'none',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
                 textDecoration: 'none',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#ffa929'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#ffbd59'
               }}
               title="Create New Idea"
             >
@@ -147,12 +159,18 @@ export default function HistoryPage() {
                     justifyContent: 'center',
                     width: '36px',
                     height: '36px',
-                    borderRadius: '50%',
+                    borderRadius: '8px',
                     background: '#f5f5f5',
                     border: 'none',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',
                     textDecoration: 'none',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#e5e5e5'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#f5f5f5'
                   }}
                   title="History"
                 >

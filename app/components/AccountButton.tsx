@@ -25,28 +25,7 @@ export default function AccountButton({ credits, subscriptionStatus, currentPlan
     <>
       <button
         onClick={() => setShowModal(true)}
-        style={{
-          position: 'relative',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: '36px',
-          height: '36px',
-          borderRadius: '50%',
-          background: '#e5e5e5',
-          border: '2px solid #e5e5e5',
-          cursor: 'pointer',
-          transition: 'all 0.2s ease',
-          padding: 0,
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = '#d0d0d0'
-          e.currentTarget.style.borderColor = '#d0d0d0'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = '#e5e5e5'
-          e.currentTarget.style.borderColor = '#e5e5e5'
-        }}
+        className="account-button"
         aria-label="Account menu"
       >
         <span style={{ 

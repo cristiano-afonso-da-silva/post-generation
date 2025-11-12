@@ -92,6 +92,17 @@ export default function GenerationPage() {
   const [activeLeftTab, setActiveLeftTab] = useState<'design' | 'carousels' | 'caption'>('design')
   const [expandedCarouselIndexes, setExpandedCarouselIndexes] = useState<number[]>([])
   const [showCustomisation, setShowCustomisation] = useState(true)
+  // Initialize fromHistory synchronously to prevent flash
+  const [fromHistory, setFromHistory] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return localStorage.getItem('postGeneration_fromHistory') === 'true'
+      } catch {
+        return false
+      }
+    }
+    return false
+  })
   
   // Theme settings
   const [templateId, setTemplateId] = useState('template1')
@@ -108,6 +119,25 @@ export default function GenerationPage() {
       router.push('/')
     }
   }, [user, authLoading, router])
+
+  // Check if coming from history page on mount
+  useEffect(() => {
+    if (user && !authLoading) {
+      try {
+        const fromHistoryFlag = localStorage.getItem('postGeneration_fromHistory')
+        if (fromHistoryFlag === 'true') {
+          setFromHistory(true)
+          // Clear the flag after reading it so it doesn't persist
+          localStorage.removeItem('postGeneration_fromHistory')
+        } else {
+          setFromHistory(false)
+        }
+      } catch (error) {
+        console.error('Error checking fromHistory flag:', error)
+        setFromHistory(false)
+      }
+    }
+  }, [user, authLoading])
 
   // Load generation data from SWR hook
   useEffect(() => {
@@ -327,7 +357,8 @@ export default function GenerationPage() {
                 } catch (error) {
                   console.error('Error clearing localStorage:', error)
                 }
-                router.push('/app')
+                // Force a full page reload to ensure fresh state
+                window.location.href = '/app'
               }}
               style={{
                 display: 'flex',
@@ -335,12 +366,18 @@ export default function GenerationPage() {
                 justifyContent: 'center',
                 width: '36px',
                 height: '36px',
-                borderRadius: '50%',
+                borderRadius: '8px',
                 background: '#ffbd59',
                 border: 'none',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
                 textDecoration: 'none',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#ffa929'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#ffbd59'
               }}
               title="Create New Idea"
             >
@@ -356,12 +393,20 @@ export default function GenerationPage() {
                     justifyContent: 'center',
                     width: '36px',
                     height: '36px',
-                    borderRadius: '50%',
-                    background: '#f5f5f5',
-                    border: 'none',
+                    borderRadius: '8px',
+                    background: '#e5e5e5',
+                    border: '2px solid #e5e5e5',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',
                     textDecoration: 'none',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#d0d0d0'
+                    e.currentTarget.style.borderColor = '#d0d0d0'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#e5e5e5'
+                    e.currentTarget.style.borderColor = '#e5e5e5'
                   }}
                   title="History"
                 >
@@ -409,9 +454,30 @@ export default function GenerationPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', overflow: 'hidden', alignSelf: 'stretch' }}>
               <div className="card mobile-customize" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: '16px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px', color: '#000000' }}>
-                    Customisation
-                  </h3>
+                  {!fromHistory && (
+                    <button
+                      onClick={() => router.push('/app')}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        background: 'none',
+                        border: 'none',
+                        padding: '8px 0',
+                        cursor: 'pointer',
+                        marginBottom: '24px',
+                        color: '#000000',
+                        fontSize: '16px',
+                        fontWeight: '600'
+                      }}
+                    >
+                      <ChevronLeft size={20} />
+                      <span>Back</span>
+                    </button>
+                  )}
+                    <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px', color: '#000000' }}>
+                      Customisation
+                    </h3>
                   
                   {/* Tab buttons */}
                   <div 
@@ -663,6 +729,7 @@ export default function GenerationPage() {
                   <CarouselImageGenerator 
                     carousels={carouselsDirty && editedCarousels.length > 0 ? editedCarousels : note.carousels}
                     ideaTitle={note.ideaTitle}
+                    ideaIndex={null}
                     underlineWords={note.underlineWords || {}}
                     templateId={templateId}
                     colorThemeId={colorThemeId}

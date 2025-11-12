@@ -118,7 +118,7 @@ h6[style*="font-family"][style*="serif"],
   padding: 32px;
   margin-bottom: 24px;
   transition: all 0.3s ease;
-  cursor: pointer;
+  cursor: default;
 }
 
 .card:hover {
@@ -132,6 +132,15 @@ h6[style*="font-family"][style*="serif"],
 .card.mobile-customize:hover {
   box-shadow: none;
   cursor: default;
+}
+
+.card.empty-state-card {
+  transition: none;
+}
+
+.card.empty-state-card:hover {
+  box-shadow: none;
+  transform: none;
 }
 
 /* Remove margin-bottom for cards inside grid to ensure equal heights */
@@ -402,13 +411,33 @@ textarea.input {
   min-width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: #ffbd59;
+  background: rgb(229, 229, 229);
   color: #000000;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
   font-size: 14px;
+}
+
+.account-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgb(229, 229, 229);
+  border: 2px solid rgb(229, 229, 229);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.account-button:hover {
+  background: rgb(208, 208, 208);
+  border-color: rgb(208, 208, 208);
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -663,13 +692,11 @@ textarea.input {
 
 .idea-textarea:focus {
   outline: none;
-  border-color: #ffbd59 !important;
-  box-shadow: 0 4px 12px rgba(255, 189, 89, 0.2) !important;
-  transform: translateY(-1px);
+  border-color: #cccccc !important;
 }
 
 .idea-textarea::placeholder {
   color: #999999;
-  font-style: italic;
+  font-style: normal;
 }
 

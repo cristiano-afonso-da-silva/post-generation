@@ -99,6 +99,7 @@ interface Carousel {
 interface Props {
   carousels: Carousel[]
   ideaTitle: string
+  ideaIndex?: number | null
   underlineWords?: Record<number, { underline: string; highlight: string; imageUrl?: string | null; originalImageUrl?: string | null }>
   templateId?: string
   colorThemeId?: string
@@ -150,7 +151,8 @@ const getInitialImages = (carousels: Carousel[], ideaTitle: string, underlineWor
 
 export default function CarouselImageGenerator({ 
   carousels, 
-  ideaTitle, 
+  ideaTitle,
+  ideaIndex = null,
   underlineWords = {},
   templateId = 'template1',
   colorThemeId = 'purple-black',
@@ -328,6 +330,13 @@ export default function CarouselImageGenerator({
   }, [ideaTitle, carousels, underlineWords, templateId, colorThemeId, user?.id])
 
   const generateAllCarousels = useCallback(async (overrideTemplateId?: string, overrideColorId?: string) => {
+    const renderStartTime = performance.now()
+    console.log('🎨 [RENDERING START] CarouselImageGenerator.generateAllCarousels() called')
+    console.log('   ⏱️ Timestamp:', new Date().toISOString())
+    console.log('   📊 Carousels to render:', carousels.length)
+    console.log('   🎨 Template:', overrideTemplateId ?? templateId)
+    console.log('   🎨 Color Theme:', overrideColorId ?? colorThemeId)
+    
     setGenerating(true)
     
     // Use override values if provided (for design changes), otherwise use current props
@@ -335,8 +344,10 @@ export default function CarouselImageGenerator({
     const currentColorId = overrideColorId ?? colorThemeId
     
     // Compute configs with current values
+    const templateStartTime = performance.now()
     const currentTemplate = getCarouselTemplate(currentTemplateId)
     const currentColorTheme = getColorTheme(currentColorId)
+    console.log('   ⏱️ Template/Theme loading took:', (performance.now() - templateStartTime).toFixed(2), 'ms')
     
     // Ensure canvasRefs array has correct length
     if (canvasRefs.current.length !== carousels.length) {
@@ -347,33 +358,51 @@ export default function CarouselImageGenerator({
     const imageDataUrls: string[] = new Array(carousels.length).fill('')
     
     // Generate all carousels first without updating state (prevents layout shifts)
+    const carouselGenerationStart = performance.now()
     for (let i = 0; i < carousels.length; i++) {
+      const carouselStartTime = performance.now()
+      console.log(`   🖼️ [CAROUSEL ${i + 1}/${carousels.length}] Starting generation...`)
+      console.log(`      Type: ${carousels[i].kind}, Title: ${carousels[i].title?.substring(0, 30)}...`)
+      
       await generateCarouselImage(i, currentTemplate, currentColorTheme)
+      
+      const carouselEndTime = performance.now()
+      const carouselDuration = carouselEndTime - carouselStartTime
+      console.log(`   ✅ [CAROUSEL ${i + 1}/${carousels.length}] Generated in ${carouselDuration.toFixed(2)}ms`)
+      
       // Save canvas to data URL at the specific index to maintain order
       const canvas = canvasRefs.current[i]
       if (canvas) {
+        const dataUrlStartTime = performance.now()
         const dataUrl = canvas.toDataURL('image/png')
+        const dataUrlDuration = performance.now() - dataUrlStartTime
         imageDataUrls[i] = dataUrl
-        console.log(`✅ Generated carousel ${i + 1}/${carousels.length}`)
+        console.log(`      📸 Canvas toDataURL took: ${dataUrlDuration.toFixed(2)}ms`)
       } else {
-        console.warn(`⚠️ Canvas not found for carousel ${i + 1}`)
+        console.warn(`   ⚠️ Canvas not found for carousel ${i + 1}`)
       }
     }
+    
+    const carouselGenerationEnd = performance.now()
+    console.log(`   ⏱️ Total carousel generation time: ${(carouselGenerationEnd - carouselGenerationStart).toFixed(2)}ms`)
     
     // Verify all images were generated
     const allImagesValid = imageDataUrls.every(img => img && img.startsWith('data:image/'))
     if (!allImagesValid) {
-      console.error('❌ Some images failed to generate')
+      console.error('❌ [RENDERING ERROR] Some images failed to generate')
     } else {
-      console.log('✅ All', imageDataUrls.length, 'carousels generated successfully')
+      console.log('✅ [RENDERING] All', imageDataUrls.length, 'carousels generated successfully')
+      console.log('   ⏱️ Total rendering time so far:', (performance.now() - renderStartTime).toFixed(2), 'ms')
     }
     
     // Batch update all images at once to prevent layout shifts
     // Preserve old images in ref before updating
+    const setStateStartTime = performance.now()
     setCarouselImages(prev => {
       previousImagesRef.current = prev.length > 0 ? [...prev] : []
       return imageDataUrls
     })
+    console.log('   ⏱️ setCarouselImages() call took:', (performance.now() - setStateStartTime).toFixed(2), 'ms')
     
     // Create full content hash (includes template/theme) for image matching - deterministic order
     const fullContentHash = JSON.stringify({ 
@@ -463,20 +492,30 @@ export default function CarouselImageGenerator({
     }
     
     setGenerating(false)
+    const beforeSaveTime = performance.now()
+    console.log('   ⏱️ Rendering complete, total time:', (beforeSaveTime - renderStartTime).toFixed(2), 'ms')
     
     // Save to Supabase immediately after generation (always save, including design updates)
     if (user?.id && imageDataUrls.length > 0) {
       const isDataUrl = imageDataUrls[0]?.startsWith('data:image/')
       if (isDataUrl) {
-        console.log('💾 Saving images to Supabase (design update or new generation)...')
+        const saveStartTime = performance.now()
+        console.log('💾 [SAVE] Saving images to Supabase (design update or new generation)...')
+        console.log('   ⏱️ Timestamp:', new Date().toISOString())
         try {
           await saveToDatabase(imageDataUrls)
-          console.log('✅ Images saved to Supabase successfully')
+          const saveEndTime = performance.now()
+          console.log('✅ [SAVE] Images saved to Supabase successfully')
+          console.log('   ⏱️ Save duration:', (saveEndTime - saveStartTime).toFixed(2), 'ms')
         } catch (err) {
-          console.error('❌ Failed to save to Supabase:', err)
+          console.error('❌ [SAVE ERROR] Failed to save to Supabase:', err)
         }
       }
     }
+    
+    const finalTime = performance.now()
+    console.log('🎨 [RENDERING COMPLETE] Total end-to-end time:', (finalTime - renderStartTime).toFixed(2), 'ms')
+    console.log('   ⏱️ Final timestamp:', new Date().toISOString())
     
     // Notify parent component that generation is complete
     if (onGenerationComplete) {
@@ -752,13 +791,21 @@ export default function CarouselImageGenerator({
     template = TEMPLATE, 
     colorTheme = COLOR_THEME
   ) => {
+    const carouselImageStartTime = performance.now()
     const canvas = canvasRefs.current[index]
-    if (!canvas) return
+    if (!canvas) {
+      console.warn(`      ⚠️ Canvas not found for carousel ${index + 1}`)
+      return
+    }
 
     const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    if (!ctx) {
+      console.warn(`      ⚠️ Canvas context not available for carousel ${index + 1}`)
+      return
+    }
 
     const carousel = carousels[index]
+    console.log(`      📝 Processing carousel ${index + 1}: ${carousel.kind}`)
 
     const getLetterSpacingFor = (section: 'hook' | 'hookTopic' | 'hookSubtitle' | 'hookCTA' | 'title' | 'content' | 'cta'): number => {
       return template.styles?.letterSpacing?.[section] ?? 0
@@ -780,7 +827,10 @@ export default function CarouselImageGenerator({
 
     // Load fonts before rendering
     if (index === 0) {
+      const fontLoadStart = performance.now()
+      console.log(`      🔤 Loading fonts for template ${template.id}...`)
       await loadFonts(template)
+      console.log(`      ⏱️ Font loading took: ${(performance.now() - fontLoadStart).toFixed(2)}ms`)
     }
 
     // Instagram note dimensions (4:5 ratio)
@@ -793,7 +843,10 @@ export default function CarouselImageGenerator({
     const backgroundConfig = template.background
     if (backgroundConfig?.type === 'image') {
       try {
+        const bgLoadStart = performance.now()
+        console.log(`      🖼️ Loading background image: ${backgroundConfig.src}`)
         const bgImage = await loadImage(backgroundConfig.src)
+        console.log(`      ⏱️ Background image load took: ${(performance.now() - bgLoadStart).toFixed(2)}ms`)
         const scale = Math.max(width / bgImage.width, height / bgImage.height)
         const scaledWidth = bgImage.width * scale
         const scaledHeight = bgImage.height * scale
@@ -816,7 +869,10 @@ export default function CarouselImageGenerator({
     // Draw hook-specific background image with transparency (for HOOK slides only)
     if (cleanCarousel.kind === 'HOOK' && template.hookBackground?.type === 'image') {
       try {
+        const hookBgLoadStart = performance.now()
+        console.log(`      🖼️ Loading hook background image: ${template.hookBackground.src}`)
         const hookBgImage = await loadImage(template.hookBackground.src)
+        console.log(`      ⏱️ Hook background image load took: ${(performance.now() - hookBgLoadStart).toFixed(2)}ms`)
         const scale = Math.max(width / hookBgImage.width, height / hookBgImage.height)
         const scaledWidth = hookBgImage.width * scale
         const scaledHeight = hookBgImage.height * scale
@@ -1414,13 +1470,16 @@ export default function CarouselImageGenerator({
       
       if (imageSourceUrl) {
         try {
-          console.log(`🖼️ Carousel ${index + 1}: Attempting to load image from:`, imageSourceUrl)
+          const imageLoadStart = performance.now()
+          console.log(`      🖼️ Loading content image from: ${imageSourceUrl.substring(0, 50)}...`)
           loadedImage = await loadImage(imageSourceUrl)
+          const imageLoadDuration = performance.now() - imageLoadStart
+          console.log(`      ⏱️ Content image load took: ${imageLoadDuration.toFixed(2)}ms`)
           // Make photo container 30% smaller for template 3
           const sizeMultiplier = template.id === 'template3' ? 0.7 : 1.0
           imageWidth = Math.round(safeWidth * sizeMultiplier)
           imageHeight = Math.round(imageWidth * 9 / 16)
-          console.log(`✅ Carousel ${index + 1}: Image loaded successfully! Dimensions: ${loadedImage.width}x${loadedImage.height}`)
+          console.log(`      ✅ Image loaded! Dimensions: ${loadedImage.width}x${loadedImage.height}`)
         } catch (error) {
           console.error(`❌ Carousel ${index + 1}: Failed to pre-load image:`, error)
           console.error(`   Image URL was:`, imageSourceUrl)
@@ -1867,6 +1926,10 @@ export default function CarouselImageGenerator({
       ctx.lineTo(arrowEndX - arrowConfig.height / 2, arrowY + arrowConfig.height / 2)
       ctx.stroke()
     }
+    
+    const carouselImageEndTime = performance.now()
+    const carouselImageDuration = carouselImageEndTime - carouselImageStartTime
+    console.log(`      ✅ Carousel ${index + 1} complete! Total time: ${carouselImageDuration.toFixed(2)}ms`)
   }  // Close generateCarouselImage function
 
   const downloadCarousel = (index: number) => {
@@ -1959,7 +2022,8 @@ export default function CarouselImageGenerator({
         display: 'flex',
         flexDirection: 'column',
         paddingBottom: '16px',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        cursor: 'default'
       }}
     >
       <h3 style={{ 
@@ -1967,7 +2031,7 @@ export default function CarouselImageGenerator({
         fontSize: '24px',
         fontWeight: '700'
       }}>
-        Your carousel
+        {ideaTitle}
       </h3>
 
       <div
