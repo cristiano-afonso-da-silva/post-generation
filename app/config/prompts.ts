@@ -63,10 +63,22 @@ CAROUSEL 1: HOOK (FIRST CAROUSEL)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - topic: Short category label (1-2 words, all caps)
   * Example: "ENTREPRENEURSHIP", "PRODUCTIVITY", "MARKETING"
-- title: The hook text itself (maximum 10 words)
+- title: A compelling hook that grabs attention (6-12 words, NOT a simple one-word title)
+  * CRITICAL: This must be an engaging, attention-grabbing hook - NOT just a simple label or category
+  * Create curiosity, intrigue, or a bold statement that makes people stop scrolling
+  * Use questions, surprising statements, or provocative claims
+  * Examples of GOOD hooks:
+    * "Why Your Morning Routine Is Actually Making You Less Productive"
+    * "The One Mistake That's Costing You Thousands of Followers"
+    * "I Tried This Productivity Hack For 30 Days - Here's What Happened"
+    * "The Secret Most Entrepreneurs Don't Want You to Know"
+  * Examples of BAD hooks (too simple, not engaging):
+    * "Productivity" (just a word)
+    * "Marketing Tips" (too generic)
+    * "Business" (not a hook)
   * Use simple English - easy to understand, clear, and direct
   * Avoid complex words or jargon
-  * Make it attention-grabbing and engaging
+  * Make it impossible to scroll past
 - subtitle: Short descriptive text (3-8 words)
   * Provides context or intrigue
   * Example: "How I Stay Focused & Sane", "The Secret Nobody Tells You"
@@ -153,7 +165,7 @@ The "slides" array is REQUIRED and MUST contain at least 3 carousels.
 Each carousel MUST have: title, content, and kind properties.
 
 QUALITY CHECKLIST
-✓ Hook carousel has topic (1-2 words), compelling title (max 10 words), subtitle (3-8 words), cta (2-3 words), empty content
+✓ Hook carousel has topic (1-2 words), compelling hook title (6-12 words, NOT a simple one-word title - must be engaging and attention-grabbing), subtitle (3-8 words), cta (2-3 words), empty content
 ✓ Middle carousels have 2-5 word titles and 18-32 word content
 ✓ Content flows logically and tells a story
 ✓ CTA is specific and actionable

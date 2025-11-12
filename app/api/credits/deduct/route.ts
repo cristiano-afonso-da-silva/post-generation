@@ -3,7 +3,7 @@ import { deductCreditServerSQL, getUserCreditsServerSQL } from '@/app/lib/supaba
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await request.json()
+    const { userId, amount = 1 } = await request.json()
 
     if (!userId) {
       return NextResponse.json(
@@ -11,6 +11,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    // Validate amount
+    const creditAmount = Math.max(1, Math.floor(amount || 1))
 
     // Check if user has credits (using MCP-compatible SQL pattern)
     const currentCredits = await getUserCreditsServerSQL(userId)
@@ -21,7 +24,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (currentCredits.credits_remaining <= 0) {
+    if (currentCredits.credits_remaining < creditAmount) {
       return NextResponse.json(
         { error: 'Insufficient credits' },
         { status: 403 }
@@ -30,7 +33,7 @@ export async function POST(request: NextRequest) {
 
     // Deduct credit (using MCP-compatible SQL pattern)
     // This matches the SQL that can be tested with: mcp_supabase_execute_sql
-    const updatedCredits = await deductCreditServerSQL(userId)
+    const updatedCredits = await deductCreditServerSQL(userId, creditAmount)
 
     if (!updatedCredits) {
       return NextResponse.json(

@@ -105,6 +105,9 @@ interface Props {
   colorThemeId?: string
   accountDescription?: string
   caption?: string
+  includeImages?: boolean
+  useAIImages?: boolean
+  aiImageStyle?: 'animated' | 'surreal'
   onGenerationComplete?: () => void
 }
 
@@ -158,6 +161,9 @@ export default function CarouselImageGenerator({
   colorThemeId = 'purple-black',
   accountDescription = '',
   caption = '',
+  includeImages = false,
+  useAIImages = false,
+  aiImageStyle = 'animated',
   onGenerationComplete
 }: Props) {
   // Debug: Log underlineWords on component mount/update
@@ -459,12 +465,16 @@ export default function CarouselImageGenerator({
     }
     
     // Deduct credit when carousels are generated (only once per note generation)
+    // Calculate credit amount based on content style:
+    // Text only: 1 credit
+    // Text + Image (Pexels or AI): 2 credits
     if (user?.id && !hasDeductedCredit.current) {
+      const creditAmount = includeImages ? 2 : 1
       try {
         const deductResponse = await fetch('/api/credits/deduct', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.id }),
+          body: JSON.stringify({ userId: user.id, amount: creditAmount }),
         })
 
         if (deductResponse.ok) {
@@ -931,7 +941,7 @@ export default function CarouselImageGenerator({
     if (cleanCarousel.kind === 'HOOK') {
       // Check if this template uses the new hook layout (template 3)
       if (template.hookLayout?.showTopic || template.hookLayout?.showSubtitle || template.hookLayout?.showCTA) {
-        // NEW TEMPLATE 3 LAYOUT: topic, title, subtitle, CTA with colored box and arrow
+        // NEW TEMPLATE 3 LAYOUT: topic (at top), title (centered), subtitle, CTA with colored box and arrow
         const topicText = cleanCarousel.topic || ''
         const titleText = cleanCarousel.title || ''
         const subtitleText = cleanCarousel.subtitle || ''
@@ -939,7 +949,7 @@ export default function CarouselImageGenerator({
 
         const hookLetterSpacing = getLetterSpacingFor('hook')
         
-        // 1. Render TOPIC at the very top middle (all caps)
+        // 1. Render TOPIC at the very top middle (all caps) - using topic from JSON
         if (template.hookLayout.showTopic && topicText && template.fonts.hookTopic) {
           ctx.font = template.fonts.hookTopic.cssFont
           ctx.fillStyle = colorTheme.primaryColor
@@ -1262,7 +1272,7 @@ export default function CarouselImageGenerator({
       }  // End of else block for original HOOK layout
       
     } else if (cleanCarousel.kind === 'CTA') {
-      // Render topic at the top for template 3
+      // Render topic at the top for template 3 (using topic from HOOK slide)
       if (template.id === 'template3' && template.fonts.hookTopic) {
         const topicText = carousels[0]?.topic || '' // Get topic from HOOK slide
         if (topicText) {
@@ -1650,7 +1660,7 @@ export default function CarouselImageGenerator({
       
       console.log(`📏 Layout: ${titleLines.length} title lines, ${contentLines.length} content lines, total: ${Math.round(totalHeight)}px, safe: ${safeHeight}px`)
       
-      // Render topic at the top for template 3 MIDDLE slides
+      // Render topic at the top for template 3 MIDDLE slides (using topic from HOOK slide)
       if (template.id === 'template3' && cleanCarousel.kind === 'MIDDLE' && template.fonts.hookTopic) {
         const topicText = carousels[0]?.topic || '' // Get topic from HOOK slide
         if (topicText) {

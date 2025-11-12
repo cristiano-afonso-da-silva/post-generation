@@ -746,6 +746,9 @@ export default function GenerationPage() {
                     colorThemeId={colorThemeId}
                     accountDescription={accountDescription}
                     caption={note.caption}
+                    includeImages={false}
+                    useAIImages={false}
+                    aiImageStyle="animated"
                     onGenerationComplete={() => {
                       // Navigate to /app/{generationId} after saving
                       const savedGenerationId = localStorage.getItem('postGeneration_generationId')

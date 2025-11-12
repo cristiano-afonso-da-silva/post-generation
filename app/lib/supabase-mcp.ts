@@ -62,7 +62,7 @@ export async function createInitialCreditRecordServerSQL(userId: string): Promis
 //     updated_at = NOW()
 // WHERE user_id = 'user-id-here'
 // RETURNING *;
-export async function deductCreditServerSQL(userId: string): Promise<any> {
+export async function deductCreditServerSQL(userId: string, amount: number = 1): Promise<any> {
   const serverClient = createServerClient()
   
   // First get current credits
@@ -75,8 +75,8 @@ export async function deductCreditServerSQL(userId: string): Promise<any> {
   const { data, error } = await serverClient
     .from('user_credits')
     .update({
-      credits_remaining: Math.max(current.credits_remaining - 1, 0),
-      total_credits_used: current.total_credits_used + 1,
+      credits_remaining: Math.max(current.credits_remaining - amount, 0),
+      total_credits_used: current.total_credits_used + amount,
       updated_at: new Date().toISOString(),
     })
     .eq('user_id', userId)

@@ -1374,6 +1374,9 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
               colorThemeId={colorThemeId}
               accountDescription={accountDescription}
               caption={note.caption}
+              includeImages={includeImages}
+              useAIImages={useAIImages}
+              aiImageStyle={aiImageStyle}
                     onGenerationComplete={() => {
                       // Generation complete - stay on current page
                       // Removed redirect to prevent flash/duplicate page issue
