@@ -210,13 +210,19 @@ export default function LandingPage() {
                 style={{
                   padding: '12px 24px',
                   borderRadius: '8px',
-                  background: 'transparent',
+                  background: '#f5f5f5',
                   border: '1px solid #e5e5e5',
                   color: '#000000',
-                  fontSize: '14px',
+                  fontSize: '16px',
                   fontWeight: '600',
                   textDecoration: 'none',
                   transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#e5e5e5'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#f5f5f5'
                 }}
               >
                 Log In
@@ -228,6 +234,7 @@ export default function LandingPage() {
 
       {/* Hero Section */}
       <section
+        className="hero-section"
         style={{
           minHeight: '110vh',
           display: 'grid',
@@ -240,7 +247,7 @@ export default function LandingPage() {
         }}
       >
         {/* Left Column - Content */}
-        <div style={{ position: 'relative', zIndex: 10, paddingRight: '64px', paddingLeft: '48px', paddingTop: '120px', paddingBottom: '120px' }}>
+        <div className="hero-content" style={{ position: 'relative', zIndex: 10, paddingRight: '64px', paddingLeft: '48px', paddingTop: '120px', paddingBottom: '120px' }}>
           <div
             style={{
               display: 'inline-flex',
@@ -257,7 +264,7 @@ export default function LandingPage() {
             }}
           >
             <span aria-hidden="true" style={{ color: '#ffbd59', letterSpacing: '2px' }}>★★★★★</span>
-            <span>Trusted by creators with 99 drafts.</span>
+            <span>Trusted by creators with 99 drafts</span>
           </div>
           <h1
             style={{
@@ -267,13 +274,14 @@ export default function LandingPage() {
               letterSpacing: '-1px',
               color: '#000000',
               marginBottom: '24px',
-              fontFamily: 'var(--font-playfair-display), serif',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
               textAlign: 'left',
             }}
           >
-            Turn Ideas Into Content That <em>Sells</em>
+            Turn Ideas Into Content That <span style={{ fontFamily: 'var(--font-playfair-display), serif', fontStyle: 'italic' }}>Sells</span>
           </h1>
           <p
+            className="hero-description"
             style={{
               fontSize: 'clamp(18px, 2.5vw, 22px)',
               color: '#666666',
@@ -294,12 +302,13 @@ export default function LandingPage() {
                 alignItems: 'center',
                 gap: '8px',
                 padding: '14px 28px',
-                borderRadius: '8px',
+                borderRadius: '12px',
                 background: '#ffbd59',
                 color: '#000000',
                 fontSize: '16px',
                 fontWeight: '600',
                 textDecoration: 'none',
+                border: '1px solid rgba(0, 0, 0, 0.1)',
                 transition: 'all 0.2s ease',
               }}
             >
@@ -587,7 +596,7 @@ export default function LandingPage() {
       {/* Features - Copy 1 */}
       <section
         style={{
-          padding: '120px 48px 80px 48px',
+          padding: '100px 48px',
           background: '#faf8f5',
         }}
       >
@@ -609,6 +618,7 @@ export default function LandingPage() {
           >
             {/* Left side: Content */}
             <div
+              className="features-content"
               style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -616,30 +626,13 @@ export default function LandingPage() {
                 padding: '48px 0',
               }}
             >
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  padding: '6px 18px',
-                  background: '#f5f5f5',
-                  border: '1px solid #e5e5e5',
-                  borderRadius: '999px',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  color: '#666666',
-                  marginBottom: '24px',
-                  width: 'fit-content',
-                }}
-              >
-                Why us?
-              </div>
               <h2
                 style={{
-                  fontSize: 'clamp(40px, 5vw, 64px)',
-                  fontWeight: '700',
+                  fontSize: 'clamp(36px, 6vw, 56px)',
+                  fontWeight: '800',
                   color: '#000000',
-                  marginBottom: '24px',
-                  lineHeight: '1.2',
+                  letterSpacing: '-2px',
+                  marginBottom: '16px',
                   fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
                 }}
               >
@@ -659,6 +652,7 @@ export default function LandingPage() {
 
             {/* Right side: Purple card */}
             <div
+              className="features-card-container"
               style={{
                 minHeight: '533px',
                 display: 'flex',
@@ -673,7 +667,7 @@ export default function LandingPage() {
                   maxWidth: '400px',
                   aspectRatio: card1CopyExpanded ? '3 / 4' : 'auto',
                   maxHeight: card1CopyExpanded ? 'none' : '350px',
-                  border: '8px solid rgba(0, 0, 0, 0.05)',
+                  border: '1px solid rgb(229, 229, 229)',
                   borderRadius: '12px',
                   padding: '24px',
                   boxSizing: 'border-box',
@@ -700,7 +694,7 @@ export default function LandingPage() {
                         alignItems: 'stretch',
                         justifyContent: 'flex-start',
                         background: '#ffffff',
-                        border: '8px solid rgba(0, 0, 0, 0.05)',
+                        border: '1px solid rgb(229, 229, 229)',
                         borderRadius: '12px',
                         position: 'relative',
                         padding: '0',
@@ -717,7 +711,7 @@ export default function LandingPage() {
                           position: 'relative',
                           overflow: 'hidden',
                           cursor: 'pointer',
-                          border: '2px solid rgba(0, 0, 0, 0.1)',
+                          border: '1px solid rgb(229, 229, 229)',
                           borderRadius: '4px',
                         }}
                         onClick={() => {
@@ -795,7 +789,7 @@ export default function LandingPage() {
                         padding: '16px 32px',
                         borderRadius: '12px',
                         background: '#ededed',
-                        border: 'none',
+                        border: '1px solid rgb(229, 229, 229)',
                         color: '#000000',
                         fontSize: '16px',
                         fontWeight: '600',
@@ -830,7 +824,7 @@ export default function LandingPage() {
                         alignItems: 'stretch',
                         justifyContent: 'flex-start',
                         background: '#ffffff',
-                        border: '8px solid rgba(0, 0, 0, 0.05)',
+                        border: '1px solid rgb(229, 229, 229)',
                         borderRadius: '12px',
                         position: 'relative',
                         padding: '16px',
@@ -863,7 +857,7 @@ export default function LandingPage() {
                         borderRadius: '12px',
                         background: 'rgb(242, 242, 242)',
                         color: '#000000',
-                        border: 'none',
+                        border: '1px solid rgb(229, 229, 229)',
                         fontSize: '16px',
                         fontWeight: '600',
                         cursor: 'pointer',
@@ -891,7 +885,7 @@ export default function LandingPage() {
       {/* Features - Reversed */}
       <section
         style={{
-          padding: '120px 48px',
+          padding: '100px 48px',
           background: '#faf8f5',
         }}
       >
@@ -911,14 +905,53 @@ export default function LandingPage() {
               alignItems: 'center',
             }}
           >
-            {/* Left side: Interactive card */}
+            {/* Left side: Content */}
             <div
+              className="features-content-reversed"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                padding: '48px 0',
+                gridColumn: '1',
+                textAlign: 'left',
+              }}
+            >
+              <h2
+                style={{
+                  fontSize: 'clamp(36px, 6vw, 56px)',
+                  fontWeight: '800',
+                  color: '#000000',
+                  letterSpacing: '-2px',
+                  marginBottom: '16px',
+                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
+                  textAlign: 'left',
+                }}
+              >
+                Design that matches your brand
+              </h2>
+              <p
+                style={{
+                  fontSize: 'clamp(18px, 2vw, 22px)',
+                  fontWeight: '400',
+                  color: '#666666',
+                  lineHeight: '1.6',
+                  textAlign: 'left',
+                }}
+              >
+                Pick a theme, font, and tone that fits your identity, make every post feel yours.
+              </p>
+            </div>
+
+            {/* Right side: Interactive card */}
+            <div
+              className="features-card-container-reversed"
               style={{
                 minHeight: '533px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gridColumn: '1',
+                gridColumn: '2',
               }}
             >
               <div
@@ -928,7 +961,7 @@ export default function LandingPage() {
                   maxWidth: '400px',
                   aspectRatio: '3 / 4',
                   maxHeight: 'none',
-                  border: '8px solid rgba(0, 0, 0, 0.05)',
+                  border: '1px solid rgb(229, 229, 229)',
                   borderRadius: '12px',
                   padding: '24px',
                   boxSizing: 'border-box',
@@ -953,7 +986,7 @@ export default function LandingPage() {
                     alignItems: 'stretch',
                     justifyContent: 'flex-start',
                     background: '#ffffff',
-                    border: '8px solid rgba(0, 0, 0, 0.05)',
+                    border: '1px solid rgb(229, 229, 229)',
                     borderRadius: '12px',
                     position: 'relative',
                     padding: '0',
@@ -994,7 +1027,7 @@ export default function LandingPage() {
                       borderRadius: '12px',
                       background: selectedStyle === 1 ? 'rgb(242, 242, 242)' : 'rgb(230, 230, 230)',
                       color: '#000000',
-                      border: 'none',
+                      border: '1px solid rgba(0, 0, 0, 0.1)',
                       fontSize: '16px',
                       fontWeight: '600',
                       cursor: 'pointer',
@@ -1021,7 +1054,7 @@ export default function LandingPage() {
                       borderRadius: '12px',
                       background: selectedStyle === 2 ? 'rgb(242, 242, 242)' : 'rgb(230, 230, 230)',
                       color: '#000000',
-                      border: 'none',
+                      border: '1px solid rgba(0, 0, 0, 0.1)',
                       fontSize: '16px',
                       fontWeight: '600',
                       cursor: 'pointer',
@@ -1043,69 +1076,15 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
-
-            {/* Right side: Content */}
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                padding: '48px 0',
-                gridColumn: '2',
-                textAlign: 'right',
-              }}
-            >
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  padding: '6px 18px',
-                  background: '#f5f5f5',
-                  border: '1px solid #e5e5e5',
-                  borderRadius: '999px',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  color: '#666666',
-                  marginBottom: '24px',
-                  width: 'fit-content',
-                  marginLeft: 'auto',
-                }}
-              >
-                Why us?
-              </div>
-              <h2
-                style={{
-                  fontSize: 'clamp(40px, 5vw, 64px)',
-                  fontWeight: '700',
-                  color: '#000000',
-                  marginBottom: '24px',
-                  lineHeight: '1.2',
-                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
-                  textAlign: 'right',
-                }}
-              >
-                Design that matches your brand
-              </h2>
-              <p
-                style={{
-                  fontSize: 'clamp(18px, 2vw, 22px)',
-                  fontWeight: '400',
-                  color: '#666666',
-                  lineHeight: '1.6',
-                  textAlign: 'right',
-                }}
-              >
-                Pick a theme, font, and tone that fits your identity, make every post feel yours.
-              </p>
-            </div>
           </div>
         </div>
       </section>
 
       {/* Features */}
       <section
+        className="features-section-scale"
         style={{
-          padding: '120px 48px 80px 48px',
+          padding: '100px 48px',
           background: '#faf8f5',
         }}
       >
@@ -1127,37 +1106,21 @@ export default function LandingPage() {
           >
             {/* Left side: Content */}
             <div
+              className="features-content-scale"
               style={{
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
-                padding: '48px 0',
+                padding: '48px 64px 48px 0',
               }}
             >
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  padding: '6px 18px',
-                  background: '#f5f5f5',
-                  border: '1px solid #e5e5e5',
-                  borderRadius: '999px',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  color: '#666666',
-                  marginBottom: '24px',
-                  width: 'fit-content',
-                }}
-              >
-                Why us?
-              </div>
               <h2
                 style={{
-                  fontSize: 'clamp(40px, 5vw, 64px)',
-                  fontWeight: '700',
+                  fontSize: 'clamp(36px, 6vw, 56px)',
+                  fontWeight: '800',
                   color: '#000000',
-                  marginBottom: '24px',
-                  lineHeight: '1.2',
+                  letterSpacing: '-2px',
+                  marginBottom: '16px',
                   fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
                 }}
               >
@@ -1193,6 +1156,7 @@ export default function LandingPage() {
               {tealCardDownloaded && (
                 <>
                   <div
+                    className="teal-card-after-state"
                     style={{
                       position: 'relative',
                       width: 'fit-content',
@@ -1212,6 +1176,7 @@ export default function LandingPage() {
                   ].map((image, index) => (
                     <div
                       key={index}
+                      className="teal-card-small"
                       onClick={() => {
                         setTealCardDownloaded(false)
                       }}
@@ -1275,6 +1240,7 @@ export default function LandingPage() {
                           width={360}
                           height={460}
                           unoptimized
+                          className="teal-card-small-image"
                           style={{
                             width: 'auto',
                             height: 'auto',
@@ -1293,13 +1259,14 @@ export default function LandingPage() {
               {/* Before state - Main card (hidden when downloaded) */}
               {!tealCardDownloaded && (
                 <div
+                  className="teal-card"
                   style={{
                     width: '100%',
                     maxWidth: '400px',
                     aspectRatio: '3 / 4',
                     maxHeight: 'none',
                     minHeight: '533px',
-                    border: '8px solid rgba(0, 0, 0, 0.05)',
+                    border: '1px solid rgb(229, 229, 229)',
                     borderRadius: '12px',
                     padding: '24px',
                     boxSizing: 'border-box',
@@ -1324,7 +1291,7 @@ export default function LandingPage() {
                     alignItems: 'stretch',
                     justifyContent: 'flex-start',
                     background: '#ffffff',
-                    border: '8px solid rgba(0, 0, 0, 0.05)',
+                    border: '1px solid rgb(229, 229, 229)',
                     borderRadius: '12px',
                     position: 'relative',
                     padding: '0',
@@ -1368,7 +1335,7 @@ export default function LandingPage() {
                     borderRadius: '12px',
                     background: 'rgb(242, 242, 242)',
                     color: '#000000',
-                    border: 'none',
+                    border: '1px solid rgba(0, 0, 0, 0.1)',
                     fontSize: '16px',
                     fontWeight: '600',
                     transition: 'all 0.2s ease',
@@ -1425,7 +1392,7 @@ export default function LandingPage() {
                 maxWidth: '280px',
                 margin: '0 auto',
                 aspectRatio: '3 / 4',
-                border: '8px solid rgba(0, 0, 0, 0.05)',
+                    border: '1px solid rgb(229, 229, 229)',
                 borderRadius: '12px',
                 padding: '24px',
                 boxSizing: 'border-box',
@@ -1498,7 +1465,7 @@ export default function LandingPage() {
                 maxWidth: '280px',
                 margin: '0 auto',
                 aspectRatio: '3 / 4',
-                border: '8px solid rgba(0, 0, 0, 0.05)',
+                    border: '1px solid rgb(229, 229, 229)',
                 borderRadius: '12px',
                 padding: '24px',
                 boxSizing: 'border-box',
@@ -1561,7 +1528,7 @@ export default function LandingPage() {
                 maxWidth: '280px',
                 margin: '0 auto',
                 aspectRatio: '3 / 4',
-                border: '8px solid rgba(0, 0, 0, 0.05)',
+                    border: '1px solid rgb(229, 229, 229)',
                 borderRadius: '12px',
                 padding: '24px',
                 boxSizing: 'border-box',
@@ -1629,22 +1596,6 @@ export default function LandingPage() {
       >
         <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: '80px' }}>
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                padding: '6px 18px',
-                background: '#f5f5f5',
-                border: '1px solid #e5e5e5',
-                borderRadius: '999px',
-                fontSize: '13px',
-                fontWeight: '600',
-                color: '#666666',
-                marginBottom: '24px',
-              }}
-            >
-              Benefits
-            </div>
             <h2
               style={{
                 fontSize: 'clamp(36px, 6vw, 56px)',
@@ -1673,7 +1624,7 @@ export default function LandingPage() {
             style={{
               background: '#ffffff',
               borderRadius: '24px',
-              border: '1px solid #e5e5e5',
+                    border: '1px solid rgb(229, 229, 229)',
               overflow: 'hidden',
             }}
           >
@@ -1690,9 +1641,27 @@ export default function LandingPage() {
                 letterSpacing: '0.5px',
               }}
             >
-              <div style={{ padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', borderBottom: '1px solid #f0f0f0' }}></div>
-              <div style={{ textAlign: 'center', padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', borderBottom: '1px solid #f0f0f0', wordWrap: 'break-word', overflowWrap: 'break-word' }}>Canva</div>
-              <div style={{ textAlign: 'center', background: '#ffbd59', padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', borderBottom: '0.5px solid rgba(240, 240, 240, 0.5)', wordWrap: 'break-word', overflowWrap: 'break-word' }}>Post My Note</div>
+              <div style={{ 
+                padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', 
+                borderBottom: '1px solid rgb(229, 229, 229)',
+                wordWrap: 'break-word', 
+                overflowWrap: 'break-word' 
+              }}></div>
+              <div style={{ 
+                textAlign: 'center', 
+                padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', 
+                borderBottom: '1px solid rgb(229, 229, 229)', 
+                wordWrap: 'break-word', 
+                overflowWrap: 'break-word' 
+              }}>Canva</div>
+              <div style={{ 
+                textAlign: 'center', 
+                background: '#ffbd59', 
+                padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', 
+                borderBottom: '1px solid rgb(229, 229, 229)', 
+                wordWrap: 'break-word', 
+                overflowWrap: 'break-word' 
+              }}>Post My Note</div>
             </div>
             {/* Data Rows */}
             {comparisonData.map((row, index) => (
@@ -1705,9 +1674,35 @@ export default function LandingPage() {
                   alignItems: 'center',
                 }}
               >
-                <div style={{ fontWeight: '600', color: '#000000', fontSize: 'clamp(13px, 2vw, 19px)', padding: 'clamp(16px, 3vw, 24px) 0 clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', borderTop: '1px solid #f0f0f0', wordWrap: 'break-word', overflowWrap: 'break-word' }}>{row.metric}</div>
-                <div style={{ textAlign: 'center', color: '#999999', fontSize: 'clamp(12px, 2vw, 17px)', padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', borderTop: '1px solid #f0f0f0', wordWrap: 'break-word', overflowWrap: 'break-word' }}>{row.manual}</div>
-                <div style={{ textAlign: 'center', color: '#000000', fontWeight: '600', fontSize: 'clamp(12px, 2vw, 17px)', background: '#ffbd59', padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', borderTop: '0.5px solid rgba(240, 240, 240, 0.5)', wordWrap: 'break-word', overflowWrap: 'break-word' }}>
+                <div style={{ 
+                  fontWeight: '600', 
+                  color: '#000000', 
+                  fontSize: 'clamp(13px, 2vw, 19px)', 
+                  padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', 
+                  borderTop: index === 0 ? 'none' : '1px solid rgb(229, 229, 229)', 
+                  wordWrap: 'break-word', 
+                  overflowWrap: 'break-word' 
+                }}>{row.metric}</div>
+                <div style={{ 
+                  textAlign: 'center', 
+                  color: '#999999', 
+                  fontSize: 'clamp(13px, 2vw, 19px)', 
+                  padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', 
+                  borderTop: index === 0 ? 'none' : '1px solid rgb(229, 229, 229)', 
+                  wordWrap: 'break-word', 
+                  overflowWrap: 'break-word' 
+                }}>{row.manual}</div>
+                <div style={{ 
+                  textAlign: 'center', 
+                  color: '#000000', 
+                  fontWeight: '600', 
+                  fontSize: 'clamp(13px, 2vw, 19px)', 
+                  background: '#ffbd59', 
+                  padding: 'clamp(16px, 3vw, 24px) clamp(16px, 4vw, 32px)', 
+                  borderTop: index === 0 ? 'none' : '1px solid rgb(229, 229, 229)', 
+                  wordWrap: 'break-word', 
+                  overflowWrap: 'break-word' 
+                }}>
                   {row.postMyNote}
                 </div>
               </div>
@@ -1891,17 +1886,6 @@ export default function LandingPage() {
           >
             Your ideas deserve to move <span style={{ fontFamily: 'var(--font-playfair-display), serif', fontStyle: 'italic' }}>faster</span>
           </h2>
-          <p
-            style={{
-              fontSize: 'clamp(18px, 2.5vw, 22px)',
-              color: '#ffffff',
-              marginBottom: '48px',
-              lineHeight: '1.6',
-              opacity: 0.9,
-            }}
-          >
-            Your ideas deserve to move faster.
-          </p>
           <Link
             href={user ? "/app" : "/signup"}
             className="cta-button"
@@ -1910,12 +1894,13 @@ export default function LandingPage() {
               alignItems: 'center',
               gap: '8px',
               padding: '14px 28px',
-              borderRadius: '8px',
+              borderRadius: '12px',
               background: '#ffbd59',
               color: '#000000',
               fontSize: '16px',
               fontWeight: '600',
               textDecoration: 'none',
+              border: '1px solid rgba(0, 0, 0, 0.1)',
               transition: 'all 0.2s ease',
             }}
           >
@@ -2536,14 +2521,184 @@ export default function LandingPage() {
             gap: 24px !important;
           }
 
+          /* Hero section mobile layout */
+          .hero-section {
+            display: flex !important;
+            flex-direction: column !important;
+            grid-template-columns: none !important;
+            min-height: auto !important;
+            padding-top: 100px !important;
+          }
+
+          .hero-content {
+            padding: 80px 24px !important;
+            padding-top: 80px !important;
+            padding-bottom: 160px !important;
+            order: 1;
+            width: 100% !important;
+            text-align: center !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+          }
+
+          .hero-content h1 {
+            text-align: center !important;
+          }
+
+          .hero-content p,
+          .hero-content .hero-description {
+            text-align: center !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+            font-size: clamp(16px, 2vw, 18px) !important;
+          }
+
+          .hero-content > div:first-of-type {
+            margin-left: auto !important;
+            margin-right: auto !important;
+          }
+
+          .hero-content > div:last-of-type {
+            justify-content: center !important;
+            width: 100% !important;
+          }
+
           .hero-carousel-container {
             position: relative !important;
             width: 100% !important;
-            height: 600px !important;
+            height: 500px !important;
             padding-left: 0 !important;
             padding-right: 0 !important;
+            padding-top: 24px !important;
+            padding-bottom: 48px !important;
             top: auto !important;
             right: auto !important;
+            order: 2;
+          }
+
+          /* Features section mobile layout */
+          section[style*="background: rgb(250, 248, 245)"],
+          section[style*="background: #faf8f5"] {
+            padding: 48px 24px !important;
+          }
+
+          .features-grid {
+            grid-template-columns: 1fr !important;
+            gap: 32px !important;
+          }
+
+          .features-card-container {
+            order: 2 !important;
+            min-height: auto !important;
+            padding: 24px 0 !important;
+          }
+
+          .features-content {
+            order: 1 !important;
+            padding: 24px 0 !important;
+            text-align: center !important;
+          }
+
+          .features-content h2 {
+            text-align: center !important;
+          }
+
+          .features-content p {
+            text-align: center !important;
+          }
+
+          /* Features reversed section mobile layout */
+          .features-grid-reversed {
+            grid-template-columns: 1fr !important;
+            gap: 32px !important;
+          }
+
+          .features-card-container-reversed {
+            order: 2 !important;
+            min-height: auto !important;
+            padding: 24px 0 !important;
+            grid-column: auto !important;
+          }
+
+          .features-content-reversed {
+            order: 1 !important;
+            padding: 24px 0 !important;
+            text-align: center !important;
+            grid-column: auto !important;
+          }
+
+          .features-content-reversed h2 {
+            text-align: center !important;
+          }
+
+          .features-content-reversed p {
+            text-align: center !important;
+          }
+
+          /* Teal card mobile sizing */
+          .teal-card {
+            max-width: 90% !important;
+            min-height: 350px !important;
+            padding: 16px !important;
+          }
+
+          /* Teal card after state mobile sizing */
+          .teal-card-after-state {
+            min-width: 90% !important;
+            min-height: auto !important;
+            padding-bottom: 60px !important;
+          }
+
+          /* Create at scale content mobile centering */
+          .features-content-scale {
+            text-align: center !important;
+            padding: 24px 0 !important;
+            align-items: center !important;
+          }
+
+          .features-content-scale h2 {
+            text-align: center !important;
+          }
+
+          .features-content-scale p {
+            text-align: center !important;
+          }
+
+          /* Small teal cards mobile sizing */
+          .teal-card-small {
+            transform: rotate(5deg) scale(1) !important;
+            border-width: 4px !important;
+          }
+
+          .teal-card-small:nth-child(1) {
+            left: 0 !important;
+            top: 0 !important;
+          }
+
+          .teal-card-small:nth-child(2) {
+            left: 85% !important;
+            top: 150% !important;
+            transform: translateX(-50%) rotate(5deg) scale(1) !important;
+          }
+
+          .teal-card-small:nth-child(3) {
+            left: 0 !important;
+            top: 250% !important;
+          }
+
+          .teal-card-small-image {
+            max-width: 130px !important;
+          }
+
+          .teal-card-small > div:first-child {
+            width: 20px !important;
+            height: 20px !important;
+          }
+
+          .teal-card-small > div:first-child img {
+            width: 20px !important;
+            height: 20px !important;
           }
         }
       `}</style>

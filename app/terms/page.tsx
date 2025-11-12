@@ -22,46 +22,45 @@ export default function TermsPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#ffffff' }}>
-      {/* Navigation */}
-      <nav
+      {/* Header */}
+      <header
         style={{
+          borderBottom: '1px solid #e5e5e5',
+          padding: '24px 0',
+          background: '#ffffff',
           position: 'sticky',
-          top: '16px',
+          top: 0,
+          left: 0,
+          right: 0,
           zIndex: 100,
-          padding: '0 24px',
-          marginBottom: '0',
         }}
       >
-        <div
-          style={{
-            maxWidth: '960px',
-            margin: '0 auto',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '10px 20px',
-            background: 'rgba(255, 255, 255, 0.98)',
-            borderRadius: '999px',
-            border: '1px solid #e5e5e5',
-            backdropFilter: 'blur(8px)',
-          }}
-        >
+        <div className="header-inner" style={{
+          maxWidth: '100%',
+          margin: '0 auto',
+          padding: '0 48px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}>
           <Link 
             href="/" 
             style={{ 
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
-              fontSize: '20px',
+              gap: '12px',
+              fontSize: '20px', 
               fontWeight: '700', 
               color: '#000000', 
-              textDecoration: 'none',
+              letterSpacing: '-0.5px',
+              cursor: 'pointer',
+              textDecoration: 'none'
             }}
           >
             <Image src="/logo.svg" alt="Post My Note" width={40} height={40} priority style={{ width: '40px', height: '40px' }} />
             <span>Post My Note</span>
           </Link>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {user ? (
               <AccountButton
                 credits={credits?.credits_remaining ?? 0}
@@ -72,15 +71,21 @@ export default function TermsPage() {
               <Link
                 href="/signup"
                 style={{
-                  padding: '10px 24px',
-                  borderRadius: '999px',
-                  background: 'transparent',
+                  padding: '12px 24px',
+                  borderRadius: '8px',
+                  background: '#f5f5f5',
                   border: '1px solid #e5e5e5',
                   color: '#000000',
-                  fontSize: '14px',
+                  fontSize: '16px',
                   fontWeight: '600',
                   textDecoration: 'none',
                   transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#e5e5e5'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#f5f5f5'
                 }}
               >
                 Log In
@@ -88,7 +93,7 @@ export default function TermsPage() {
             )}
           </div>
         </div>
-      </nav>
+      </header>
 
       {/* Content */}
       <div

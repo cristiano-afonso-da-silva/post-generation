@@ -578,10 +578,6 @@ textarea.input {
     padding: 0 16px !important;
   }
 
-  header a[href="/landing"] {
-    font-size: 20px !important;
-  }
-
   /* Toggle switch touch-friendly */
   .toggle-switch {
     min-width: 58px;
