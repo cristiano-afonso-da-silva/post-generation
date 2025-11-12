@@ -4,17 +4,129 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
 import { useGenerations } from '../hooks/useGenerations'
 import Link from 'next/link'
-import Image from 'next/image'
 import { Plus, History, ChevronLeft, ChevronRight } from 'lucide-react'
 import AccountButton from '../components/AccountButton'
 import { useEffect, useState } from 'react'
 
-interface Generation {
-  id: string
-  project_name: string
-  idea_title: string
-  thumbnail_urls: string[]
-  created_at: string
+const normalizeImages = (rawImages: any[]): string[] =>
+  (rawImages || [])
+    .map((img: any) => {
+      if (!img) return ''
+      if (typeof img === 'string') return img.replace(/^"+|"+$/g, '').trim()
+      if (typeof img === 'object') {
+        if (img.publicUrl) return String(img.publicUrl)
+        if (img.url) return String(img.url)
+      }
+      return String(img)
+    })
+    .filter((img: string) => img.length > 0)
+
+function HistoryThumbnail({ images }: { images: string[] }) {
+  const [thumbs, setThumbs] = useState<string[]>([])
+
+  useEffect(() => {
+    let mounted = true
+    const controller = new AbortController()
+
+    async function loadThumbnails() {
+      const targets = images.slice(0, 2)
+      if (targets.length === 0) {
+        setThumbs([])
+        return
+      }
+
+      try {
+        const loaded = await Promise.all(
+          targets.map(async (url) => {
+            try {
+              const res = await fetch(url, {
+                mode: 'cors',
+                referrerPolicy: 'no-referrer',
+                signal: controller.signal
+              })
+              if (!res.ok) {
+                console.error('Thumbnail fetch failed', url, res.status)
+                return ''
+              }
+              const blob = await res.blob()
+              return URL.createObjectURL(blob)
+            } catch (err) {
+              console.error('Thumbnail fetch error', url, err)
+              return ''
+            }
+          })
+        )
+
+        if (mounted) {
+          setThumbs(loaded.filter(Boolean))
+        }
+      } catch (err) {
+        console.error('Thumbnail load error', err)
+      }
+    }
+
+    loadThumbnails()
+
+    return () => {
+      mounted = false
+      controller.abort()
+      setThumbs((prev) => {
+        prev.forEach((url) => URL.revokeObjectURL(url))
+        return []
+      })
+    }
+  }, [images])
+
+  if (thumbs.length === 0) {
+    return (
+      <div
+        style={{
+          gridColumn: '1 / -1',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#f5f5f5',
+          color: '#999999',
+          fontSize: '14px'
+        }}
+      >
+        No preview
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {thumbs[0] && (
+        <img
+          src={thumbs[0]}
+          alt="Slide 1"
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+      )}
+      {thumbs[1] ? (
+        <img
+          src={thumbs[1]}
+          alt="Slide 2"
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+      ) : (
+        thumbs[0] && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: '#f5f5f5',
+              color: '#999999'
+            }}
+          >
+            Slide 2 unavailable
+          </div>
+        )
+      )}
+    </>
+  )
 }
 
 export default function HistoryPage() {
@@ -33,55 +145,15 @@ export default function HistoryPage() {
     }
   }, [user, authLoading, router])
 
-  // Clear any generation-specific localStorage when viewing history
-  // This prevents auto-loading content from previous sessions
-  useEffect(() => {
-    if (user) {
-      try {
-        // Only clear generation-specific data, keep user preferences
-        localStorage.removeItem('postGeneration_note')
-        localStorage.removeItem('postGeneration_canvasImages')
-        localStorage.removeItem('postGeneration_fullContentHash')
-        localStorage.removeItem('postGeneration_contentHash')
-        localStorage.removeItem('postGeneration_generationId')
-        localStorage.removeItem('postGeneration_ideaTitle')
-        localStorage.removeItem('postGeneration_fromHistory')
-        localStorage.removeItem('postGeneration_accountDescription')
-      } catch (error) {
-        console.error('Error clearing localStorage:', error)
-      }
-    }
-  }, [user])
-
-  // Debug: Log generations and thumbnail URLs
-  useEffect(() => {
-    if (generations && generations.length > 0) {
-      console.log('📸 History page - Generations loaded:', generations.length)
-      generations.forEach((gen, idx) => {
-        console.log(`  Generation ${idx + 1}:`, {
-          id: gen.id,
-          idea_title: gen.idea_title,
-          thumbnail_urls: gen.thumbnail_urls,
-          thumbnail_count: gen.thumbnail_urls?.length || 0,
-          thumbnail_urls_detail: gen.thumbnail_urls
-        })
-      })
-    }
-  }, [generations])
-
   const loadGeneration = (id: string) => {
-    // Set flag to indicate we're coming from history page
     try {
       localStorage.setItem('postGeneration_fromHistory', 'true')
     } catch (error) {
       console.error('Error setting fromHistory flag:', error)
     }
-    // Simply navigate to the generation page - let it handle data fetching
-    // This is much faster and cleaner
     router.push(`/app/${id}`)
   }
 
-  // Show loading state only on initial auth check
   if (authLoading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -111,17 +183,13 @@ export default function HistoryPage() {
           <Link 
             href="/" 
             style={{ 
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
               fontSize: '24px', 
               fontWeight: '700', 
               color: '#000000', 
-              letterSpacing: '-0.5px',
               textDecoration: 'none'
             }}
           >
-            <Image src="/logo.svg" alt="Post My Note" width={40} height={40} priority style={{ width: '40px', height: '40px' }} />
+            Post My Note
           </Link>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <Link
@@ -134,22 +202,14 @@ export default function HistoryPage() {
                 height: '36px',
                 borderRadius: '8px',
                 background: '#ffbd59',
-                border: 'none',
                 cursor: 'pointer',
-                transition: 'all 0.2s ease',
                 textDecoration: 'none',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#ffa929'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = '#ffbd59'
               }}
               title="Create New Idea"
             >
               <Plus size={18} color="#000000" />
             </Link>
-            {credits && (
+            {user && (
               <>
                 <Link 
                   href="/history"
@@ -161,25 +221,16 @@ export default function HistoryPage() {
                     height: '36px',
                     borderRadius: '8px',
                     background: '#f5f5f5',
-                    border: 'none',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
                     textDecoration: 'none',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#e5e5e5'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = '#f5f5f5'
                   }}
                   title="History"
                 >
                   <History size={18} color="#000000" />
                 </Link>
                 <AccountButton
-                  credits={credits.credits_remaining}
-                  subscriptionStatus={credits.subscription_status}
-                  currentPlan={credits.current_plan}
+                  credits={credits?.credits_remaining ?? 0}
+                  subscriptionStatus={credits?.subscription_status ?? null}
+                  currentPlan={credits?.current_plan ?? null}
                 />
               </>
             )}
@@ -268,103 +319,138 @@ export default function HistoryPage() {
             gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
             gap: '24px',
           }}>
-            {generations.map((gen) => (
-              <div
-                key={gen.id}
-                onClick={() => loadGeneration(gen.id)}
-                className="card"
-                style={{
-                  cursor: 'pointer',
-                  padding: '0',
-                  overflow: 'hidden',
-                }}
-              >
-                {/* Thumbnail Images */}
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
-                  gap: '2px',
-                  background: '#e5e5e5',
-                  aspectRatio: '2/1',
-                }}>
-                  {gen.thumbnail_urls && gen.thumbnail_urls.length > 0 ? (
-                    gen.thumbnail_urls.map((url, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          position: 'relative',
-                          width: '100%',
-                          height: '100%',
-                          overflow: 'hidden',
-                          background: '#f5f5f5',
-                        }}
-                      >
+            {generations.map((gen: any) => {
+              // EXACT SAME as generation page: use image_urls directly (line 169 in [id]/page.tsx)
+              const imageUrls = gen.image_urls || []
+
+              return (
+                <div
+                  key={gen.id}
+                  onClick={() => loadGeneration(gen.id)}
+                  className="card"
+                  style={{
+                    cursor: 'pointer',
+                    padding: '0',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* Images Grid - Show first 2 slides */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '2px',
+                    background: '#e5e5e5',
+                    aspectRatio: '2/1',
+                  }}>
+                    {imageUrls.length >= 2 ? (
+                      <>
                         <img
-                          src={url}
-                          alt={`Thumbnail ${idx + 1}`}
+                          src={imageUrls[0]}
+                          alt="Slide 1"
+                          crossOrigin="anonymous"
                           style={{
                             width: '100%',
                             height: '100%',
                             objectFit: 'cover',
-                          }}
-                          onLoad={() => {
-                            console.log(`✅ Thumbnail ${idx + 1} loaded successfully for generation ${gen.id}:`, url)
+                            display: 'block',
                           }}
                           onError={(e) => {
-                            console.error(`❌ Failed to load thumbnail ${idx + 1} for generation ${gen.id}:`, url)
-                            // If image fails to load, show placeholder
-                            const target = e.target as HTMLImageElement
-                            target.style.display = 'none'
-                            const parent = target.parentElement
+                            console.error('Failed to load image 1:', imageUrls[0])
+                            e.currentTarget.style.display = 'none'
+                            const parent = e.currentTarget.parentElement
                             if (parent) {
-                              parent.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; background: #f5f5f5; color: #999999; font-size: 12px;">No image</div>'
+                              parent.style.background = '#f5f5f5'
+                              parent.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #999; font-size: 12px;">Preview unavailable</div>'
+                            }
+                          }}
+                        />
+                        <img
+                          src={imageUrls[1]}
+                          alt="Slide 2"
+                          crossOrigin="anonymous"
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            display: 'block',
+                          }}
+                          onError={(e) => {
+                            console.error('Failed to load image 2:', imageUrls[1])
+                            e.currentTarget.style.display = 'none'
+                            const parent = e.currentTarget.parentElement
+                            if (parent) {
+                              parent.style.background = '#f5f5f5'
+                              parent.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #999; font-size: 12px;">Preview unavailable</div>'
+                            }
+                          }}
+                        />
+                      </>
+                    ) : imageUrls.length === 1 ? (
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <img
+                          src={imageUrls[0]}
+                          alt="Slide 1"
+                          crossOrigin="anonymous"
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            display: 'block',
+                          }}
+                          onError={(e) => {
+                            console.error('Failed to load image:', imageUrls[0])
+                            e.currentTarget.style.display = 'none'
+                            const parent = e.currentTarget.parentElement
+                            if (parent) {
+                              parent.style.background = '#f5f5f5'
+                              parent.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #999; font-size: 14px;">No preview</div>'
                             }
                           }}
                         />
                       </div>
-                    ))
-                  ) : (
-                    <div style={{
-                      gridColumn: '1 / -1',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      background: '#f5f5f5',
-                      color: '#999999',
-                      fontSize: '14px',
-                    }}>
-                      No preview
-                    </div>
-                  )}
-                </div>
+                    ) : (
+                      <div style={{
+                        gridColumn: '1 / -1',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: '#f5f5f5',
+                        color: '#999999',
+                        fontSize: '14px',
+                      }}>
+                        No preview
+                      </div>
+                    )}
+                  </div>
 
-                {/* Project Info */}
-                <div style={{ padding: '20px' }}>
-                  <h3 style={{
-                    fontSize: '16px',
-                    fontWeight: '700',
-                    marginBottom: '8px',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {gen.project_name}
-                  </h3>
-                  <p style={{
-                    fontSize: '13px',
-                    color: '#666666',
-                  }}>
-                    {new Date(gen.created_at).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </p>
+                  {/* Project Info */}
+                  <div style={{ padding: '20px' }}>
+                    <h3 style={{
+                      fontSize: '16px',
+                      fontWeight: '700',
+                      marginBottom: '8px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {gen.project_name || gen.idea_title}
+                    </h3>
+                    <p style={{
+                      fontSize: '13px',
+                      color: '#666666',
+                    }}>
+                      {new Date(gen.created_at).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
 
@@ -392,59 +478,14 @@ export default function HistoryPage() {
                 background: page === 1 ? '#f5f5f5' : '#ffffff',
                 cursor: page === 1 ? 'not-allowed' : 'pointer',
                 opacity: page === 1 ? 0.5 : 1,
-                transition: 'all 0.2s ease',
               }}
-              className="pagination-button"
             >
               <ChevronLeft size={20} color="#000000" />
             </button>
 
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
-                // Show first page, last page, current page, and pages around current
-                const showPage = pageNum === 1 || 
-                                 pageNum === totalPages || 
-                                 Math.abs(pageNum - page) <= 1
-
-                if (!showPage && pageNum === 2 && page > 3) {
-                  return <span key={pageNum} style={{ color: '#999999' }}>...</span>
-                }
-                if (!showPage && pageNum === totalPages - 1 && page < totalPages - 2) {
-                  return <span key={pageNum} style={{ color: '#999999' }}>...</span>
-                }
-                if (!showPage) return null
-
-                return (
-                  <button
-                    key={pageNum}
-                    onClick={() => setPage(pageNum)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minWidth: '40px',
-                      height: '40px',
-                      padding: '0 12px',
-                      borderRadius: '8px',
-                      border: pageNum === page ? '2px solid #ffbd59' : '2px solid #e5e5e5',
-                      background: pageNum === page ? '#ffbd59' : '#ffffff',
-                      color: pageNum === page ? '#000000' : '#666666',
-                      cursor: 'pointer',
-                      fontWeight: pageNum === page ? '600' : '400',
-                      fontSize: '14px',
-                      transition: 'all 0.2s ease',
-                    }}
-                    className="pagination-button"
-                  >
-                    {pageNum}
-                  </button>
-                )
-              })}
-            </div>
+            <span style={{ fontSize: '14px', color: '#666666' }}>
+              Page {page} of {totalPages}
+            </span>
 
             <button
               onClick={() => setPage(page + 1)}
@@ -460,24 +501,13 @@ export default function HistoryPage() {
                 background: page === totalPages ? '#f5f5f5' : '#ffffff',
                 cursor: page === totalPages ? 'not-allowed' : 'pointer',
                 opacity: page === totalPages ? 0.5 : 1,
-                transition: 'all 0.2s ease',
               }}
-              className="pagination-button"
             >
               <ChevronRight size={20} color="#000000" />
             </button>
-
-            <span style={{
-              fontSize: '14px',
-              color: '#666666',
-              marginLeft: '12px'
-            }}>
-              Page {page} of {totalPages}
-            </span>
           </div>
         )}
       </div>
     </div>
   )
 }
-

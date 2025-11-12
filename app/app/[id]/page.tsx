@@ -15,6 +15,7 @@ import { useGeneration } from '../../hooks/useGenerations'
 import AccountButton from '../../components/AccountButton'
 import UpgradePrompt from '../../components/UpgradePrompt'
 import SubscriptionModal from '../../components/SubscriptionModal'
+import TemplateSelectorModal from '../../components/TemplateSelectorModal'
 
 const API_URL = ''
 
@@ -84,6 +85,7 @@ export default function GenerationPage() {
   const [error, setError] = useState('')
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
+  const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [editedCarousels, setEditedCarousels] = useState<Note['carousels']>([])
   const [carouselsDirty, setCarouselsDirty] = useState(false)
   const [savingCarousels, setSavingCarousels] = useState(false)
@@ -127,8 +129,10 @@ export default function GenerationPage() {
         const fromHistoryFlag = localStorage.getItem('postGeneration_fromHistory')
         if (fromHistoryFlag === 'true') {
           setFromHistory(true)
-          // Clear the flag after reading it so it doesn't persist
-          localStorage.removeItem('postGeneration_fromHistory')
+          // Clear the flag after a short delay to ensure component has rendered
+          setTimeout(() => {
+            localStorage.removeItem('postGeneration_fromHistory')
+          }, 100)
         } else {
           setFromHistory(false)
         }
@@ -383,7 +387,7 @@ export default function GenerationPage() {
             >
               <Plus size={18} color="#000000" />
             </Link>
-            {credits && (
+            {user && (
               <>
                 <Link 
                   href="/history"
@@ -413,9 +417,9 @@ export default function GenerationPage() {
                   <History size={18} color="#000000" />
                 </Link>
                 <AccountButton
-                  credits={credits.credits_remaining}
-                  subscriptionStatus={credits.subscription_status}
-                  currentPlan={credits.current_plan}
+                  credits={credits?.credits_remaining ?? 0}
+                  subscriptionStatus={credits?.subscription_status ?? null}
+                  currentPlan={credits?.current_plan ?? null}
                 />
               </>
             )}
@@ -532,18 +536,25 @@ export default function GenerationPage() {
                           <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
                             Template
                           </label>
-                          <select
-                            value={templateId}
-                            onChange={(e) => setTemplateId(e.target.value)}
+                          <button
+                            onClick={() => setShowTemplateModal(true)}
                             className="input"
-                            style={{ cursor: 'pointer', padding: '12px' }}
+                            style={{ 
+                              cursor: 'pointer', 
+                              padding: '12px',
+                              textAlign: 'left',
+                              background: '#ffffff',
+                              border: '2px solid #e5e5e5',
+                              borderRadius: '12px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              width: '100%'
+                            }}
                           >
-                            {getTemplateOptions().map(template => (
-                              <option key={template.id} value={template.id}>
-                                {template.name}
-                              </option>
-                            ))}
-                          </select>
+                            <span>{getTemplateOptions().find(t => t.id === templateId)?.name || 'Select Template'}</span>
+                            <span style={{ fontSize: '12px', color: '#666666' }}>▼</span>
+                          </button>
                         </div>
                         <div>
                           <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
@@ -762,6 +773,14 @@ export default function GenerationPage() {
         currentPlan={credits?.current_plan || null}
         credits={credits?.credits_remaining}
         subscriptionStatus={credits?.subscription_status || null}
+      />
+
+      {/* Template Selector Modal */}
+      <TemplateSelectorModal
+        isOpen={showTemplateModal}
+        onClose={() => setShowTemplateModal(false)}
+        selectedTemplateId={templateId}
+        onSelectTemplate={(id) => setTemplateId(id)}
       />
     </div>
   )

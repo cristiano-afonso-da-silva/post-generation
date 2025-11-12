@@ -897,14 +897,17 @@ export default function CarouselImageGenerator({
     let safeMarginTop = originalSafeMarginTop
     let safeMarginBottom = originalSafeMarginBottom
     
-    // Reserve extra space for template 3 MIDDLE slides (for layout calculations only)
+    // For template 3 MIDDLE slides, EXCLUDE topic and page number from safe area completely
     if (template.id === 'template3' && cleanCarousel.kind === 'MIDDLE') {
-      // Reserve space for topic at top (font size + spacing)
+      // Topic takes: originalSafeMarginTop + font size + spacing
       if (template.fonts.hookTopic) {
-        safeMarginTop = originalSafeMarginTop + template.fonts.hookTopic.size + 60 // Extra 60px spacing
+        safeMarginTop = originalSafeMarginTop + template.fonts.hookTopic.size + 100 // Extra 100px spacing
       }
-      // Reserve space for page number box at bottom
-      safeMarginBottom = originalSafeMarginBottom + 70 // Extra 70px for page number box
+      // Page number box: height - 150 - 60 = 1140
+      // Content must NOT go below Y=1090 (50px above page number)
+      // So safe margin from bottom needs to be: 1350 - 1090 = 260
+      // But we need MORE space, so increase to 300px total
+      safeMarginBottom = originalSafeMarginBottom + 150 // 150 + 150 = 300px total safe margin at bottom
     }
     
     const safeWidth = width - (safeMarginSides * 2)
@@ -1489,11 +1492,11 @@ export default function CarouselImageGenerator({
         console.warn(`   This might mean images weren't fetched from Pexels or includeImages was false`)
       }
       
-      // Dynamic spacing with minimums - template 3 needs tighter spacing
-      const minTitleContentGap = template.id === 'template3' ? 30 : 20
-      const minImageGap = template.id === 'template3' ? 30 : 20
-      const maxTitleContentGap = template.id === 'template3' ? 50 : 70
-      const maxImageGap = template.id === 'template3' ? 40 : 40
+      // Dynamic spacing with minimums - template 3 needs much tighter spacing
+      const minTitleContentGap = template.id === 'template3' ? 20 : 20
+      const minImageGap = template.id === 'template3' ? 20 : 20
+      const maxTitleContentGap = template.id === 'template3' ? 40 : 70
+      const maxImageGap = template.id === 'template3' ? 30 : 40
       
       const buildTitleFont = (size: number) => template.fonts.title.cssFont.replace(/(\d+\.?\d*)px/, `${size}px`)
       const buildContentFont = (size: number) => template.fonts.content.cssFont.replace(/(\d+\.?\d*)px/, `${size}px`)
@@ -1569,8 +1572,20 @@ export default function CarouselImageGenerator({
       
       let layout = calculateLayout(titleFontSize, contentFontSize)
       
-      if (layout.totalHeight > safeHeight) {
-        console.log(`⚠️  Content too long (${layout.totalHeight}px > ${safeHeight}px), scaling down...`)
+      // For template 3 MIDDLE slides, calculate actual available space between topic and page number
+      let effectiveSafeHeight = safeHeight
+      if (template.id === 'template3' && cleanCarousel.kind === 'MIDDLE') {
+        // Topic bottom: originalSafeMarginTop + topicFontSize + 100px spacing
+        const topicBottomY = originalSafeMarginTop + (template.fonts.hookTopic ? template.fonts.hookTopic.size + 100 : 0)
+        // Page number box: at Y=1140 (height 1350 - 150 - 60)
+        // Content MUST end by Y=1050 to have 90px buffer above page number
+        const pageNumberTopY = height - originalSafeMarginBottom - 60 - 90 // 90px spacing above box
+        effectiveSafeHeight = pageNumberTopY - topicBottomY
+        console.log(`   Template 3 MIDDLE: Available height=${effectiveSafeHeight}px (topic ends at ${topicBottomY}, page number starts at ${pageNumberTopY})`)
+      }
+      
+      if (layout.totalHeight > effectiveSafeHeight) {
+        console.log(`⚠️  Content too long (${layout.totalHeight}px > ${effectiveSafeHeight}px), scaling down...`)
         
         // Step 1: Reduce spacing to minimums
         titleContentGap = minTitleContentGap
@@ -1578,31 +1593,50 @@ export default function CarouselImageGenerator({
         
         layout = calculateLayout(titleFontSize, contentFontSize)
         
-        if (layout.totalHeight > safeHeight) {
-          // Step 2: Scale fonts dynamically
-          scaleFactor = safeHeight / layout.totalHeight
-          scaleFactor = Math.max(0.4, Math.min(0.95, scaleFactor)) // Allow more aggressive scaling
-          
-          titleFontSize = Math.floor(template.fonts.title.size * scaleFactor)
-          contentFontSize = Math.floor(template.fonts.content.size * scaleFactor)
-          
-          console.log(`   Scaling fonts: title ${titleFontSize}px, content ${contentFontSize}px (${Math.round(scaleFactor * 100)}%)`)
-          
-          layout = calculateLayout(titleFontSize, contentFontSize)
-          
-          // Step 3: If still too large, try reducing image size for template 3
-          if (layout.totalHeight > safeHeight && template.id === 'template3' && imageHeight > 0) {
-            const imageReductionFactor = 0.7 // Reduce image by 30%
+        if (layout.totalHeight > effectiveSafeHeight) {
+          // Step 2: For template 3, aggressively reduce image size first
+          if (template.id === 'template3' && imageHeight > 0) {
+            // Calculate how much we need to reduce
+            const excessHeight = layout.totalHeight - effectiveSafeHeight
+            const imageContribution = imageHeight + imageGap
+            
+            // Reduce image by proportion of excess, but at least 50%
+            const reductionNeeded = Math.min(0.5, excessHeight / imageContribution)
+            const imageReductionFactor = Math.max(0.4, 1 - reductionNeeded) // Keep at least 40% of image
+            
             imageHeight = Math.floor(imageHeight * imageReductionFactor)
             imageWidth = Math.floor(imageWidth * imageReductionFactor)
-            console.log(`   Reducing image size: ${imageWidth}x${imageHeight}`)
+            console.log(`   Reducing image size by ${Math.round((1 - imageReductionFactor) * 100)}%: ${imageWidth}x${imageHeight}`)
             
             layout = calculateLayout(titleFontSize, contentFontSize)
           }
           
-          if (layout.totalHeight > safeHeight) {
+          // Step 3: Scale fonts dynamically if still too large
+          if (layout.totalHeight > effectiveSafeHeight) {
+            scaleFactor = effectiveSafeHeight / layout.totalHeight
+            scaleFactor = Math.max(0.35, Math.min(0.95, scaleFactor)) // Allow very aggressive scaling down to 35%
+            
+            titleFontSize = Math.floor(template.fonts.title.size * scaleFactor)
+            contentFontSize = Math.floor(template.fonts.content.size * scaleFactor)
+            
+            console.log(`   Scaling fonts: title ${titleFontSize}px, content ${contentFontSize}px (${Math.round(scaleFactor * 100)}%)`)
+            
+            layout = calculateLayout(titleFontSize, contentFontSize)
+            
+            // Step 4: If STILL too large for template 3, reduce image more
+            if (layout.totalHeight > effectiveSafeHeight && template.id === 'template3' && imageHeight > 0) {
+              const secondReductionFactor = 0.5 // Cut image in half again
+              imageHeight = Math.floor(imageHeight * secondReductionFactor)
+              imageWidth = Math.floor(imageWidth * secondReductionFactor)
+              console.log(`   Further reducing image size: ${imageWidth}x${imageHeight}`)
+              
+              layout = calculateLayout(titleFontSize, contentFontSize)
+            }
+          }
+          
+          if (layout.totalHeight > effectiveSafeHeight) {
             console.warn(`⚠️  WARNING: Content still exceeds safe height even at minimum scale!`)
-            console.warn(`   Total: ${Math.round(layout.totalHeight)}px, Safe: ${safeHeight}px`)
+            console.warn(`   Total: ${Math.round(layout.totalHeight)}px, Safe: ${effectiveSafeHeight}px`)
             console.warn(`   Consider reducing content length`)
           }
         }
@@ -1640,8 +1674,9 @@ export default function CarouselImageGenerator({
       
       if (template.id === 'template3' && cleanCarousel.kind === 'MIDDLE') {
         // Calculate available vertical space (between topic and page number)
-        const topicBottomY = originalSafeMarginTop + (template.fonts.hookTopic ? template.fonts.hookTopic.size + 60 : 0)
-        const pageNumberTopY = height - originalSafeMarginBottom - 70
+        const topicBottomY = originalSafeMarginTop + (template.fonts.hookTopic ? template.fonts.hookTopic.size + 100 : 0)
+        // Page number box: at height - 150 - 60, with 90px spacing above it
+        const pageNumberTopY = height - originalSafeMarginBottom - 60 - 90
         const availableHeight = pageNumberTopY - topicBottomY
         
         // Calculate total content height (title + content + image)
@@ -1653,8 +1688,10 @@ export default function CarouselImageGenerator({
           : 0
         const totalContentHeight = titleH + titleContentGap + contentH + imageGap + imageHeight
         
-        // Center everything vertically
+        // Center everything vertically within available space
         y = topicBottomY + (availableHeight - totalContentHeight) / 2 + titleFontSize
+        
+        console.log(`   Centering: topicBottom=${topicBottomY}, pageNumberTop=${pageNumberTopY}, contentHeight=${Math.round(totalContentHeight)}, startY=${Math.round(y)}, endY=${Math.round(y + totalContentHeight - titleFontSize)}`)
       } else {
         y = centerY - (totalHeight / 2) + firstLineFontSize
       }
