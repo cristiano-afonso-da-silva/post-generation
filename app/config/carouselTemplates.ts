@@ -71,6 +71,11 @@ export interface CarouselTemplate {
         type: 'color'
         value: string
       }
+  hookBackground?: {
+    type: 'image'
+    src: string
+    opacity: number
+  }
   styles?: {
     letterSpacing?: {
       hook?: number
@@ -219,15 +224,6 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
         title: 'center',
         content: 'center',
         cta: 'center'
-      },
-      arrow: {
-        type: 'right',
-        color: '#1C1C1C',
-        width: 100,
-        height: 36,
-        lineWidth: 8,
-        offsetRight: 24,
-        offsetBottom: 24
       }
     }
   },
@@ -236,63 +232,68 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     name: 'Template 3 (Modern)',
     fonts: {
       hookTopic: {
-        family: 'Poppins',
-        file: '/templates/template3/fonts/Poppins-SemiBold.ttf',
-        weight: '600',
+        family: 'OpenSauce',
+        file: '/templates/template3/fonts/open-sauce.one-medium.ttf',
+        weight: '500',
         style: 'normal',
-        cssFont: '600 28px Poppins, sans-serif',
+        cssFont: '500 28px OpenSauce, sans-serif',
         lineHeight: 36,
         size: 28
       },
       hook: {
-        family: 'Poppins',
-        file: '/templates/template3/fonts/Poppins-Bold.ttf',
-        weight: 'bold',
+        family: 'OpenSauce',
+        file: '/templates/template3/fonts/open-sauce.one-medium.ttf',
+        weight: '500',
         style: 'normal',
-        cssFont: 'bold 72px Poppins, sans-serif',
-        lineHeight: 88,
-        size: 72
+        cssFont: '500 120px OpenSauce, sans-serif',
+        lineHeight: 140,
+        size: 120
       },
       hookSubtitle: {
-        family: 'Poppins',
-        file: '/templates/template3/fonts/Poppins-Regular.ttf',
-        weight: 'normal',
+        family: 'OpenSauce',
+        file: '/templates/template3/fonts/open-sauce.one-medium.ttf',
+        weight: '500',
         style: 'normal',
-        cssFont: '42px Poppins, sans-serif',
+        cssFont: '500 42px OpenSauce, sans-serif',
         lineHeight: 54,
         size: 42
       },
       hookCTA: {
-        family: 'Poppins',
-        file: '/templates/template3/fonts/Poppins-SemiBold.ttf',
-        weight: '600',
+        family: 'Mansalva',
+        file: '/templates/template3/fonts/Mansalva-Regular.ttf',
+        weight: 'normal',
         style: 'normal',
-        cssFont: '600 32px Poppins, sans-serif',
-        lineHeight: 40,
-        size: 32
+        cssFont: '48px Mansalva, cursive',
+        lineHeight: 60,
+        size: 48
       },
       title: {
-        family: 'Poppins',
-        file: '/templates/template3/fonts/Poppins-Bold.ttf',
-        weight: 'bold',
+        family: 'OpenSauce',
+        file: '/templates/template3/fonts/open-sauce.one-medium.ttf',
+        weight: '500',
         style: 'normal',
-        cssFont: 'bold 75px Poppins, sans-serif',
+        cssFont: '500 75px OpenSauce, sans-serif',
         lineHeight: 90,
         size: 75
       },
       content: {
-        family: 'Poppins',
-        file: '/templates/template3/fonts/Poppins-Regular.ttf',
-        weight: 'normal',
+        family: 'OpenSauce',
+        file: '/templates/template3/fonts/open-sauce.one-medium.ttf',
+        weight: '500',
         style: 'normal',
-        cssFont: '52px Poppins, sans-serif',
+        cssFont: '500 52px OpenSauce, sans-serif',
         lineHeight: 68,
         size: 52
       }
     },
     background: {
       type: 'color',
-      value: '#FFFFFF'
+      value: '#fefbf8'
+    },
+    hookBackground: {
+      type: 'image',
+      src: '/templates/template3/bg.jpg',
+      opacity: 0.3
     },
     styles: {
       letterSpacing: {
@@ -309,9 +310,9 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
         hook: 'center',
         hookSubtitle: 'center',
         hookCTA: 'center',
-        title: 'left',
-        content: 'left',
-        cta: 'left'
+        title: 'center',
+        content: 'center',
+        cta: 'center'
       },
       ctaBox: {
         useThemeColor: true,
