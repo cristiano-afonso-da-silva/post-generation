@@ -93,7 +93,7 @@ export default function SignUpPage() {
           Log in
         </h3>
         <p style={{ color: '#666666', marginBottom: '32px', fontSize: '15px', textAlign: 'left' }}>
-          Start creating amazing content today
+          Start creating on Post My Note today
         </p>
 
         {error && <div className="error" style={{ marginBottom: '20px' }}>{error}</div>}
@@ -113,6 +113,17 @@ export default function SignUpPage() {
               alignItems: 'center',
               justifyContent: 'center',
               gap: '8px',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => {
+              if (!isLoading) {
+                e.currentTarget.style.background = '#f5f5f5'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isLoading) {
+                e.currentTarget.style.background = '#ffffff'
+              }
             }}
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -153,6 +164,17 @@ export default function SignUpPage() {
               alignItems: 'center',
               justifyContent: 'center',
               gap: '8px',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => {
+              if (!isLoading) {
+                e.currentTarget.style.background = '#f5f5f5'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isLoading) {
+                e.currentTarget.style.background = '#ffffff'
+              }
             }}
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
