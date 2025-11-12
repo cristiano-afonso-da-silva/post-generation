@@ -63,6 +63,8 @@ export default function Home() {
   const [loadingIdeas, setLoadingIdeas] = useState(false)
   const [loadingNote, setLoadingNote] = useState(false)
   const [selectedIdea, setSelectedIdea] = useState<string | null>(null)
+  const [previousIdeas, setPreviousIdeas] = useState<Array<{ idea: string; timestamp: number }>>([])
+  const [showPreviousIdeas, setShowPreviousIdeas] = useState(false)
   const [currentStep, setCurrentStep] = useState<'generating' | 'analysing' | 'rendering' | null>(null)
   const [error, setError] = useState('')
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
@@ -154,10 +156,45 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     })
   }, [])
 
+  // Close previous ideas dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (showPreviousIdeas) {
+        const target = e.target as HTMLElement
+        if (!target.closest('[data-previous-ideas-dropdown]')) {
+          setShowPreviousIdeas(false)
+        }
+      }
+    }
+    
+    if (showPreviousIdeas) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showPreviousIdeas])
+
+  // Load previous ideas from localStorage on mount
+  useEffect(() => {
+    if (user && !authLoading) {
+      try {
+        const stored = localStorage.getItem(`postGeneration_previousIdeas_${user.id}`)
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          setPreviousIdeas(parsed)
+        }
+      } catch (error) {
+        console.error('Error loading previous ideas:', error)
+      }
+    }
+  }, [user, authLoading])
+
   // Clear localStorage and reset all state on mount - /app is always a fresh/new idea page
   useEffect(() => {
     if (user && !authLoading) {
-      // Clear all localStorage to ensure fresh state
+      // Clear all localStorage to ensure fresh state (but keep previous ideas)
       try {
         localStorage.removeItem('postGeneration_note')
         localStorage.removeItem('postGeneration_accountDescription')
@@ -359,6 +396,12 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
               localStorage.setItem('postGeneration_userId', user.id)
             }
             console.log('✅ Saved note to localStorage')
+            
+            // Save idea to previous ideas (keep last 10)
+            const newIdea = { idea, timestamp: Date.now() }
+            const updatedPreviousIdeas = [newIdea, ...previousIdeas.filter(p => p.idea !== idea)].slice(0, 10)
+            setPreviousIdeas(updatedPreviousIdeas)
+            localStorage.setItem(`postGeneration_previousIdeas_${user.id}`, JSON.stringify(updatedPreviousIdeas))
           } catch (error) {
             console.error('Error saving to localStorage:', error)
           }
@@ -1171,7 +1214,113 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
 
               {/* Show Generated Carousels if note exists and was generated on this page */}
         {note && !loadingNote && note.carousels && note.carousels.length > 0 && (
-                <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Header with current idea and previous ideas button */}
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              padding: '0 8px'
+            }}>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ 
+                  fontSize: '20px', 
+                  fontWeight: '600', 
+                  color: '#000000',
+                  marginBottom: '4px'
+                }}>
+                  Your Carousel
+                </h3>
+                {selectedIdea && (
+                  <p style={{ 
+                    fontSize: '14px', 
+                    color: '#666',
+                    margin: 0
+                  }}>
+                    {selectedIdea}
+                  </p>
+                )}
+              </div>
+              {previousIdeas.length > 0 && (
+                <div style={{ position: 'relative' }} data-previous-ideas-dropdown>
+                  <button
+                    onClick={() => setShowPreviousIdeas(!showPreviousIdeas)}
+                    style={{
+                      padding: '8px 16px',
+                      background: '#f5f5f5',
+                      border: '1px solid #e0e0e0',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      color: '#000000',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#e8e8e8'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#f5f5f5'
+                    }}
+                  >
+                    <History size={16} />
+                    Previous Ideas
+                  </button>
+                  {showPreviousIdeas && (
+                    <div style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 8px)',
+                      right: 0,
+                      background: '#ffffff',
+                      border: '1px solid #e0e0e0',
+                      borderRadius: '12px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                      minWidth: '300px',
+                      maxWidth: '400px',
+                      maxHeight: '400px',
+                      overflowY: 'auto',
+                      zIndex: 1000,
+                      padding: '8px'
+                    }}>
+                      {previousIdeas.map((item, index) => (
+                        <button
+                          key={index}
+                          onClick={() => {
+                            setShowPreviousIdeas(false)
+                            generateNote(item.idea)
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '12px',
+                            textAlign: 'left',
+                            background: 'transparent',
+                            border: 'none',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            color: '#000000',
+                            transition: 'background 0.2s ease',
+                            display: 'block'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#f5f5f5'
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'transparent'
+                          }}
+                        >
+                          {item.idea}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
             <CarouselImageGenerator 
               carousels={carouselsDirty && editedCarousels.length > 0 ? editedCarousels : note.carousels}
               ideaTitle={note.ideaTitle}
@@ -1188,6 +1337,7 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                       }
                     }}
                   />
+                </div>
                 </div>
               )}
 
