@@ -841,7 +841,7 @@ export default function LandingPage() {
                 e.currentTarget.style.boxShadow = '0 0 20px rgba(255, 189, 89, 0.4), 0 4px 12px rgba(255, 189, 89, 0.2)'
               }}
             >
-              Get Started for Free
+              {user ? "Go to App" : "Get Started for Free"}
               <ArrowRight size={18} />
             </Link>
           </div>
