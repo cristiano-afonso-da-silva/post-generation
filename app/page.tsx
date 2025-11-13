@@ -3,10 +3,10 @@ import type { CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Check, ArrowRight, Zap, Palette, Download, Gauge, MessageSquare, CheckCircle } from 'lucide-react'
+import { Check, ArrowRight, Zap, Palette, Download, Gauge, MessageSquare, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAuth } from './context/AuthContext'
 import AccountButton from './components/AccountButton'
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 const exampleSlides = [
   { src: '/slide1.png', alt: 'Example carousel slide 1' },
@@ -142,6 +142,102 @@ const backgroundOptions = [
   { name: 'Gradient 2', value: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' },
 ]
 
+// Slide Carousel Component - Continuous horizontal scrolling animation
+function SlideCarousel() {
+  const slides = exampleSlides.slice(0, 9)
+  
+  // Duplicate slides multiple times for seamless infinite loop
+  const duplicatedSlides = [...slides, ...slides, ...slides, ...slides]
+  
+  // Calculate total width for animation
+  const slideWidth = 320
+  const slideGap = 24
+  const slideTotalWidth = slideWidth + slideGap
+  const totalWidth = duplicatedSlides.length * slideTotalWidth
+  const animationDuration = 60 // seconds for full cycle (slower animation)
+
+  return (
+    <div
+      style={{
+        width: '100%',
+        padding: '80px 24px',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Edge Fade Gradients */}
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: '200px',
+          background: 'linear-gradient(90deg, #F5F5F5 0%, transparent 100%)',
+          zIndex: 10,
+          pointerEvents: 'none',
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: '200px',
+          background: 'linear-gradient(270deg, #F5F5F5 0%, transparent 100%)',
+          zIndex: 10,
+          pointerEvents: 'none',
+        }}
+      />
+
+      {/* Scrolling Slides Container */}
+      <div
+        style={{
+          display: 'flex',
+          gap: `${slideGap}px`,
+          width: `${totalWidth}px`,
+          animation: `slideCarouselScroll ${animationDuration}s linear infinite`,
+        }}
+      >
+        {duplicatedSlides.map((slide, idx) => (
+          <div
+            key={`slide-${idx}`}
+            style={{
+              flexShrink: 0,
+              width: `${slideWidth}px`,
+            }}
+          >
+            <div
+              style={{
+                position: 'relative',
+                width: '100%',
+                aspectRatio: '10 / 13',
+                borderRadius: '20px',
+                overflow: 'hidden',
+                boxShadow: '0 15px 35px -10px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.05)',
+              }}
+            >
+              <Image
+                src={slide.src}
+                alt={slide.alt}
+                width={400}
+                height={520}
+                unoptimized
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function LandingPage() {
   const router = useRouter()
   const { user, loading, credits } = useAuth()
@@ -170,7 +266,7 @@ export default function LandingPage() {
       {/* Header */}
       <header style={{
         borderBottom: '1px solid #e5e5e5',
-        padding: '24px 0',
+        padding: '12px 0',
         background: '#ffffff',
         position: 'absolute',
         top: 0,
@@ -179,9 +275,9 @@ export default function LandingPage() {
         zIndex: 100,
       }}>
         <div className="header-inner" style={{
-          maxWidth: '100%',
+          maxWidth: '1000px',
           margin: '0 auto',
-          padding: '0 48px',
+          padding: '0 24px',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -214,6 +310,25 @@ export default function LandingPage() {
               <Link
                 href="/signup"
                 className="login-button"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  background: '#e5e5e5',
+                  color: '#000000',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  textDecoration: 'none',
+                  border: 'none',
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#d1d5db'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#e5e5e5'
+                }}
               >
                 Log In
               </Link>
@@ -227,13 +342,14 @@ export default function LandingPage() {
         className="hero-section"
         style={{
           minHeight: '110vh',
-          display: 'grid',
+          display: 'none !important', // Hidden for now
           gridTemplateColumns: '1fr 1fr',
           alignItems: 'center',
           padding: '0',
           position: 'relative',
           overflow: 'hidden',
           background: '#ffffff',
+          visibility: 'hidden',
         }}
       >
         {/* Left Column - Content */}
@@ -550,6 +666,7 @@ export default function LandingPage() {
             style={{
               display: 'flex',
               gap: '24px',
+              marginBottom: '24px',
               width: 'fit-content',
               animation: 'scrollHorizontal15 60s linear infinite reverse',
             }}
@@ -586,21 +703,165 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
+
+          {/* Row 8 - 15° diagonal */}
+          <div
+            className="scroll-row-diagonal-8"
+            style={{
+              display: 'flex',
+              gap: '24px',
+              width: 'fit-content',
+              animation: 'scrollHorizontal15 65s linear infinite',
+            }}
+          >
+            {[...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
+              <div
+                key={`diag8-${index}`}
+                className="carousel-card"
+                style={{
+                  flexShrink: 0,
+                  width: 'clamp(180px, 25vw, 320px)',
+                  height: 'auto',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                }}
+              >
+                <Image
+                  src={slide.src}
+                  alt={slide.alt}
+                  width={360}
+                  height={460}
+                  unoptimized
+                  style={{
+                    width: '100%',
+                    height: 'auto',
+                    borderRadius: '24px',
+                    objectFit: 'cover',
+                    boxShadow: '0 20px 40px rgba(17, 24, 39, 0.15), 0 8px 16px rgba(0, 0, 0, 0.1)',
+                    border: '5px solid #ffffff',
+                    background: '#ffffff',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Hero Section - Centered Copy (No Animation) */}
+      <section
+        style={{
+          minHeight: '80vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '120px 24px',
+          background: '#F5F5F5',
+        }}
+      >
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          textAlign: 'center',
+          maxWidth: '800px',
+          width: '100%',
+        }}>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '6px 18px',
+              background: '#fff9ed',
+              border: '1px solid #ffbd59',
+              borderRadius: '999px',
+              fontSize: '13px',
+              fontWeight: '600',
+              color: '#000000',
+              marginTop: '80px',
+              marginBottom: '32px',
+            }}
+          >
+            <span aria-hidden="true" style={{ color: '#ffbd59', letterSpacing: '2px' }}>★★★★★</span>
+            <span>Trusted by creators with 99 drafts</span>
+          </div>
+          <h1
+            style={{
+              fontSize: 'clamp(36px, 6vw, 64px)',
+              fontWeight: '800',
+              lineHeight: '1.1',
+              letterSpacing: '-1px',
+              color: '#000000',
+              marginBottom: '24px',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
+              textAlign: 'center',
+            }}
+          >
+            Turn Ideas Into Content That <span style={{ fontFamily: 'var(--font-playfair-display), serif', fontStyle: 'italic' }}>Sells</span>
+          </h1>
+          <p
+            style={{
+              fontSize: 'clamp(14px, 1.8vw, 18px)',
+              color: '#666666',
+              marginBottom: '24px',
+              lineHeight: '1.6',
+              maxWidth: '600px',
+              textAlign: 'center',
+            }}
+          >
+            Post My Note is a next-gen content system that helps creators and small brands publish authentic, on-brand carousels, 10× faster, without a designer.
+          </p>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '64px' }}>
+            <Link
+              href={user ? "/app" : "/signup"}
+              className="cta-button"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '16px 32px',
+                borderRadius: '12px',
+                background: '#ffbd59',
+                color: '#000000',
+                fontSize: '18px',
+                fontWeight: '600',
+                textDecoration: 'none',
+                border: 'none',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 0 20px rgba(255, 189, 89, 0.4), 0 4px 12px rgba(255, 189, 89, 0.2)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#ffa929'
+                e.currentTarget.style.boxShadow = '0 0 30px rgba(255, 189, 89, 0.6), 0 6px 16px rgba(255, 189, 89, 0.3)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#ffbd59'
+                e.currentTarget.style.boxShadow = '0 0 20px rgba(255, 189, 89, 0.4), 0 4px 12px rgba(255, 189, 89, 0.2)'
+              }}
+            >
+              Get Started for Free
+              <ArrowRight size={18} />
+            </Link>
+          </div>
+
+          {/* Slide Carousel */}
+          <SlideCarousel />
         </div>
       </section>
 
       {/* Features - Copy 1 */}
       <section
         style={{
-          padding: '100px 48px',
-          background: '#faf8f5',
+          padding: '100px 24px',
+          background: '#F5F5F5',
         }}
       >
         <div
           style={{
-            maxWidth: '1200px',
+            maxWidth: '1000px',
             margin: '0 auto',
-            padding: '0 24px',
           }}
         >
           <div
@@ -881,15 +1142,14 @@ export default function LandingPage() {
       {/* Features - Reversed */}
       <section
         style={{
-          padding: '100px 48px',
-          background: '#faf8f5',
+          padding: '100px 24px',
+          background: '#F5F5F5',
         }}
       >
         <div
           style={{
-            maxWidth: '1200px',
+            maxWidth: '1000px',
             margin: '0 auto',
-            padding: '0 24px',
           }}
         >
           <div
@@ -1080,15 +1340,14 @@ export default function LandingPage() {
       <section
         className="features-section-scale"
         style={{
-          padding: '100px 48px',
-          background: '#faf8f5',
+          padding: '100px 24px',
+          background: '#F5F5F5',
         }}
       >
         <div
           style={{
-            maxWidth: '1200px',
+            maxWidth: '1000px',
             margin: '0 auto',
-            padding: '0 24px',
           }}
         >
           <div
@@ -1356,7 +1615,7 @@ export default function LandingPage() {
           background: '#fafafa',
         }}
       >
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: '80px' }}>
             <h2
               style={{
@@ -1587,7 +1846,7 @@ export default function LandingPage() {
       <section
         style={{
           padding: '120px 24px',
-          background: '#fafafa',
+          background: '#F5F5F5',
         }}
       >
         <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
@@ -1714,7 +1973,7 @@ export default function LandingPage() {
           background: '#fafafa',
         }}
       >
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: '80px' }}>
             <h2
               style={{
@@ -1767,7 +2026,7 @@ export default function LandingPage() {
           background: '#ffffff',
         }}
       >
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: '80px' }}>
             <h2
               style={{
@@ -1870,7 +2129,7 @@ export default function LandingPage() {
           textAlign: 'center',
         }}
       >
-        <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
           <h2
             style={{
               fontSize: 'clamp(36px, 6vw, 56px)',
@@ -1916,7 +2175,7 @@ export default function LandingPage() {
       >
         <div
           style={{
-            maxWidth: '1200px',
+            maxWidth: '1000px',
             margin: '0 auto',
             display: 'flex',
             justifyContent: 'space-between',
@@ -1937,6 +2196,22 @@ export default function LandingPage() {
         </div>
       </footer>
       <style jsx global>{`
+        .hero-section {
+          display: none !important;
+        }
+
+        @media (max-width: 768px) {
+          .hero-section {
+            display: none !important;
+          }
+        }
+
+        @media (max-width: 1024px) {
+          .hero-section {
+            display: none !important;
+          }
+        }
+
         @keyframes fadeInUp {
           from {
             opacity: 0;
@@ -1986,12 +2261,22 @@ export default function LandingPage() {
           }
         }
 
+        @keyframes slideCarouselScroll {
+          from {
+            transform: translateX(0);
+          }
+          to {
+            transform: translateX(-50%);
+          }
+        }
+
         .scroll-row-diagonal-2:hover,
         .scroll-row-diagonal-3:hover,
         .scroll-row-diagonal-4:hover,
         .scroll-row-diagonal-5:hover,
         .scroll-row-diagonal-6:hover,
-        .scroll-row-diagonal-7:hover {
+        .scroll-row-diagonal-7:hover,
+        .scroll-row-diagonal-8:hover {
           animation-play-state: paused;
         }
 
@@ -2000,7 +2285,8 @@ export default function LandingPage() {
         .hero-carousel-container:hover .scroll-row-diagonal-4,
         .hero-carousel-container:hover .scroll-row-diagonal-5,
         .hero-carousel-container:hover .scroll-row-diagonal-6,
-        .hero-carousel-container:hover .scroll-row-diagonal-7 {
+        .hero-carousel-container:hover .scroll-row-diagonal-7,
+        .hero-carousel-container:hover .scroll-row-diagonal-8 {
           animation-play-state: paused;
         }
 
@@ -2517,13 +2803,9 @@ export default function LandingPage() {
             gap: 24px !important;
           }
 
-          /* Hero section mobile layout */
+          /* Hero section mobile layout - Hidden */
           .hero-section {
-            display: flex !important;
-            flex-direction: column !important;
-            grid-template-columns: none !important;
-            min-height: auto !important;
-            padding-top: 100px !important;
+            display: none !important;
           }
 
           .hero-content {
