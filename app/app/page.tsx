@@ -249,39 +249,60 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
     }
   }, [user, authLoading])
 
+  // Track if we've already initialized to prevent clearing state during generation
+  const hasInitializedRef = useRef(false)
+  
   // Clear localStorage and reset all state on mount - /app is always a fresh/new idea page
+  // Only run once on initial mount when user is authenticated
   useEffect(() => {
-    if (user && !authLoading) {
-      // Clear all localStorage to ensure fresh state (but keep previous ideas, stored ideas, and fromHistory flag)
-      try {
-        localStorage.removeItem('postGeneration_note')
-        localStorage.removeItem('postGeneration_templateId')
-        localStorage.removeItem('postGeneration_colorThemeId')
-        localStorage.removeItem('postGeneration_canvasImages')
-        localStorage.removeItem('postGeneration_contentHash')
-        localStorage.removeItem('postGeneration_generationId')
-        localStorage.removeItem('postGeneration_fullContentHash')
-        localStorage.removeItem('postGeneration_ideaTitle')
-        // Don't remove fromHistory, ideas, or accountDescription here - we check/load them above
-        // Keep userId for user-specific operations
-        if (user?.id) {
-          localStorage.setItem('postGeneration_userId', user.id)
-        }
-      } catch (error) {
-        console.error('Error clearing localStorage:', error)
-      }
+    if (user && !authLoading && !hasInitializedRef.current) {
+      // Check if there's an active generation in progress before clearing
+      // If we're generating or have generated content, don't clear state
+      const hasActiveGeneration = 
+        loadingNote || 
+        localStorage.getItem('postGeneration_note') !== null ||
+        localStorage.getItem('postGeneration_generationId') !== null
       
-      // Reset all state to ensure fresh page (but preserve fromHistory state and loaded ideas)
-      setNote(null)
-      setSelectedIdea(null)
-      setCurrentStep(null)
-      setError('')
-      setShowCustomisation(false)
-      setEditedCarousels([])
-      setEditedCaption('')
-      setCarouselsDirty(false)
-      setTemplateId('template1')
-      setColorThemeId('purple-black')
+      if (!hasActiveGeneration) {
+        hasInitializedRef.current = true
+        
+        // Clear all localStorage to ensure fresh state (but keep previous ideas, stored ideas, and fromHistory flag)
+        try {
+          localStorage.removeItem('postGeneration_note')
+          localStorage.removeItem('postGeneration_templateId')
+          localStorage.removeItem('postGeneration_colorThemeId')
+          localStorage.removeItem('postGeneration_canvasImages')
+          localStorage.removeItem('postGeneration_contentHash')
+          localStorage.removeItem('postGeneration_generationId')
+          localStorage.removeItem('postGeneration_fullContentHash')
+          localStorage.removeItem('postGeneration_ideaTitle')
+          // Don't remove fromHistory, ideas, or accountDescription here - we check/load them above
+          // Keep userId for user-specific operations
+          if (user?.id) {
+            localStorage.setItem('postGeneration_userId', user.id)
+          }
+        } catch (error) {
+          console.error('Error clearing localStorage:', error)
+        }
+        
+        // Only reset state if we're not in the middle of generation
+        // Check state values directly (they might be null on mount even if localStorage has data)
+        if (!note && !selectedIdea && !loadingNote) {
+          setNote(null)
+          setSelectedIdea(null)
+          setCurrentStep(null)
+          setError('')
+          setShowCustomisation(false)
+          setEditedCarousels([])
+          setEditedCaption('')
+          setCarouselsDirty(false)
+          setTemplateId('template1')
+          setColorThemeId('purple-black')
+        }
+      } else {
+        // If there's an active generation, mark as initialized but don't clear state
+        hasInitializedRef.current = true
+      }
     }
   }, [user, authLoading])
 
@@ -473,9 +494,20 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
           
           const beforeSetNote = performance.now()
           console.log('📝 [SET NOTE] Setting note state, will trigger CarouselImageGenerator')
+          
+          // Clear fromHistory state when generating new content (before setting note)
+          setFromHistory(false)
+          
+          // Set note - this will trigger the useEffect that sets showCustomisation to true
           setNote(noteData)
+          
+          // Ensure showCustomisation is set to true when note is set
+          // This ensures the carousel view is shown immediately
+          setShowCustomisation(true)
+          
           const afterSetNote = performance.now()
           console.log('   ⏱️ setNote() call took:', (afterSetNote - beforeSetNote).toFixed(2), 'ms')
+          
           // Clear generation_id to force new generation creation (new ideaTitle = new generation)
           try {
             localStorage.removeItem('postGeneration_generationId')
@@ -489,8 +521,6 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
             if (user?.id) {
               localStorage.setItem('postGeneration_userId', user.id)
             }
-            // Clear fromHistory state when generating new content
-            setFromHistory(false)
             console.log('✅ Saved note to localStorage')
             
             // Save idea to previous ideas (keep last 10)
@@ -507,6 +537,8 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
           console.log('   ⏱️ Total Duration:', (finalTime - startTime).toFixed(2), 'ms')
           console.log('   ⏱️ Timestamp:', new Date().toISOString())
           setCurrentStep(null)
+          // Keep selectedIdea set so we know which idea was selected
+          // Don't clear selectedIdea after generation completes
         } else {
           console.error('❌ [ERROR] Invalid data structure received from API')
           console.error('   ⏱️ Total Duration:', (performance.now() - startTime).toFixed(2), 'ms')
@@ -638,12 +670,22 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
   }
 
   const reset = () => {
+    // Reset all React state
     setAccountDescription('')
     setIdeas([])
     setNote(null)
     setSelectedIdea(null)
     setCurrentStep(null)
     setError('')
+    setShowCustomisation(false)
+    setEditedCarousels([])
+    setEditedCaption('')
+    setCarouselsDirty(false)
+    setExpandedCarouselIndexes([])
+    setActiveLeftTab('design')
+    setTemplateId('template1')
+    setColorThemeId('purple-black')
+    setFromHistory(false)
     // Clear localStorage
     try {
       localStorage.removeItem('postGeneration_note')
@@ -655,6 +697,8 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
       localStorage.removeItem('postGeneration_generationId')
       localStorage.removeItem('postGeneration_fullContentHash')
       localStorage.removeItem('postGeneration_fromHistory')
+      localStorage.removeItem('postGeneration_ideaTitle')
+      localStorage.removeItem('postGeneration_ideas')
     } catch (error) {
       console.error('Error clearing localStorage:', error)
     }
@@ -702,8 +746,9 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
               href="/app"
               onClick={(e) => {
                 e.preventDefault()
-                // Clear all state and navigate to fresh /app
+                // Clear all state and reset to fresh /app page
                 try {
+                  // Clear all localStorage items
                   localStorage.removeItem('postGeneration_note')
                   localStorage.removeItem('postGeneration_canvasImages')
                   localStorage.removeItem('postGeneration_fullContentHash')
@@ -714,7 +759,9 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                   localStorage.removeItem('postGeneration_accountDescription')
                   localStorage.removeItem('postGeneration_templateId')
                   localStorage.removeItem('postGeneration_colorThemeId')
-                  localStorage.removeItem('postGeneration_ideas') // Clear stored ideas when creating new
+                  localStorage.removeItem('postGeneration_ideas')
+                  // Reset all React state by calling the reset function
+                  reset()
                 } catch (error) {
                   console.error('Error clearing localStorage:', error)
                 }
@@ -928,8 +975,9 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
                 <div className="card mobile-customize" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: '16px' }}>
                   {/* Content area */}
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    {/* Back button - only show if NOT coming from history */}
-                    {!fromHistory && (
+                    {/* Back button - hide right after generation (when selectedIdea exists) */}
+                    {/* Only show if NOT coming from history AND we don't have a selectedIdea (not right after generation) */}
+                    {!fromHistory && !selectedIdea && (
                       <button
                         onClick={goBackToBusinessDetails}
                         style={{
@@ -1229,7 +1277,9 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
               )}
 
               {/* Show Ideas if available - show when going back from customization or when no note selected */}
-              {ideas.length > 0 && !selectedIdea && (!note || !showCustomisation) && !loadingIdeas && (
+              {/* Only show ideas page if: we have ideas, no note exists, not loading note, not currently generating, and no selected idea */}
+              {/* During generation, selectedIdea is set, so ideas page won't show */}
+              {ideas.length > 0 && !note && !loadingNote && !loadingIdeas && !selectedIdea && (
                 <div className="card" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
                   <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
                     Choose an Idea
@@ -1251,7 +1301,8 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
               )}
 
               {/* Show Loading Steps if generating */}
-        {selectedIdea && loadingNote && (
+        {/* Show loading steps when we're generating (loadingNote is true) and we have a selected idea */}
+        {loadingNote && selectedIdea && (
                 <div className="card">
               <h2 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '32px', color: '#000000' }}>
                 {selectedIdea}
@@ -1361,8 +1412,9 @@ const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] 
           </div>
         )}
 
-              {/* Show Generated Carousels if note exists and was generated on this page, but not when showing ideas list */}
-        {note && !loadingNote && note.carousels && note.carousels.length > 0 && showCustomisation && (
+              {/* Show Generated Carousels if note exists and was generated on this page */}
+        {/* Show carousel as long as we have a note with carousels, regardless of loading state or showCustomisation */}
+        {note && note.carousels && note.carousels.length > 0 && (
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
             <CarouselImageGenerator 

@@ -94,17 +94,25 @@ export default function GenerationPage() {
   const [activeLeftTab, setActiveLeftTab] = useState<'design' | 'carousels' | 'caption'>('design')
   const [expandedCarouselIndexes, setExpandedCarouselIndexes] = useState<number[]>([])
   const [showCustomisation, setShowCustomisation] = useState(true)
-  // Initialize fromHistory synchronously to prevent flash
+  // Initialize fromHistory synchronously and clear flag immediately
   const [fromHistory, setFromHistory] = useState(() => {
     if (typeof window !== 'undefined') {
       try {
-        return localStorage.getItem('postGeneration_fromHistory') === 'true'
+        const flag = localStorage.getItem('postGeneration_fromHistory') === 'true'
+        // Clear the flag immediately after reading to prevent re-checks
+        if (flag) {
+          localStorage.removeItem('postGeneration_fromHistory')
+        }
+        return flag
       } catch {
         return false
       }
     }
     return false
   })
+  
+  // Ref to track if fromHistory has been initialized to prevent redundant checks
+  const fromHistoryInitialized = useRef(false)
   
   // Theme settings
   const [templateId, setTemplateId] = useState('template1')
@@ -122,26 +130,22 @@ export default function GenerationPage() {
     }
   }, [user, authLoading, router])
 
-  // Check if coming from history page on mount
+  // Check if coming from history page - ONLY RUN ONCE on mount
   useEffect(() => {
-    if (user && !authLoading) {
-      try {
-        const fromHistoryFlag = localStorage.getItem('postGeneration_fromHistory')
-        if (fromHistoryFlag === 'true') {
-          setFromHistory(true)
-          // Clear the flag after a short delay to ensure component has rendered
-          setTimeout(() => {
-            localStorage.removeItem('postGeneration_fromHistory')
-          }, 100)
-        } else {
-          setFromHistory(false)
-        }
-      } catch (error) {
-        console.error('Error checking fromHistory flag:', error)
-        setFromHistory(false)
-      }
+    // Skip if already initialized to prevent re-running on auth changes
+    if (fromHistoryInitialized.current) {
+      return
     }
-  }, [user, authLoading])
+    
+    if (user && !authLoading) {
+      fromHistoryInitialized.current = true
+      
+      // fromHistory state is already set in useState initializer
+      // and localStorage flag is already cleared
+      // This effect is just to ensure we mark it as initialized
+      console.log('✅ fromHistory initialized:', fromHistory)
+    }
+  }, [user, authLoading, fromHistory])
 
   // Load generation data from SWR hook
   useEffect(() => {
@@ -750,11 +754,9 @@ export default function GenerationPage() {
                     useAIImages={false}
                     aiImageStyle="animated"
                     onGenerationComplete={() => {
-                      // Navigate to /app/{generationId} after saving
-                      const savedGenerationId = localStorage.getItem('postGeneration_generationId')
-                      if (savedGenerationId) {
-                        router.push(`/app/${savedGenerationId}`)
-                      }
+                      // Do nothing - we're already on the correct page
+                      // No need to navigate when viewing a saved generation
+                      console.log('✅ Generation rendering complete')
                     }}
                   />
                 </div>

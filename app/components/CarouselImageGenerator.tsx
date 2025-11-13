@@ -152,6 +152,23 @@ const getInitialImages = (carousels: Carousel[], ideaTitle: string, underlineWor
   return []
 }
 
+// Helper function to yield control without relying on timers (works in background tabs)
+// This is defined outside the component so it's available before useCallback is called
+const yieldToEventLoop = (): Promise<void> => {
+  return new Promise(resolve => {
+    // Use MessageChannel for yielding - less likely to be throttled in background tabs
+    // Fallback to queueMicrotask if MessageChannel is not available
+    if (typeof MessageChannel !== 'undefined') {
+      const channel = new MessageChannel()
+      channel.port1.onmessage = () => resolve()
+      channel.port2.postMessage(null)
+    } else {
+      // Fallback to queueMicrotask (works in all modern browsers)
+      queueMicrotask(() => resolve())
+    }
+  })
+}
+
 export default function CarouselImageGenerator({ 
   carousels, 
   ideaTitle,
@@ -364,12 +381,26 @@ export default function CarouselImageGenerator({
     const imageDataUrls: string[] = new Array(carousels.length).fill('')
     
     // Generate all carousels first without updating state (prevents layout shifts)
+    // Use yield mechanism that works in background tabs
     const carouselGenerationStart = performance.now()
     for (let i = 0; i < carousels.length; i++) {
       const carouselStartTime = performance.now()
       console.log(`   🖼️ [CAROUSEL ${i + 1}/${carousels.length}] Starting generation...`)
       console.log(`      Type: ${carousels[i].kind}, Title: ${carousels[i].title?.substring(0, 30)}...`)
       
+      // Save progress to localStorage (so rendering can resume if interrupted)
+      try {
+        localStorage.setItem('postGeneration_renderingProgress', JSON.stringify({
+          currentIndex: i,
+          totalCarousels: carousels.length,
+          ideaTitle,
+          timestamp: Date.now()
+        }))
+      } catch (error) {
+        // Ignore localStorage errors (quota exceeded, etc.)
+      }
+      
+      // Generate carousel - this will continue even in background tabs
       await generateCarouselImage(i, currentTemplate, currentColorTheme)
       
       const carouselEndTime = performance.now()
@@ -387,6 +418,19 @@ export default function CarouselImageGenerator({
       } else {
         console.warn(`   ⚠️ Canvas not found for carousel ${i + 1}`)
       }
+      
+      // Yield control between carousels to prevent blocking, but continue rendering
+      // This ensures rendering continues even in background tabs
+      if (i < carousels.length - 1) {
+        await yieldToEventLoop()
+      }
+    }
+    
+    // Clear rendering progress after completion
+    try {
+      localStorage.removeItem('postGeneration_renderingProgress')
+    } catch (error) {
+      // Ignore localStorage errors
     }
     
     const carouselGenerationEnd = performance.now()
@@ -717,82 +761,150 @@ export default function CarouselImageGenerator({
     console.log('🔄 Reset for new note, prevDesignSettings:', prevDesignSettings.current)
   }, [ideaTitle, carousels.length, templateId, colorThemeId])
 
-  const loadImage = (src: string): Promise<HTMLImageElement> => {
+  const loadImage = (src: string, timeout = 30000): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
       const img = new Image()
       // Set crossOrigin for all images to allow canvas drawing
       // This is needed for both external images and proxied images
       img.crossOrigin = 'anonymous'
       
+      // Set loading priority to high to ensure it loads even in background tabs
+      if ('fetchPriority' in img) {
+        (img as any).fetchPriority = 'high'
+      }
+      
+      let timeoutId: NodeJS.Timeout | null = null
+      let resolved = false
+      
+      const cleanup = () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+          timeoutId = null
+        }
+      }
+      
       img.onload = () => {
+        if (resolved) return
+        resolved = true
+        cleanup()
         console.log(`✅ Image loaded successfully: ${src}`)
         resolve(img)
       }
+      
       img.onerror = (error) => {
+        if (resolved) return
+        resolved = true
+        cleanup()
         console.error(`❌ Failed to load image: ${src}`, error)
         reject(error)
       }
+      
+      // Set timeout to prevent indefinite waiting (especially in background tabs)
+      timeoutId = setTimeout(() => {
+        if (resolved) return
+        resolved = true
+        cleanup()
+        console.error(`❌ Image load timeout: ${src}`)
+        reject(new Error(`Image load timeout after ${timeout}ms`))
+      }, timeout)
+      
+      // Start loading - this will continue even in background tabs
       img.src = src
     })
   }
 
-  const loadFonts = async (template: typeof TEMPLATE) => {
+  const loadFonts = async (template: typeof TEMPLATE, timeout = 30000) => {
     try {
-      // Load fonts from template
+      // Load fonts from template with timeout to prevent indefinite waiting
+      // Use display: 'swap' to ensure fonts load even in background tabs
+      const fontFaces: FontFace[] = []
+      const fontPromises: Promise<FontFace>[] = []
+      
       const hookFont = new FontFace(template.fonts.hook.family, `url(${template.fonts.hook.file})`, {
         weight: template.fonts.hook.weight,
-        style: template.fonts.hook.style
+        style: template.fonts.hook.style,
+        display: 'swap' // Ensure fonts load even in background tabs
       })
+      fontFaces.push(hookFont)
+      fontPromises.push(hookFont.load())
       
       const titleFont = new FontFace(template.fonts.title.family, `url(${template.fonts.title.file})`, {
         weight: template.fonts.title.weight,
-        style: template.fonts.title.style
+        style: template.fonts.title.style,
+        display: 'swap'
       })
+      fontFaces.push(titleFont)
+      fontPromises.push(titleFont.load())
       
       const contentFont = new FontFace(template.fonts.content.family, `url(${template.fonts.content.file})`, {
         weight: template.fonts.content.weight,
-        style: template.fonts.content.style
+        style: template.fonts.content.style,
+        display: 'swap'
       })
-      
-      const loadedHook = await hookFont.load()
-      const loadedTitle = await titleFont.load()
-      const loadedContent = await contentFont.load()
-      
-      document.fonts.add(loadedHook)
-      document.fonts.add(loadedTitle)
-      document.fonts.add(loadedContent)
+      fontFaces.push(contentFont)
+      fontPromises.push(contentFont.load())
       
       // Load additional fonts for template 3 (hookTopic, hookSubtitle, hookCTA)
       if (template.fonts.hookTopic) {
         const hookTopicFont = new FontFace(template.fonts.hookTopic.family, `url(${template.fonts.hookTopic.file})`, {
           weight: template.fonts.hookTopic.weight,
-          style: template.fonts.hookTopic.style
+          style: template.fonts.hookTopic.style,
+          display: 'swap'
         })
-        const loadedHookTopic = await hookTopicFont.load()
-        document.fonts.add(loadedHookTopic)
+        fontFaces.push(hookTopicFont)
+        fontPromises.push(hookTopicFont.load())
       }
       
       if (template.fonts.hookSubtitle) {
         const hookSubtitleFont = new FontFace(template.fonts.hookSubtitle.family, `url(${template.fonts.hookSubtitle.file})`, {
           weight: template.fonts.hookSubtitle.weight,
-          style: template.fonts.hookSubtitle.style
+          style: template.fonts.hookSubtitle.style,
+          display: 'swap'
         })
-        const loadedHookSubtitle = await hookSubtitleFont.load()
-        document.fonts.add(loadedHookSubtitle)
+        fontFaces.push(hookSubtitleFont)
+        fontPromises.push(hookSubtitleFont.load())
       }
       
       if (template.fonts.hookCTA) {
         const hookCTAFont = new FontFace(template.fonts.hookCTA.family, `url(${template.fonts.hookCTA.file})`, {
           weight: template.fonts.hookCTA.weight,
-          style: template.fonts.hookCTA.style
+          style: template.fonts.hookCTA.style,
+          display: 'swap'
         })
-        const loadedHookCTA = await hookCTAFont.load()
-        document.fonts.add(loadedHookCTA)
+        fontFaces.push(hookCTAFont)
+        fontPromises.push(hookCTAFont.load())
+      }
+      
+      // Load all fonts in parallel
+      // In background tabs, browsers may throttle this, but it will still complete (just slower)
+      // Use Promise.allSettled to continue even if some fonts fail to load
+      const loadResults = await Promise.allSettled(fontPromises)
+      
+      // Add successfully loaded fonts to document
+      let loadedCount = 0
+      loadResults.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          try {
+            document.fonts.add(result.value)
+            loadedCount++
+          } catch (error) {
+            console.warn('⚠️ Failed to add font to document:', fontFaces[index]?.family, error)
+          }
+        } else {
+          console.warn('⚠️ Font failed to load:', fontFaces[index]?.family, result.reason)
+        }
+      })
+      
+      if (loadedCount === fontFaces.length) {
+        console.log('✅ All fonts loaded successfully')
+      } else {
+        console.log(`⚠️ ${loadedCount}/${fontFaces.length} fonts loaded, continuing with available fonts`)
       }
       
       console.log('✓ Template fonts loaded successfully')
     } catch (error) {
       console.warn('⚠️  Failed to load template fonts, using fallback:', error)
+      // Continue rendering even if fonts fail to load (browser will use fallback fonts)
     }
   }
 
