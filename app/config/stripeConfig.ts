@@ -2,83 +2,53 @@
 // The mode is determined by your STRIPE_SECRET_KEY environment variable
 // Test mode keys start with 'sk_test_', live mode keys start with 'sk_live_'
 
+// Free plan (not a Stripe subscription - no priceId/productId needed)
+export const FREE_PLAN = {
+  id: 'plan-10',
+  name: 'Basic',
+  price: 0,
+  credits: 10,
+} as const
+
 // Test mode product/price IDs (created in Stripe test mode dashboard)
+// Only includes paid subscription plans
 const TEST_MODE_PLANS = {
-  'plan-10': {
-    id: 'plan-10',
-    name: 'Basic',
-    price: 10,
-    credits: 10,
-    description: 'For exploring AI-generated content',
-    priceId: 'price_1SQsy5HK7zocq1del54yVslU',
-    productId: 'prod_TNeGSMzAWDRkPI',
-  },
   'plan-20': {
     id: 'plan-20',
-    name: 'Pro',
+    name: 'Plus',
     price: 20,
-    credits: 20,
-    description: 'For professionals building consistency',
+    credits: 50,
     priceId: 'price_1SQt09HK7zocq1deXFEv1HoP',
     productId: 'prod_TNeIuDYPWUgjHr',
   },
   'plan-50': {
     id: 'plan-50',
-    name: 'Business',
+    name: 'Pro',
     price: 50,
-    credits: 50,
-    description: 'For teams growing their brand presence',
+    credits: 150,
     priceId: 'price_1SQt0cHK7zocq1deRCHeL6Hb',
     productId: 'prod_TNeJdtLvyHxaNx',
-  },
-  'plan-100': {
-    id: 'plan-100',
-    name: 'Enterprise',
-    price: 100,
-    credits: 100,
-    description: 'For agencies producing at scale',
-    priceId: 'price_1SQt16HK7zocq1deLxS44hMe',
-    productId: 'prod_TNeJlwIVYe67Hw',
   },
 } as const
 
 // Live mode product/price IDs (updated to match actual Stripe products)
+// Only includes paid subscription plans
 const LIVE_MODE_PLANS = {
-  'plan-10': {
-    id: 'plan-10',
-    name: 'Basic',
-    price: 10,
-    credits: 10,
-    description: 'For exploring AI-generated content',
-    priceId: 'price_1SQl4rHK7zocq1deIIFdiAHb',
-    productId: 'prod_TNW6s5tgNWdads',
-  },
   'plan-20': {
     id: 'plan-20',
-    name: 'Pro',
+    name: 'Plus',
     price: 20,
-    credits: 20,
-    description: 'For professionals building consistency',
-    priceId: 'price_1SQl4tHK7zocq1deDUeN8h4c',
-    productId: 'prod_TNW6g9hABzsSRb',
+    credits: 50,
+    priceId: 'price_1ST5AhHK7zocq1de8pSI9LNR',
+    productId: 'prod_TPv0lOXN2ZdR1l',
   },
   'plan-50': {
     id: 'plan-50',
-    name: 'Business',
+    name: 'Pro',
     price: 50,
-    credits: 50,
-    description: 'For teams growing their brand presence',
-    priceId: 'price_1SQl4uHK7zocq1decjSxbUMB',
-    productId: 'prod_TNW6K7MnAsF78B',
-  },
-  'plan-100': {
-    id: 'plan-100',
-    name: 'Enterprise',
-    price: 100,
-    credits: 100,
-    description: 'For agencies producing at scale',
-    priceId: 'price_1SQl4vHK7zocq1de36HgckbG',
-    productId: 'prod_TNW6m6NXaBCtCj',
+    credits: 150,
+    priceId: 'price_1ST5ANHK7zocq1dejxjhNZE9',
+    productId: 'prod_TPv0feydxqnouk',
   },
 } as const
 
@@ -122,6 +92,11 @@ export function getPlanByPriceId(priceId: string) {
 }
 
 export function getPlanById(planId: string) {
+  // Handle free plan
+  if (planId === 'plan-10') {
+    return FREE_PLAN
+  }
+  
   const plans = getStripePlans()
   return plans[planId as PlanId] || null
 }

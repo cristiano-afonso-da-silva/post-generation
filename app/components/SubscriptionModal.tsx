@@ -410,9 +410,6 @@ export default function SubscriptionModal({
                   <div style={{ fontSize: '14px', color: '#666666', marginBottom: '8px' }}>
                     {planItem.credits} credits per month
                   </div>
-                  <div style={{ fontSize: '13px', color: '#666666', lineHeight: '1.5' }}>
-                    {planItem.description}
-                  </div>
                 </div>
 
                 {isCurrentPlan ? (

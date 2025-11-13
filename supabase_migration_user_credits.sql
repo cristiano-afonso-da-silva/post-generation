@@ -2,12 +2,12 @@
 CREATE TABLE IF NOT EXISTS public.user_credits (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  credits_remaining INTEGER NOT NULL DEFAULT 5,
+  credits_remaining INTEGER NOT NULL DEFAULT 10,
   total_credits_used INTEGER NOT NULL DEFAULT 0,
   stripe_customer_id TEXT,
   stripe_subscription_id TEXT,
   subscription_status TEXT CHECK (subscription_status IN ('active', 'canceled', 'past_due')),
-  current_plan TEXT CHECK (current_plan IN ('plan-10', 'plan-20', 'plan-50', 'plan-100')),
+  current_plan TEXT CHECK (current_plan IN ('plan-10', 'plan-20', 'plan-50')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(user_id)

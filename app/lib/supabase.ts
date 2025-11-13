@@ -28,7 +28,7 @@ export interface UserCredits {
   stripe_customer_id: string | null
   stripe_subscription_id: string | null
   subscription_status: 'active' | 'canceled' | 'past_due' | null
-  current_plan: 'plan-10' | 'plan-20' | 'plan-50' | 'plan-100' | null
+  current_plan: 'plan-10' | 'plan-20' | 'plan-50' | null
   created_at: string
   updated_at: string
 }
@@ -43,7 +43,7 @@ export async function getUserCredits(userId: string): Promise<UserCredits | null
 
   if (error) {
     if (error.code === 'PGRST116') {
-      // No record found, create one with default 5 credits
+      // No record found, create one with default 10 credits
       return await createInitialCreditRecord(userId)
     }
     console.error('Error fetching user credits:', error)
@@ -59,7 +59,7 @@ export async function createInitialCreditRecord(userId: string): Promise<UserCre
     .from('user_credits')
     .insert({
       user_id: userId,
-      credits_remaining: 5,
+      credits_remaining: 10,
       total_credits_used: 0,
     })
     .select()
@@ -106,7 +106,7 @@ export async function updateUserSubscription(
     stripe_customer_id?: string
     stripe_subscription_id?: string
     subscription_status?: 'active' | 'canceled' | 'past_due' | null
-    current_plan?: 'plan-10' | 'plan-20' | 'plan-50' | 'plan-100' | null
+    current_plan?: 'plan-10' | 'plan-20' | 'plan-50' | null
     credits_remaining?: number
   }
 ): Promise<UserCredits | null> {
@@ -194,7 +194,7 @@ export async function getUserCreditsServer(userId: string): Promise<UserCredits 
 
   if (error) {
     if (error.code === 'PGRST116') {
-      // No record found, create one with default 5 credits
+      // No record found, create one with default 10 credits
       return await createInitialCreditRecordServer(userId)
     }
     console.error('Error fetching user credits:', error)
@@ -212,7 +212,7 @@ export async function createInitialCreditRecordServer(userId: string): Promise<U
     .from('user_credits')
     .insert({
       user_id: userId,
-      credits_remaining: 5,
+      credits_remaining: 10,
       total_credits_used: 0,
     })
     .select()
