@@ -70,23 +70,7 @@ export default function TermsPage() {
             ) : (
               <Link
                 href="/signup"
-                style={{
-                  padding: '12px 24px',
-                  borderRadius: '8px',
-                  background: '#f5f5f5',
-                  border: '1px solid #e5e5e5',
-                  color: '#000000',
-                  fontSize: '16px',
-                  fontWeight: '600',
-                  textDecoration: 'none',
-                  transition: 'all 0.2s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#e5e5e5'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#f5f5f5'
-                }}
+                className="login-button"
               >
                 Log In
               </Link>

@@ -72,10 +72,6 @@ CAROUSEL 1: HOOK (FIRST CAROUSEL)
     * "The One Mistake That's Costing You Thousands of Followers"
     * "I Tried This Productivity Hack For 30 Days - Here's What Happened"
     * "The Secret Most Entrepreneurs Don't Want You to Know"
-  * Examples of BAD hooks (too simple, not engaging):
-    * "Productivity" (just a word)
-    * "Marketing Tips" (too generic)
-    * "Business" (not a hook)
   * Use simple English - easy to understand, clear, and direct
   * Avoid complex words or jargon
   * Make it impossible to scroll past

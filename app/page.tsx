@@ -7,7 +7,6 @@ import { Check, ArrowRight, Zap, Palette, Download, Gauge, MessageSquare, CheckC
 import { useAuth } from './context/AuthContext'
 import AccountButton from './components/AccountButton'
 import { useState } from 'react'
-import './globals.css'
 
 const exampleSlides = [
   { src: '/slide1.png', alt: 'Example carousel slide 1' },
@@ -15,6 +14,13 @@ const exampleSlides = [
   { src: '/slide3.png', alt: 'Example carousel slide 3' },
   { src: '/slide4.png', alt: 'Example carousel slide 4' },
   { src: '/slide5.png', alt: 'Example carousel slide 5' },
+  { src: '/slide6.png', alt: 'Example carousel slide 6' },
+  { src: '/slide7.png', alt: 'Example carousel slide 7' },
+  { src: '/slide8.png', alt: 'Example carousel slide 8' },
+  { src: '/slide9.png', alt: 'Example carousel slide 9' },
+  { src: '/slide10.png', alt: 'Example carousel slide 10' },
+  { src: '/slide11.png', alt: 'Example carousel slide 11' },
+  { src: '/slide12.png', alt: 'Example carousel slide 12' },
 ]
 
 const exampleFolderSlides = [
@@ -207,23 +213,7 @@ export default function LandingPage() {
             ) : (
               <Link
                 href="/signup"
-                style={{
-                  padding: '12px 24px',
-                  borderRadius: '8px',
-                  background: '#f5f5f5',
-                  border: '1px solid #e5e5e5',
-                  color: '#000000',
-                  fontSize: '16px',
-                  fontWeight: '600',
-                  textDecoration: 'none',
-                  transition: 'all 0.2s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#e5e5e5'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#f5f5f5'
-                }}
+                className="login-button"
               >
                 Log In
               </Link>
@@ -345,7 +335,7 @@ export default function LandingPage() {
               animation: 'scrollHorizontal15 35s linear infinite',
             }}
           >
-            {[...exampleSlides, ...exampleSlides, ...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
+            {[...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
               <div
                 key={`diag2-${index}`}
                 className="carousel-card"
@@ -362,6 +352,7 @@ export default function LandingPage() {
                   alt={slide.alt}
                   width={360}
                   height={460}
+                  unoptimized
                   style={{
                     width: '100%',
                     height: 'auto',
@@ -388,7 +379,7 @@ export default function LandingPage() {
               animation: 'scrollHorizontal15 40s linear infinite reverse',
             }}
           >
-            {[...exampleSlides, ...exampleSlides, ...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
+            {[...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
               <div
                 key={`diag3-${index}`}
                 className="carousel-card"
@@ -405,6 +396,7 @@ export default function LandingPage() {
                   alt={slide.alt}
                   width={360}
                   height={460}
+                  unoptimized
                   style={{
                     width: '100%',
                     height: 'auto',
@@ -431,7 +423,7 @@ export default function LandingPage() {
               animation: 'scrollHorizontal15 45s linear infinite',
             }}
           >
-            {[...exampleSlides, ...exampleSlides, ...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
+            {[...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
               <div
                 key={`diag4-${index}`}
                 className="carousel-card"
@@ -448,6 +440,7 @@ export default function LandingPage() {
                   alt={slide.alt}
                   width={360}
                   height={460}
+                  unoptimized
                   style={{
                     width: '100%',
                     height: 'auto',
@@ -474,7 +467,7 @@ export default function LandingPage() {
               animation: 'scrollHorizontal15 50s linear infinite reverse',
             }}
           >
-            {[...exampleSlides, ...exampleSlides, ...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
+            {[...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
               <div
                 key={`diag5-${index}`}
                 className="carousel-card"
@@ -491,6 +484,7 @@ export default function LandingPage() {
                   alt={slide.alt}
                   width={360}
                   height={460}
+                  unoptimized
                   style={{
                     width: '100%',
                     height: 'auto',
@@ -517,7 +511,7 @@ export default function LandingPage() {
               animation: 'scrollHorizontal15 55s linear infinite',
             }}
           >
-            {[...exampleSlides, ...exampleSlides, ...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
+            {[...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
               <div
                 key={`diag6-${index}`}
                 className="carousel-card"
@@ -534,6 +528,7 @@ export default function LandingPage() {
                   alt={slide.alt}
                   width={360}
                   height={460}
+                  unoptimized
                   style={{
                     width: '100%',
                     height: 'auto',
@@ -559,7 +554,7 @@ export default function LandingPage() {
               animation: 'scrollHorizontal15 60s linear infinite reverse',
             }}
           >
-            {[...exampleSlides, ...exampleSlides, ...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
+            {[...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
               <div
                 key={`diag7-${index}`}
                 className="carousel-card"
@@ -576,6 +571,7 @@ export default function LandingPage() {
                   alt={slide.alt}
                   width={360}
                   height={460}
+                  unoptimized
                   style={{
                     width: '100%',
                     height: 'auto',
