@@ -86,27 +86,27 @@ const testimonials = [
 
 const pricingPlans = [
   {
-    name: 'Starter',
-    price: '$9',
+    name: 'Basic',
+    price: '$0',
     period: '/month',
     features: ['10 carousel posts/month', 'All design themes', 'HD export quality', 'Email support'],
     cta: 'Start Free Trial',
     highlighted: false,
   },
   {
-    name: 'Pro',
-    price: '$29',
+    name: 'Plus',
+    price: '$20',
     period: '/month',
     features: ['50 carousel posts/month', 'All design themes', '4K export quality', 'Priority support', 'Custom branding', 'Advanced AI features'],
     cta: 'Get Started',
     highlighted: true,
   },
   {
-    name: 'Agency',
-    price: '$99',
+    name: 'Pro',
+    price: '$50',
     period: '/month',
-    features: ['Unlimited carousel posts', 'All design themes', '4K export quality', 'Dedicated support', 'White-label options', 'Team collaboration', 'API access'],
-    cta: 'Contact Sales',
+    features: ['150 carousel posts/month', 'All design themes', '4K export quality', 'Dedicated support', 'White-label options', 'Team collaboration', 'API access'],
+    cta: 'Get Started',
     highlighted: false,
   },
 ]
@@ -397,7 +397,7 @@ export default function LandingPage() {
               textAlign: 'left',
             }}
           >
-            Post My Note is a next-gen content system that helps creators and small brands publish authentic, on-brand carousels, 10× faster, without a designer.
+            Make clean, on-brand posts instantly with zero design work.
           </p>
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
             <Link
@@ -799,7 +799,7 @@ export default function LandingPage() {
               textAlign: 'center',
             }}
           >
-            Turn Ideas Into Content That <span style={{ fontFamily: 'var(--font-playfair-display), serif', fontStyle: 'italic' }}>Sells</span>
+            Create Carousel Posts in <span style={{ fontFamily: 'var(--font-playfair-display), serif', fontStyle: 'italic' }}>Seconds</span>
           </h1>
           <p
             style={{
@@ -811,7 +811,7 @@ export default function LandingPage() {
               textAlign: 'center',
             }}
           >
-            Post My Note is a next-gen content system that helps creators and small brands publish authentic, on-brand carousels, 10× faster, without a designer.
+            Make clean, on-brand posts instantly with zero design work.
           </p>
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '64px' }}>
             <Link
@@ -903,7 +903,7 @@ export default function LandingPage() {
                   lineHeight: '1.6',
                 }}
               >
-                Write one line. Get a finished post that looks like you spent hours designing it.
+                Write one line and get a finished post that looks like you spent hours designing it.
               </p>
             </div>
 
@@ -1195,7 +1195,7 @@ export default function LandingPage() {
                   textAlign: 'left',
                 }}
               >
-                Pick a theme, font, and tone that fits your identity, make every post feel yours.
+                Pick a theme, font, and tone that fits your brand, make every post feel yours.
               </p>
             </div>
 
@@ -1389,7 +1389,7 @@ export default function LandingPage() {
                   lineHeight: '1.6',
                 }}
               >
-                Batch, edit, and export dozens of scroll-stopping carousels at once.
+                Batch, edit, and export carousels at once to your social media.
               </p>
             </div>
 
@@ -1872,7 +1872,7 @@ export default function LandingPage() {
                 maxWidth: '700px',
               }}
             >
-              Cut your content creation time by 90%, keep every post perfectly on-brand, and scale your output without ever hiring a team.
+              Cut your content creation time by 90% and scale your output without ever hiring a team.
             </p>
           </div>
           <div
