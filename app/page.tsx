@@ -401,7 +401,7 @@ export default function LandingPage() {
           </p>
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
             <Link
-              href={user ? "/app" : "/signup"}
+              href={user ? "/dashboard" : "/signup"}
               className="cta-button"
               style={{
                 display: 'inline-flex',
@@ -815,7 +815,7 @@ export default function LandingPage() {
           </p>
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '64px' }}>
             <Link
-              href={user ? "/app" : "/signup"}
+              href={user ? "/dashboard?view=create" : "/signup"}
               className="cta-button"
               style={{
                 display: 'inline-flex',
@@ -841,7 +841,7 @@ export default function LandingPage() {
                 e.currentTarget.style.boxShadow = '0 0 20px rgba(255, 189, 89, 0.4), 0 4px 12px rgba(255, 189, 89, 0.2)'
               }}
             >
-              Get Started for Free
+              {user ? "Go to App" : "Get Started for Free"}
               <ArrowRight size={18} />
             </Link>
           </div>
@@ -2142,7 +2142,7 @@ export default function LandingPage() {
             Your ideas deserve to move <span style={{ fontFamily: 'var(--font-playfair-display), serif', fontStyle: 'italic' }}>faster</span>
           </h2>
           <Link
-            href={user ? "/app" : "/signup"}
+            href={user ? "/dashboard" : "/signup"}
             className="cta-button"
             style={{
               display: 'inline-flex',

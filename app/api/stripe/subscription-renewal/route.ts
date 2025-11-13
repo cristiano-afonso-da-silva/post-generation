@@ -84,6 +84,15 @@ export async function GET(request: NextRequest) {
         currentPeriodEnd: (subscription as any).current_period_end
       })
     } catch (error: any) {
+      // Handle mode mismatch gracefully (test mode key accessing live subscription or vice versa)
+      if (error.code === 'resource_missing' && error.message?.includes('similar object exists')) {
+        console.warn('[SUBSCRIPTION-RENEWAL] Mode mismatch detected (test/live mode). Returning null renewal date.')
+        return NextResponse.json(
+          { renewalDate: null },
+          { status: 200 }
+        )
+      }
+      
       console.error('[SUBSCRIPTION-RENEWAL] ERROR fetching subscription from Stripe:', {
         message: error.message,
         type: error.type,

@@ -108,12 +108,19 @@ interface Props {
   includeImages?: boolean
   useAIImages?: boolean
   aiImageStyle?: 'animated' | 'surreal'
-  onGenerationComplete?: () => void
+  onGenerationComplete?: (generationId?: string) => void
 }
 
 // Initialize images from localStorage before rendering
 const getInitialImages = (carousels: Carousel[], ideaTitle: string, underlineWords: Record<number, any>, templateId: string, colorThemeId: string): string[] => {
   try {
+    // Check if cache should be skipped (e.g., when color theme changes)
+    const skipCache = localStorage.getItem('postGeneration_skipCache') === 'true'
+    if (skipCache) {
+      console.log('⏭️ Skip cache flag detected - forcing regeneration')
+      return []
+    }
+    
     // If there's no generationId in localStorage, we're on a fresh /app page - don't load from cache
     const storedGenerationId = localStorage.getItem('postGeneration_generationId')
     if (!storedGenerationId) {
@@ -135,6 +142,14 @@ const getInitialImages = (carousels: Carousel[], ideaTitle: string, underlineWor
       colorThemeId
     })
     
+    console.log('🔍 Cache check:', {
+      hasSavedImages: !!savedImages,
+      savedHash,
+      currentHash: currentFullContentHash,
+      hashMatch: savedHash === currentFullContentHash,
+      colorThemeId
+    })
+    
     if (savedImages && savedHash && savedHash === currentFullContentHash) {
       const imageDataUrls = JSON.parse(savedImages)
       // Verify all images are present and valid data URLs
@@ -145,6 +160,8 @@ const getInitialImages = (carousels: Carousel[], ideaTitle: string, underlineWor
       } else {
         console.warn('⚠️ Cached images incomplete or invalid, will regenerate')
       }
+    } else if (savedHash && savedHash !== currentFullContentHash) {
+      console.log('🔄 Hash mismatch - cache invalid, will regenerate')
     }
   } catch (error) {
     console.error('Error loading images from localStorage:', error)
@@ -261,21 +278,21 @@ export default function CarouselImageGenerator({
 
 
   // Auto-save function
-  const saveToDatabase = useCallback(async (imageDataUrls: string[]) => {
+  const saveToDatabase = useCallback(async (imageDataUrls: string[]): Promise<string | undefined> => {
     if (!user?.id) {
       console.warn('Cannot save: user not authenticated')
-      return
+      return undefined
     }
 
     if (imageDataUrls.length === 0) {
       console.warn('Cannot save: no images to save')
-      return
+      return undefined
     }
 
     // Prevent multiple simultaneous saves
     if (isSavingRef.current) {
       console.warn('⚠️ Save already in progress, skipping duplicate save request')
-      return
+      return undefined
     }
 
     isSavingRef.current = true
@@ -343,9 +360,12 @@ export default function CarouselImageGenerator({
         } else {
           console.log('✅ Generation auto-saved to history (new ideaTitle):', returnedGenerationId)
         }
+        
+        return returnedGenerationId
       }
     } catch (error: any) {
       console.error('❌ Error auto-saving generation:', error.message || error)
+      return undefined
     } finally {
       // Always reset the saving flag, even if there was an error
       isSavingRef.current = false
@@ -550,6 +570,7 @@ export default function CarouselImageGenerator({
     console.log('   ⏱️ Rendering complete, total time:', (beforeSaveTime - renderStartTime).toFixed(2), 'ms')
     
     // Save to Supabase immediately after generation (always save, including design updates)
+    let savedGenerationId: string | undefined
     if (user?.id && imageDataUrls.length > 0) {
       const isDataUrl = imageDataUrls[0]?.startsWith('data:image/')
       if (isDataUrl) {
@@ -557,12 +578,14 @@ export default function CarouselImageGenerator({
         console.log('💾 [SAVE] Saving images to Supabase (design update or new generation)...')
         console.log('   ⏱️ Timestamp:', new Date().toISOString())
         try {
-          await saveToDatabase(imageDataUrls)
+          savedGenerationId = await saveToDatabase(imageDataUrls)
           const saveEndTime = performance.now()
           console.log('✅ [SAVE] Images saved to Supabase successfully')
           console.log('   ⏱️ Save duration:', (saveEndTime - saveStartTime).toFixed(2), 'ms')
+          console.log('   📝 Saved generationId:', savedGenerationId)
         } catch (err) {
           console.error('❌ [SAVE ERROR] Failed to save to Supabase:', err)
+          savedGenerationId = undefined
         }
       }
     }
@@ -571,27 +594,41 @@ export default function CarouselImageGenerator({
     console.log('🎨 [RENDERING COMPLETE] Total end-to-end time:', (finalTime - renderStartTime).toFixed(2), 'ms')
     console.log('   ⏱️ Final timestamp:', new Date().toISOString())
     
-    // Notify parent component that generation is complete
+    // Notify parent component that generation is complete with the generation ID
     if (onGenerationComplete) {
-      onGenerationComplete()
+      console.log('📞 Calling onGenerationComplete with generationId:', savedGenerationId)
+      onGenerationComplete(savedGenerationId)
+    } else {
+      console.warn('⚠️ onGenerationComplete callback not provided')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carousels, ideaTitle, underlineWords, templateId, colorThemeId, user?.id])
 
   // Generate carousels if not loaded from storage
   useEffect(() => {
-    if (carousels.length > 0 && carouselImages.length === 0) {
-      // Only generate if we don't have cached images
-      console.log('Initial generation triggered')
+    // Check if cache should be skipped (e.g., when color theme changes)
+    const skipCache = localStorage.getItem('postGeneration_skipCache') === 'true'
+    
+    if (carousels.length > 0 && (carouselImages.length === 0 || skipCache)) {
+      // Generate if we don't have cached images OR if skipCache flag is set
+      if (skipCache) {
+        console.log('⏭️ Skip cache flag detected - forcing regeneration on mount')
+      } else {
+        console.log('Initial generation triggered')
+      }
       generateAllCarousels().then(() => {
         // Mark as not initial mount after first generation completes
         isInitialMount.current = false
-        console.log('Initial mount flag set to false')
+        // Update prevDesignSettings to current values so future changes are detected
+        prevDesignSettings.current = { templateId, colorThemeId }
+        console.log('Initial mount flag set to false, prevDesignSettings updated:', prevDesignSettings.current)
       })
     } else if (carousels.length > 0 && carouselImages.length > 0 && isInitialMount.current) {
       // If we have images from cache, mark as not initial mount
       isInitialMount.current = false
-      console.log('Initial mount flag set to false (cached images)')
+      // Update prevDesignSettings to current values so future changes are detected
+      prevDesignSettings.current = { templateId, colorThemeId }
+      console.log('Initial mount flag set to false (cached images), prevDesignSettings updated:', prevDesignSettings.current)
     }
   }, [carousels.length, carouselImages.length, generateAllCarousels])
 
@@ -759,7 +796,7 @@ export default function CarouselImageGenerator({
     // Reset carousel content tracking
     prevCarouselsContent.current = JSON.stringify(carousels)
     console.log('🔄 Reset for new note, prevDesignSettings:', prevDesignSettings.current)
-  }, [ideaTitle, carousels.length, templateId, colorThemeId])
+  }, [ideaTitle, carousels.length])
 
   const loadImage = (src: string, timeout = 30000): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {

@@ -1,0 +1,865 @@
+'use client'
+
+import { useState, useEffect, useRef, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useAuth } from '../context/AuthContext'
+import { useGenerations, useGeneration } from '../hooks/useGenerations'
+import Link from 'next/link'
+import { ChevronLeft, ChevronRight, Palette, Edit3, MessageSquare } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import CarouselImageGenerator from '../components/CarouselImageGenerator'
+import { COLOR_THEMES } from '../config/carouselThemes'
+import { getTemplateOptions } from '../config/carouselTemplates'
+import TemplateSelectorModal from '../components/TemplateSelectorModal'
+
+const API_URL = ''
+
+interface Note {
+  ideaTitle: string
+  carousels: Array<{
+    title: string
+    content: string
+    kind: 'HOOK' | 'MIDDLE' | 'CTA'
+    topic?: string
+    subtitle?: string
+    cta?: string
+  }>
+  caption: string
+  underlineWords?: Record<number, { underline: string; highlight: string; imageSearch?: string; imageUrl?: string | null; originalImageUrl?: string | null }>
+}
+
+interface HistoryPageProps {
+  onLoadGeneration?: (generationId: string) => void
+}
+
+function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const generationId = searchParams.get('id')
+  const { user, loading: authLoading } = useAuth()
+  const [page, setPage] = useState(1)
+  const itemsPerPage = 6
+  const offset = (page - 1) * itemsPerPage
+  
+  const { generations, totalCount, isLoading, isError } = useGenerations(user?.id, itemsPerPage, offset)
+  const totalPages = totalCount ? Math.ceil(totalCount / itemsPerPage) : 0
+
+  // Load generation if generationId is in URL
+  const { generation, isLoading: isLoadingGeneration } = useGeneration(
+    generationId || undefined,
+    user?.id
+  )
+
+  // State for customization view
+  const [note, setNote] = useState<Note | null>(null)
+  const [templateId, setTemplateId] = useState('template1')
+  const [colorThemeId, setColorThemeId] = useState('purple-black')
+  const [showTemplateModal, setShowTemplateModal] = useState(false)
+  const [activeLeftTab, setActiveLeftTab] = useState<'design' | 'carousels' | 'caption'>('design')
+  const [editedCarousels, setEditedCarousels] = useState<Note['carousels']>([])
+  const [carouselsDirty, setCarouselsDirty] = useState(false)
+  const [savingCarousels, setSavingCarousels] = useState(false)
+  const [editedCaption, setEditedCaption] = useState<string>('')
+  const [captionCopied, setCaptionCopied] = useState(false)
+  const [expandedCarouselIndexes, setExpandedCarouselIndexes] = useState<number[]>([])
+  const [error, setError] = useState('')
+
+  const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] = [
+    { id: 'design', label: 'Customize Design', icon: Palette },
+    { id: 'carousels', label: 'Edit Carousel', icon: Edit3 },
+    { id: 'caption', label: 'Post Caption', icon: MessageSquare }
+  ]
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/')
+    }
+  }, [user, authLoading, router])
+
+  // Load generation data when generation is available
+  useEffect(() => {
+    if (!generation || !user) return
+
+    const noteData: Note = {
+      ideaTitle: generation.idea_title,
+      carousels: generation.slides,
+      caption: generation.caption,
+      underlineWords: generation.underline_words
+    }
+    
+    setNote(noteData)
+    setEditedCarousels(generation.slides.map((slide: any) => ({ ...slide })))
+    setEditedCaption(generation.caption || '')
+    setTemplateId(generation.template_id || 'template1')
+    setColorThemeId(generation.color_theme_id || 'purple-black')
+    setCarouselsDirty(false)
+    setExpandedCarouselIndexes([])
+    
+    try {
+      localStorage.setItem('postGeneration_generationId', generation.id)
+      localStorage.setItem('postGeneration_userId', user.id)
+      localStorage.setItem('postGeneration_ideaTitle', generation.idea_title)
+      localStorage.setItem('postGeneration_fromHistory', 'true')
+      
+      if (generation.image_urls && generation.image_urls.length > 0) {
+        localStorage.setItem('postGeneration_canvasImages', JSON.stringify(generation.image_urls))
+      }
+    } catch (error) {
+      console.error('Error storing in localStorage:', error)
+    }
+  }, [generation, user])
+
+  // Sync editable carousels with note
+  useEffect(() => {
+    if (note) {
+      setEditedCarousels(note.carousels.map(carousel => ({ ...carousel })))
+      setEditedCaption(note.caption || '')
+      setCarouselsDirty(false)
+      setExpandedCarouselIndexes([])
+    }
+  }, [note])
+
+  const toggleCarouselExpansion = (index: number) => {
+    setExpandedCarouselIndexes(prev => {
+      if (prev.includes(index)) {
+        return prev.filter(i => i !== index)
+      }
+      return [...prev, index]
+    })
+  }
+
+  const handleCarouselFieldChange = (index: number, field: 'title' | 'content', value: string) => {
+    setEditedCarousels(prev => {
+      if (!prev[index]) return prev
+      const next = [...prev]
+      next[index] = {
+        ...next[index],
+        [field]: value
+      }
+      return next
+    })
+    setCarouselsDirty(true)
+  }
+
+  const resetEditedCarousels = () => {
+    if (note) {
+      setEditedCarousels(note.carousels.map(carousel => ({ ...carousel })))
+    }
+    setCarouselsDirty(false)
+  }
+
+  const saveEditedCarousels = () => {
+    if (!note || savingCarousels) return
+
+    const cleanedCarousels = editedCarousels.map(carousel => ({
+      ...carousel,
+      title: (carousel.title ?? '').trim(),
+      content: (carousel.content ?? '').trim()
+    }))
+
+    setSavingCarousels(true)
+    setError('')
+
+    fetch(`${API_URL}/api/social`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'refreshSlides',
+        slides: cleanedCarousels,
+        includeImages: false,
+        useAIImages: false,
+        aiImageStyle: 'animated'
+      })
+    })
+      .then(async (response) => {
+        const data = await response.json()
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || 'Failed to refresh carousel enhancements')
+        }
+
+        const updatedUnderline: Note['underlineWords'] = data.data?.underlineWords || {}
+        const sanitizedCarousels: Note['carousels'] = (data.data?.slides || cleanedCarousels) as Note['carousels']
+
+        const updatedNote: Note = {
+          ...note,
+          carousels: sanitizedCarousels,
+          underlineWords: updatedUnderline
+        }
+
+        setNote(updatedNote)
+        setEditedCarousels(sanitizedCarousels.map(carousel => ({ ...carousel })))
+        setCarouselsDirty(false)
+
+        try {
+          localStorage.removeItem('postGeneration_canvasImages')
+          localStorage.removeItem('postGeneration_fullContentHash')
+        } catch (storageError) {
+          console.warn('Could not clear cache:', storageError)
+        }
+      })
+      .catch((err: any) => {
+        console.error('Error refreshing carousels:', err)
+        setError(err.message || 'Failed to refresh carousels. Please try again.')
+      })
+      .finally(() => {
+        setSavingCarousels(false)
+      })
+  }
+
+  const loadGeneration = (id: string) => {
+    if (onLoadGeneration) {
+      try {
+        localStorage.setItem('postGeneration_fromHistory', 'true')
+      } catch (error) {
+        console.error('Error setting fromHistory flag:', error)
+      }
+      onLoadGeneration(id)
+    } else {
+      try {
+        localStorage.setItem('postGeneration_fromHistory', 'true')
+      } catch (error) {
+        console.error('Error setting fromHistory flag:', error)
+      }
+      router.push(`/app/${id}`)
+    }
+  }
+
+  const handleBack = () => {
+    router.push('/dashboard?view=history', { scroll: false })
+  }
+
+  const templateOptions = getTemplateOptions()
+
+  if (authLoading || (generationId && isLoadingGeneration)) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="loading">
+          <div className="spinner"></div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show customization view when generation is loaded
+  if (note && generation) {
+    return (
+      <div style={{ background: '#ffffff', minHeight: '100vh' }}>
+        <div
+          className="container"
+          style={{
+            height: 'calc(100vh - 40px)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            paddingTop: '40px'
+          }}
+        >
+          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            {error && (
+              <div className="error" style={{ margin: '0 0 24px', flex: '0 0 auto' }}>
+                {error}
+              </div>
+            )}
+
+            <div 
+              className="responsive-grid"
+              style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'minmax(260px, 0.3fr) minmax(0, 0.7fr)', 
+                gap: '32px',
+                alignItems: 'stretch',
+                flex: 1,
+                overflow: 'hidden'
+              }}
+            >
+              {/* LEFT COLUMN - Customisation */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', overflow: 'hidden', alignSelf: 'stretch' }}>
+                <div className="card mobile-customize" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: '16px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <button
+                      onClick={handleBack}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        background: 'none',
+                        border: 'none',
+                        padding: '8px 0',
+                        cursor: 'pointer',
+                        marginBottom: '24px',
+                        color: '#000000',
+                        fontSize: '16px',
+                        fontWeight: '600'
+                      }}
+                    >
+                      <ChevronLeft size={20} />
+                      <span>Back to History</span>
+                    </button>
+                    <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px', color: '#000000' }}>
+                      Customisation
+                    </h3>
+                  
+                    {/* Tab buttons */}
+                    <div 
+                      style={{ 
+                        display: 'flex', 
+                        gap: '0',
+                        alignItems: 'stretch',
+                        border: '2px solid #e5e5e5',
+                        borderRadius: '12px',
+                        padding: '2px',
+                        background: '#ededed',
+                        height: 'fit-content',
+                        marginBottom: '24px'
+                      }}
+                    >
+                      {leftTabs.map(tab => {
+                        const TabIcon = tab.icon
+                        const isActive = activeLeftTab === tab.id
+                        return (
+                          <button
+                            key={tab.id}
+                            onClick={() => setActiveLeftTab(tab.id)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: '8px 16px',
+                              flex: 1,
+                              border: 'none',
+                              borderRadius: '10px',
+                              background: isActive ? '#d8d8d8' : '#ededed',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                            title={tab.label}
+                            aria-label={tab.label}
+                          >
+                            <TabIcon size={20} color="#000000" />
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    {/* Tab content */}
+                    {activeLeftTab === 'design' && (
+                      <div style={{ marginBottom: '24px' }}>
+                        <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
+                          Carousel Style
+                        </h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+                          <div>
+                            <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
+                              Template
+                            </label>
+                            <button
+                              onClick={() => setShowTemplateModal(true)}
+                              className="input"
+                              style={{ 
+                                cursor: 'pointer', 
+                                padding: '12px',
+                                textAlign: 'left',
+                                background: '#ffffff',
+                                border: '2px solid #e5e5e5',
+                                borderRadius: '12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                width: '100%'
+                              }}
+                            >
+                              <span>{templateOptions.find(t => t.id === templateId)?.name || 'Select Template'}</span>
+                              <span style={{ fontSize: '12px', color: '#666666' }}>▼</span>
+                            </button>
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
+                              Color Theme
+                            </label>
+                            <select
+                              value={colorThemeId}
+                              onChange={(e) => setColorThemeId(e.target.value)}
+                              className="input"
+                              style={{ cursor: 'pointer', padding: '12px' }}
+                            >
+                              {COLOR_THEMES.map(theme => (
+                                <option key={theme.id} value={theme.id}>
+                                  {theme.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {activeLeftTab === 'carousels' && (
+                      <div style={{ marginBottom: '24px' }}>
+                        <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
+                          Carousel Content
+                        </h3>
+                        {note && (
+                          <div style={{ display: 'grid', gap: '16px' }}>
+                            {editedCarousels.map((carousel, index) => {
+                              const kind = note.carousels[index]?.kind ?? 'MIDDLE'
+                              const isExpanded = expandedCarouselIndexes.includes(index)
+                              return (
+                                <div 
+                                  key={index}
+                                  className={`carousel-card ${kind === 'HOOK' ? 'hook' : kind === 'CTA' ? 'cta' : 'content'}`}
+                                  style={{ padding: '0px' }}
+                                >
+                                  <button
+                                    onClick={() => toggleCarouselExpansion(index)}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      width: '100%',
+                                      background: 'none',
+                                      border: 'none',
+                                      padding: '6px 0',
+                                      margin: 0,
+                                      cursor: 'pointer',
+                                      textAlign: 'left'
+                                    }}
+                                  >
+                                    <div style={{ 
+                                      fontSize: '14px', 
+                                      fontWeight: '500', 
+                                      color: '#000000', 
+                                      textTransform: 'none',
+                                      letterSpacing: '0px'
+                                    }}>
+                                      Carousel {index + 1} • {kind === 'MIDDLE' ? 'Content' : kind === 'HOOK' ? 'Hook' : kind === 'CTA' ? 'CTA' : kind}
+                                    </div>
+                                    <span style={{ fontSize: '14px', color: '#000000', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
+                                      ▾
+                                    </span>
+                                  </button>
+
+                                  {isExpanded && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px', paddingTop: '12px' }}>
+                                      <div>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7280', marginBottom: '6px' }}>
+                                          Title
+                                        </label>
+                                        <input
+                                          className="input"
+                                          value={carousel.title ?? ''}
+                                          onChange={(e) => handleCarouselFieldChange(index, 'title', e.target.value)}
+                                          placeholder="Enter carousel title"
+                                          style={{ width: '100%' }}
+                                        />
+                                      </div>
+                                      <div>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7280', marginBottom: '6px' }}>
+                                          Content
+                                        </label>
+                                        <textarea
+                                          className="input"
+                                          value={carousel.content ?? ''}
+                                          onChange={(e) => handleCarouselFieldChange(index, 'content', e.target.value)}
+                                          placeholder="Enter carousel content"
+                                          rows={kind === 'CTA' ? 5 : 6}
+                                          style={{ width: '100%', resize: 'vertical', minHeight: '120px' }}
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                        {note && (
+                          <div style={{ 
+                            display: 'flex', 
+                            flexDirection: 'column',
+                            gap: '12px',
+                            marginTop: '24px'
+                          }}>
+                            <button
+                              className="button secondary"
+                              onClick={resetEditedCarousels}
+                              disabled={!carouselsDirty || savingCarousels}
+                              style={{ width: '100%' }}
+                            >
+                              Reset
+                            </button>
+                            <button
+                              className="button"
+                              onClick={saveEditedCarousels}
+                              disabled={!carouselsDirty || savingCarousels}
+                              style={{ width: '100%' }}
+                            >
+                              {savingCarousels ? 'Saving...' : 'Save'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {activeLeftTab === 'caption' && (
+                      <div style={{ marginBottom: '24px' }}>
+                        <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
+                          Instagram Caption
+                        </h3>
+                        <textarea
+                          className="input"
+                          value={editedCaption}
+                          onChange={(e) => setEditedCaption(e.target.value)}
+                          placeholder="Caption will appear here"
+                          style={{ 
+                            width: '100%',
+                            minHeight: '300px',
+                            padding: '20px', 
+                            background: '#fafafa',
+                            border: '2px solid #e5e5e5',
+                            borderRadius: '12px',
+                            fontSize: '15px',
+                            lineHeight: '1.8',
+                            color: '#000000',
+                            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
+                            resize: 'vertical'
+                          }}
+                        />
+                        {note && (
+                          <button
+                            className="button"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(editedCaption)
+                                setCaptionCopied(true)
+                                setTimeout(() => {
+                                  setCaptionCopied(false)
+                                }, 2000)
+                              } catch (err) {
+                                console.error('Failed to copy caption:', err)
+                              }
+                            }}
+                            style={{ width: '100%', marginTop: '12px' }}
+                          >
+                            {captionCopied ? 'Copied' : 'Copy'}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT COLUMN - Output */}
+              <div className="mobile-output" style={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '24px', minHeight: 0, alignSelf: 'stretch' }}>
+                {note && (
+                  <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+                    <CarouselImageGenerator 
+                      carousels={carouselsDirty && editedCarousels.length > 0 ? editedCarousels : note.carousels}
+                      ideaTitle={note.ideaTitle}
+                      ideaIndex={null}
+                      underlineWords={note.underlineWords || {}}
+                      templateId={templateId}
+                      colorThemeId={colorThemeId}
+                      accountDescription=""
+                      caption={note.caption}
+                      includeImages={false}
+                      useAIImages={false}
+                      aiImageStyle="animated"
+                      onGenerationComplete={() => {
+                        console.log('✅ Generation rendering complete')
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Template Selector Modal */}
+        <TemplateSelectorModal
+          isOpen={showTemplateModal}
+          onClose={() => setShowTemplateModal(false)}
+          selectedTemplateId={templateId}
+          onSelectTemplate={(id) => setTemplateId(id)}
+        />
+      </div>
+    )
+  }
+
+  // Show history list view
+  return (
+    <div style={{ minHeight: '100vh', background: '#ffffff', padding: '48px 24px' }}>
+      {/* Main Content */}
+      <div className="container" style={{ maxWidth: '1400px', margin: '0 auto' }}>
+        <div style={{ marginBottom: '40px' }}>
+          <h1 style={{ fontSize: '32px', fontWeight: '700', marginBottom: '8px' }}>
+            History
+          </h1>
+        </div>
+
+        {isLoading ? (
+          <div style={{ 
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+            gap: '24px',
+          }}>
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="card"
+                style={{
+                  padding: '0',
+                  overflow: 'hidden',
+                  animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                }}
+              >
+                <div style={{
+                  aspectRatio: '2/1',
+                  background: '#e5e5e5',
+                }} />
+                <div style={{ padding: '20px' }}>
+                  <div style={{
+                    height: '20px',
+                    background: '#e5e5e5',
+                    borderRadius: '4px',
+                    marginBottom: '8px',
+                    width: '70%',
+                  }} />
+                  <div style={{
+                    height: '16px',
+                    background: '#e5e5e5',
+                    borderRadius: '4px',
+                    width: '40%',
+                  }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : isError ? (
+          <div style={{ 
+            textAlign: 'center', 
+            padding: '80px 20px',
+            color: '#666666' 
+          }}>
+            <p style={{ fontSize: '18px', marginBottom: '16px' }}>
+              Error loading history
+            </p>
+            <p style={{ fontSize: '14px' }}>
+              Please try refreshing the page
+            </p>
+          </div>
+        ) : !generations || generations.length === 0 ? (
+          <div style={{ 
+            textAlign: 'center', 
+            padding: '80px 20px',
+            color: '#666666' 
+          }}>
+            <p style={{ fontSize: '18px', marginBottom: '16px' }}>
+              No generations yet
+            </p>
+            <p style={{ fontSize: '14px' }}>
+              Create your first note to see it here
+            </p>
+            <Link href="/dashboard?view=create" className="button" style={{ marginTop: '24px', display: 'inline-block' }}>
+              Create Note
+            </Link>
+          </div>
+        ) : (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+            gap: '24px',
+          }}>
+            {generations.map((gen: any) => {
+              const imageUrls = gen.image_urls || []
+
+              return (
+                <div
+                  key={gen.id}
+                  onClick={() => loadGeneration(gen.id)}
+                  className="card"
+                  style={{
+                    cursor: 'pointer',
+                    padding: '0',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* Images Grid - Show first 2 slides */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '2px',
+                    background: '#e5e5e5',
+                    aspectRatio: '2/1',
+                  }}>
+                    {imageUrls.length >= 2 ? (
+                      <>
+                        <img
+                          src={imageUrls[0]}
+                          alt="Slide 1"
+                          crossOrigin="anonymous"
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            display: 'block',
+                          }}
+                          onError={(e) => {
+                            console.error('Failed to load image 1:', imageUrls[0])
+                            e.currentTarget.style.display = 'none'
+                          }}
+                        />
+                        <img
+                          src={imageUrls[1]}
+                          alt="Slide 2"
+                          crossOrigin="anonymous"
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            display: 'block',
+                          }}
+                          onError={(e) => {
+                            console.error('Failed to load image 2:', imageUrls[1])
+                            e.currentTarget.style.display = 'none'
+                          }}
+                        />
+                      </>
+                    ) : imageUrls.length === 1 ? (
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <img
+                          src={imageUrls[0]}
+                          alt="Slide 1"
+                          crossOrigin="anonymous"
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            display: 'block',
+                          }}
+                          onError={(e) => {
+                            console.error('Failed to load image:', imageUrls[0])
+                            e.currentTarget.style.display = 'none'
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div style={{
+                        gridColumn: '1 / -1',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: '#f5f5f5',
+                        color: '#999999',
+                        fontSize: '14px',
+                      }}>
+                        No preview
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Project Info */}
+                  <div style={{ padding: '20px' }}>
+                    <h3 style={{
+                      fontSize: '16px',
+                      fontWeight: '700',
+                      marginBottom: '8px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {gen.project_name || gen.idea_title}
+                    </h3>
+                    <p style={{
+                      fontSize: '13px',
+                      color: '#666666',
+                    }}>
+                      {new Date(gen.created_at).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!isLoading && !isError && generations && generations.length > 0 && totalPages > 1 && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: '12px',
+            marginTop: '48px',
+            paddingBottom: '24px'
+          }}>
+            <button
+              onClick={() => setPage(page - 1)}
+              disabled={page === 1}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '40px',
+                height: '40px',
+                borderRadius: '8px',
+                border: '2px solid #e5e5e5',
+                background: page === 1 ? '#f5f5f5' : '#ffffff',
+                cursor: page === 1 ? 'not-allowed' : 'pointer',
+                opacity: page === 1 ? 0.5 : 1,
+              }}
+            >
+              <ChevronLeft size={20} color="#000000" />
+            </button>
+
+            <span style={{ fontSize: '14px', color: '#666666' }}>
+              Page {page} of {totalPages}
+            </span>
+
+            <button
+              onClick={() => setPage(page + 1)}
+              disabled={page === totalPages}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '40px',
+                height: '40px',
+                borderRadius: '8px',
+                border: '2px solid #e5e5e5',
+                background: page === totalPages ? '#f5f5f5' : '#ffffff',
+                cursor: page === totalPages ? 'not-allowed' : 'pointer',
+                opacity: page === totalPages ? 0.5 : 1,
+              }}
+            >
+              <ChevronRight size={20} color="#000000" />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default function HistoryPage(props: HistoryPageProps) {
+  return (
+    <Suspense fallback={
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="loading">
+          <div className="spinner"></div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    }>
+      <HistoryPageContent {...props} />
+    </Suspense>
+  )
+}
