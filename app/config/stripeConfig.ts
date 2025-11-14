@@ -18,8 +18,8 @@ const TEST_MODE_PLANS = {
     name: 'Plus',
     price: 20,
     credits: 50,
-    priceId: 'price_1SQt09HK7zocq1deXFEv1HoP',
-    productId: 'prod_TNeIuDYPWUgjHr',
+    priceId: 'price_1STSkvHK7zocq1de5qZQgQ1I',
+    productId: 'prod_TQJN7w19RTOrM4',
   },
   'plan-50': {
     id: 'plan-50',
@@ -39,8 +39,8 @@ const LIVE_MODE_PLANS = {
     name: 'Plus',
     price: 20,
     credits: 50,
-    priceId: 'price_1ST5AhHK7zocq1de8pSI9LNR',
-    productId: 'prod_TPv0lOXN2ZdR1l',
+    priceId: 'price_1STSkvHK7zocq1de5qZQgQ1I',
+    productId: 'prod_TQJN7w19RTOrM4',
   },
   'plan-50': {
     id: 'plan-50',
