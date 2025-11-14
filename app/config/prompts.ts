@@ -283,8 +283,8 @@ export const buildAIImagePrompt = (baseKeywords: string, style: AIImageStyle): s
 export const AI_IMAGE_STYLES = {
   animated: {
     name: 'Animated',
-    description: 'Anime-inspired artwork with cel-shading, vibrant colors, and expressive characters',
-    keywords: ['anime', 'cel-shaded', 'vibrant', 'dynamic lighting', 'expressive']
+    description: 'Anime-inspired artwork with cel-shading, vibrant colors, and expressive characters. Characters should not look evil, they should look like normal people.',
+    keywords: ['anime', 'cel-shaded', 'vibrant', 'dynamic lighting']
   },
   surreal: {
     name: 'Surrealism',

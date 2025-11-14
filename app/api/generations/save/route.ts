@@ -15,7 +15,9 @@ export async function POST(request: NextRequest) {
       underlineWords, 
       fontCombinationId, 
       colorThemeId,
-      images // base64 image data array
+      images, // base64 image data array (legacy approach)
+      imageUrls: providedImageUrls, // Already uploaded URLs (new efficient approach)
+      thumbnailUrls: providedThumbnailUrls // Already uploaded thumbnail URLs
     } = body
 
     if (!userId) {
@@ -141,65 +143,77 @@ export async function POST(request: NextRequest) {
       generation = updatedGen
     }
 
-    // Delete old images if updating (to replace with new ones)
-    if (isUpdate) {
-      const { data: oldFiles } = await supabase.storage
-        .from('carousel-images')
-        .list(`${userId}/${generation.id}`)
+    let imageUrls: string[]
+    let thumbnailUrls: string[]
+
+    // Check if images were already uploaded (new efficient approach)
+    if (providedImageUrls && providedImageUrls.length > 0) {
+      // Images already uploaded directly to storage from client
+      console.log(`✅ Using pre-uploaded images (${providedImageUrls.length} URLs provided)`)
+      imageUrls = providedImageUrls
+      thumbnailUrls = providedThumbnailUrls || providedImageUrls.slice(0, 2)
+    } else if (images && images.length > 0) {
+      // Legacy approach: Upload base64 images from API route
+      console.log(`⚡ Starting parallel upload of ${images.length} images from API route...`)
       
-      if (oldFiles && oldFiles.length > 0) {
-        const filesToDelete = oldFiles.map(file => `${userId}/${generation.id}/${file.name}`)
-        await supabase.storage
+      // Delete old images if updating (to replace with new ones)
+      if (isUpdate) {
+        const { data: oldFiles } = await supabase.storage
           .from('carousel-images')
-          .remove(filesToDelete)
+          .list(`${userId}/${generation.id}`)
+        
+        if (oldFiles && oldFiles.length > 0) {
+          const filesToDelete = oldFiles.map(file => `${userId}/${generation.id}/${file.name}`)
+          await supabase.storage
+            .from('carousel-images')
+            .remove(filesToDelete)
+        }
       }
+
+      const uploadStartTime = Date.now()
+      
+      const uploadPromises = images.map(async (imageData: string, i: number) => {
+        const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '')
+        const buffer = Buffer.from(base64Data, 'base64')
+        
+        const filePath = `${userId}/${generation.id}/slide-${i}.png`
+        
+        const { error: uploadError } = await supabase.storage
+          .from('carousel-images')
+          .upload(filePath, buffer, {
+            contentType: 'image/png',
+            upsert: true
+          })
+
+        if (uploadError) {
+          console.error(`Error uploading slide ${i}:`, uploadError)
+          throw uploadError
+        }
+
+        // Get signed URL for private bucket access (1 hour expiry)
+        const { data: urlData, error: urlError } = await supabase.storage
+          .from('carousel-images')
+          .createSignedUrl(filePath, 3600)
+        
+        if (urlError) {
+          console.error(`Error creating signed URL for slide ${i}:`, urlError)
+          const { data: publicData } = supabase.storage
+            .from('carousel-images')
+            .getPublicUrl(filePath)
+          return publicData.publicUrl
+        }
+        
+        return urlData.signedUrl
+      })
+
+      imageUrls = await Promise.all(uploadPromises)
+      thumbnailUrls = imageUrls.slice(0, 2)
+      
+      const uploadTime = Date.now() - uploadStartTime
+      console.log(`✅ Uploaded ${images.length} images in ${uploadTime}ms (parallel, server-side)`)
+    } else {
+      throw new Error('No images or imageUrls provided')
     }
-
-    // Upload images to Supabase Storage IN PARALLEL (much faster!)
-    console.log(`⚡ Starting parallel upload of ${images.length} images...`)
-    const uploadStartTime = Date.now()
-    
-    const uploadPromises = images.map(async (imageData: string, i: number) => {
-      const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '')
-      const buffer = Buffer.from(base64Data, 'base64')
-      
-      const filePath = `${userId}/${generation.id}/slide-${i}.png`
-      
-      const { error: uploadError } = await supabase.storage
-        .from('carousel-images')
-        .upload(filePath, buffer, {
-          contentType: 'image/png',
-          upsert: true
-        })
-
-      if (uploadError) {
-        console.error(`Error uploading slide ${i}:`, uploadError)
-        throw uploadError
-      }
-
-      // Get signed URL for private bucket access (1 hour expiry)
-      const { data: urlData, error: urlError } = await supabase.storage
-        .from('carousel-images')
-        .createSignedUrl(filePath, 3600) // 1 hour expiry
-      
-      if (urlError) {
-        console.error(`Error creating signed URL for slide ${i}:`, urlError)
-        // Fallback to public URL if signed URL fails
-        const { data: publicData } = supabase.storage
-          .from('carousel-images')
-          .getPublicUrl(filePath)
-        return publicData.publicUrl
-      }
-      
-      return urlData.signedUrl
-    })
-
-    // Wait for all uploads to complete in parallel
-    const imageUrls = await Promise.all(uploadPromises)
-    const thumbnailUrls = imageUrls.slice(0, 2) // First 2 as thumbnails
-    
-    const uploadTime = Date.now() - uploadStartTime
-    console.log(`✅ Uploaded ${images.length} images in ${uploadTime}ms (parallel)`)
 
     // Update generation with thumbnail URLs and all image URLs for caching
     const { error: urlUpdateError } = await supabase

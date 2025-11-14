@@ -5,6 +5,7 @@ import { getCarouselTemplate } from '../config/carouselTemplates'
 import { getColorTheme } from '../config/carouselThemes'
 import { useAuth } from '../context/AuthContext'
 import JSZip from 'jszip'
+import { uploadImagesToStorage } from '../lib/uploadImages'
 
 function ensureColorAlpha(color: string, alpha = 0.5): string {
   const clamped = Math.max(0, Math.min(1, alpha))
@@ -108,6 +109,7 @@ interface Props {
   includeImages?: boolean
   useAIImages?: boolean
   aiImageStyle?: 'animated' | 'surreal'
+  imageJobId?: string // NEW - for polling images
   onGenerationComplete?: (generationId?: string) => void
   onCarouselsReorder?: (reorderedCarousels: Carousel[]) => void
 }
@@ -187,6 +189,38 @@ const yieldToEventLoop = (): Promise<void> => {
   })
 }
 
+// Draw skeleton placeholder for loading images
+function drawSkeletonPlaceholder(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  animationTime: number = 0
+) {
+  // Base gray background
+  ctx.fillStyle = '#e0e0e0'
+  ctx.fillRect(x, y, width, height)
+  
+  // Animated shimmer effect
+  const shimmerWidth = width * 0.3
+  const shimmerX = (x - shimmerWidth) + ((animationTime / 2000) % 1) * (width + shimmerWidth * 2)
+  
+  // Create gradient for shimmer
+  const gradient = ctx.createLinearGradient(shimmerX, y, shimmerX + shimmerWidth, y + height)
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 0)')
+  gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.3)')
+  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
+  
+  ctx.fillStyle = gradient
+  ctx.fillRect(shimmerX, y, shimmerWidth, height)
+  
+  // Add subtle border
+  ctx.strokeStyle = '#d0d0d0'
+  ctx.lineWidth = 1
+  ctx.strokeRect(x, y, width, height)
+}
+
 export default function CarouselImageGenerator({ 
   carousels, 
   ideaTitle,
@@ -199,18 +233,175 @@ export default function CarouselImageGenerator({
   includeImages = false,
   useAIImages = false,
   aiImageStyle = 'animated',
+  imageJobId,
   onGenerationComplete,
   onCarouselsReorder
 }: Props) {
+  // State for image loading status and polling
+  const [imageLoadingStatus, setImageLoadingStatus] = useState<Record<number, 'loading' | 'loaded' | 'error'>>({})
+  const [pollingImageJob, setPollingImageJob] = useState(!!imageJobId)
+  const [updatedUnderlineWords, setUpdatedUnderlineWords] = useState(underlineWords)
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Poll for images if imageJobId is provided
+  useEffect(() => {
+    if (!imageJobId) {
+      setPollingImageJob(false)
+      return
+    }
+
+    console.log(`🔄 Starting image polling for job: ${imageJobId}`)
+    setPollingImageJob(true)
+
+    // Initialize loading status for MIDDLE carousels
+    const initialStatus: Record<number, 'loading' | 'loaded' | 'error'> = {}
+    carousels.forEach((carousel, index) => {
+      if (carousel.kind === 'MIDDLE') {
+        initialStatus[index] = 'loading'
+      }
+    })
+    setImageLoadingStatus(initialStatus)
+
+    // Poll every 3 seconds
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/social/images?jobId=${imageJobId}`)
+        const data = await response.json()
+
+        if (!data.success) {
+          if (data.status === 'not_found') {
+            console.warn(`⚠️ Image job ${imageJobId} not found - stopping polling`)
+            clearInterval(pollInterval)
+            setPollingImageJob(false)
+            return
+          }
+          return
+        }
+
+        console.log(`📊 Image job status: ${data.status}, progress: ${data.progress}%`)
+
+        if (data.status === 'complete') {
+          // All images loaded
+          console.log(`✅ All images loaded for job ${imageJobId}`)
+          clearInterval(pollInterval)
+          setPollingImageJob(false)
+
+          // Merge images into underlineWords
+          const merged: Record<number, any> = { ...updatedUnderlineWords }
+          Object.keys(data.images).forEach((key) => {
+            const index = parseInt(key, 10)
+            if (merged[index]) {
+              merged[index] = {
+                ...merged[index],
+                imageUrl: data.images[index].imageUrl,
+                originalImageUrl: data.images[index].originalImageUrl
+              }
+            } else {
+              merged[index] = {
+                underline: '',
+                highlight: '',
+                imageUrl: data.images[index].imageUrl,
+                originalImageUrl: data.images[index].originalImageUrl
+              }
+            }
+            setImageLoadingStatus(prev => ({ ...prev, [index]: 'loaded' }))
+          })
+          setUpdatedUnderlineWords(merged)
+
+          // Trigger regeneration with images, which will also trigger save
+          setTimeout(() => {
+            generateAllCarousels()
+          }, 500)
+        } else if (data.status === 'pending' && data.images) {
+          // Partial update - some images ready
+          const merged: Record<number, any> = { ...updatedUnderlineWords }
+          Object.keys(data.images).forEach((key) => {
+            const index = parseInt(key, 10)
+            if (data.images[index].imageUrl) {
+              if (merged[index]) {
+                merged[index] = {
+                  ...merged[index],
+                  imageUrl: data.images[index].imageUrl,
+                  originalImageUrl: data.images[index].originalImageUrl
+                }
+              } else {
+                merged[index] = {
+                  underline: '',
+                  highlight: '',
+                  imageUrl: data.images[index].imageUrl,
+                  originalImageUrl: data.images[index].originalImageUrl
+                }
+              }
+              setImageLoadingStatus(prev => ({ ...prev, [index]: 'loaded' }))
+            }
+          })
+          setUpdatedUnderlineWords(merged)
+
+          // Trigger regeneration for loaded images
+          if (Object.keys(data.images).length > 0) {
+            setTimeout(() => {
+              generateAllCarousels()
+            }, 500)
+          }
+        } else if (data.status === 'error') {
+          console.error(`❌ Image job ${imageJobId} failed`)
+          clearInterval(pollInterval)
+          setPollingImageJob(false)
+          // Mark all as error
+          const errorStatus: Record<number, 'loading' | 'loaded' | 'error'> = {}
+          carousels.forEach((carousel, index) => {
+            if (carousel.kind === 'MIDDLE') {
+              errorStatus[index] = 'error'
+            }
+          })
+          setImageLoadingStatus(errorStatus)
+        }
+      } catch (error) {
+        console.error(`❌ Error polling images:`, error)
+      }
+    }, 3000) // Poll every 3 seconds
+
+    pollingIntervalRef.current = pollInterval
+
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+      }
+    }
+  }, [imageJobId, carousels])
+
+  // Update underlineWords when updatedUnderlineWords changes
+  useEffect(() => {
+    if (Object.keys(updatedUnderlineWords).length > 0) {
+      // Merge updated images into underlineWords
+      const merged = { ...underlineWords }
+      Object.keys(updatedUnderlineWords).forEach((key) => {
+        const index = parseInt(key, 10)
+        if (updatedUnderlineWords[index]?.imageUrl) {
+          merged[index] = {
+            ...merged[index],
+            ...updatedUnderlineWords[index]
+          }
+        }
+      })
+      // Note: We can't directly update underlineWords prop, so we'll use updatedUnderlineWords in rendering
+    }
+  }, [updatedUnderlineWords])
+
+  // Use merged underlineWords (with images from polling if available)
+  const effectiveUnderlineWords = Object.keys(updatedUnderlineWords).length > 0 
+    ? { ...underlineWords, ...updatedUnderlineWords }
+    : underlineWords
+
   // Debug: Log underlineWords on component mount/update
   useEffect(() => {
     console.log('\n📦 CarouselImageGenerator: Received underlineWords:')
-    console.log(JSON.stringify(underlineWords, null, 2))
+    console.log(JSON.stringify(effectiveUnderlineWords, null, 2))
     
     // Check for image URLs in MIDDLE carousels
     carousels.forEach((carousel, index) => {
       if (carousel.kind === 'MIDDLE') {
-        const emphasis = underlineWords[index]
+        const emphasis = effectiveUnderlineWords[index]
         const hasImage = !!(emphasis?.imageUrl || emphasis?.originalImageUrl)
         if (hasImage) {
           console.log(`✅ Carousel ${index + 1} (MIDDLE): Has imageUrl =`, emphasis?.imageUrl || '(proxied not set)')
@@ -218,12 +409,20 @@ export default function CarouselImageGenerator({
             console.log(`   Original image URL:`, emphasis.originalImageUrl)
           }
         } else {
-          console.warn(`⚠️ Carousel ${index + 1} (MIDDLE): No imageUrl found!`)
-          console.warn(`   Emphasis data:`, emphasis)
+          const status = imageLoadingStatus[index]
+          if (status === 'loading') {
+            console.log(`⏳ Carousel ${index + 1} (MIDDLE): Image loading...`)
+          } else {
+            console.warn(`⚠️ Carousel ${index + 1} (MIDDLE): No imageUrl found!`)
+            console.warn(`   Emphasis data:`, emphasis)
+          }
         }
       }
     })
-  }, [underlineWords, carousels])
+  }, [effectiveUnderlineWords, carousels, imageLoadingStatus])
+
+  // Trigger save when polling completes and we have images
+  // Note: This effect will be defined after generateAllCarousels, so we'll move it there
   
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([])
   const [generating, setGenerating] = useState(false)
@@ -239,14 +438,14 @@ export default function CarouselImageGenerator({
   const [orderedCarouselImages, setOrderedCarouselImages] = useState<string[]>(() => 
     getInitialImages(carousels, ideaTitle, underlineWords, templateId, colorThemeId)
   )
-  const [orderedUnderlineWords, setOrderedUnderlineWords] = useState<Record<number, any>>(underlineWords)
+  const [orderedUnderlineWords, setOrderedUnderlineWords] = useState<Record<number, any>>(effectiveUnderlineWords)
   
   // Update local state when props change
   useEffect(() => {
     setOrderedCarousels(carousels)
-    setOrderedCarouselImages(getInitialImages(carousels, ideaTitle, underlineWords, templateId, colorThemeId))
-    setOrderedUnderlineWords(underlineWords)
-  }, [carousels, ideaTitle, underlineWords, templateId, colorThemeId])
+    setOrderedCarouselImages(getInitialImages(carousels, ideaTitle, effectiveUnderlineWords, templateId, colorThemeId))
+    setOrderedUnderlineWords(effectiveUnderlineWords)
+  }, [carousels, ideaTitle, effectiveUnderlineWords, templateId, colorThemeId])
   
   // Sync orderedCarouselImages with carouselImages when they update
   useEffect(() => {
@@ -404,14 +603,15 @@ export default function CarouselImageGenerator({
         generationIdToSend = storedGenerationId
       }
       
-      console.log('💾 Saving generation to database...', {
-        ideaTitle,
-        generationId: generationIdToSend || 'new',
-        carouselsCount: carousels.length,
-        imagesCount: imageDataUrls.length,
-        note: 'Backend will update existing entry if same ideaTitle exists'
-      })
+      console.log('💾 [SAVE] Saving generation to database...')
+      console.log('   📝 Idea:', ideaTitle)
+      console.log('   🖼️  Images:', imageDataUrls.length)
 
+      // For now, always use server-side upload to avoid RLS issues
+      // The 20MB limit should be sufficient for most cases
+      // Client-side upload can be enabled later once RLS policies are properly configured
+      console.log('📤 [UPLOAD] Using server-side upload (20MB limit)')
+      
       const response = await fetch('/api/generations/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -425,14 +625,28 @@ export default function CarouselImageGenerator({
           underlineWords: orderedUnderlineWords,
           templateId,
           colorThemeId,
-          images: imageDataUrls
+          images: imageDataUrls // Server-side upload (with increased 20MB limit)
         })
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        console.error('❌ Failed to auto-save generation:', errorData.error)
-        throw new Error(errorData.error || 'Failed to save generation')
+        // Handle different error responses (413 returns HTML, not JSON)
+        let errorMessage = `Failed to save generation (${response.status})`
+        
+        if (response.status === 413) {
+          errorMessage = 'Image data too large to save. Please try generating fewer carousels or contact support.'
+        } else {
+          try {
+            const errorData = await response.json()
+            errorMessage = errorData.error || errorMessage
+          } catch (e) {
+            // If response is not JSON (e.g., HTML error page), use status text
+            errorMessage = response.statusText || errorMessage
+          }
+        }
+        
+        console.error('❌ Failed to auto-save generation:', errorMessage)
+        throw new Error(errorMessage)
       } else {
         const result = await response.json()
         const returnedGenerationId = result.generationId
@@ -661,25 +875,31 @@ export default function CarouselImageGenerator({
     const beforeSaveTime = performance.now()
     console.log('   ⏱️ Rendering complete, total time:', (beforeSaveTime - renderStartTime).toFixed(2), 'ms')
     
-    // Save to Supabase immediately after generation (always save, including design updates)
+    // Save to Supabase - only save after polling completes OR if no images were requested
     let savedGenerationId: string | undefined
     if (user?.id && imageDataUrls.length > 0) {
       const isDataUrl = imageDataUrls[0]?.startsWith('data:image/')
       if (isDataUrl) {
-        // Database save is part of rendering - don't notify parent
-        // The rendering step will stay active until save completes
-        const saveStartTime = performance.now()
-        console.log('💾 [SAVE] Saving images to Supabase (design update or new generation)...')
-        console.log('   ⏱️ Timestamp:', new Date().toISOString())
-        try {
-          savedGenerationId = await saveToDatabase(imageDataUrls)
-          const saveEndTime = performance.now()
-          console.log('✅ [SAVE] Images saved to Supabase successfully')
-          console.log('   ⏱️ Save duration:', (saveEndTime - saveStartTime).toFixed(2), 'ms')
-          console.log('   📝 Saved generationId:', savedGenerationId)
-        } catch (err) {
-          console.error('❌ [SAVE ERROR] Failed to save to Supabase:', err)
-          savedGenerationId = undefined
+        // Only save if polling is complete (all images loaded) OR no polling was needed
+        if (!pollingImageJob) {
+          // Database save is part of rendering - don't notify parent
+          // The rendering step will stay active until save completes
+          const saveStartTime = performance.now()
+          console.log('💾 [SAVE] Saving images to Supabase (design update or new generation)...')
+          console.log('   ⏱️ Timestamp:', new Date().toISOString())
+          try {
+            savedGenerationId = await saveToDatabase(imageDataUrls)
+            const saveEndTime = performance.now()
+            console.log('✅ [SAVE] Images saved to Supabase successfully')
+            console.log('   ⏱️ Save duration:', (saveEndTime - saveStartTime).toFixed(2), 'ms')
+            console.log('   📝 Saved generationId:', savedGenerationId)
+          } catch (err) {
+            console.error('❌ [SAVE ERROR] Failed to save to Supabase:', err)
+            savedGenerationId = undefined
+          }
+        } else {
+          console.log('⏳ [SAVE] Skipping save - images still loading via polling')
+          console.log('   Will save once all images are loaded')
         }
       }
     }
@@ -702,6 +922,34 @@ export default function CarouselImageGenerator({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carousels, ideaTitle, underlineWords, templateId, colorThemeId, user?.id])
+
+  // Track if we've already triggered save after polling completes
+  const hasTriggeredSaveRef = useRef(false)
+
+  // Trigger save when polling completes and we have images
+  useEffect(() => {
+    if (!pollingImageJob && user?.id && !hasTriggeredSaveRef.current) {
+      // Check if we have any images that need saving
+      const hasImages = Object.values(effectiveUnderlineWords).some(
+        (emphasis: any) => emphasis?.imageUrl || emphasis?.originalImageUrl
+      )
+      
+      if (hasImages) {
+        // Polling completed - trigger regeneration which will save
+        console.log('✅ Polling completed - triggering save')
+        hasTriggeredSaveRef.current = true
+        // Small delay to ensure state is updated
+        setTimeout(() => {
+          generateAllCarousels()
+        }, 1000)
+      }
+    }
+    
+    // Reset flag when polling starts again
+    if (pollingImageJob) {
+      hasTriggeredSaveRef.current = false
+    }
+  }, [pollingImageJob, user?.id, effectiveUnderlineWords, generateAllCarousels])
 
   // Generate carousels if not loaded from storage
   useEffect(() => {
@@ -1748,6 +1996,7 @@ export default function CarouselImageGenerator({
       let imageHeight = 0
       let imageWidth = 0
       let loadedImage: HTMLImageElement | null = null
+      const isImageLoading = imageLoadingStatus[index] === 'loading'
       
       if (imageSourceUrl) {
         try {
@@ -1765,6 +2014,13 @@ export default function CarouselImageGenerator({
           console.error(`❌ Carousel ${index + 1}: Failed to pre-load image:`, error)
           console.error(`   Image URL was:`, imageSourceUrl)
         }
+      } else if (cleanCarousel.kind === 'MIDDLE' && isImageLoading) {
+        // Show skeleton placeholder while image is loading
+        console.log(`⏳ Carousel ${index + 1}: Image loading - will show skeleton placeholder`)
+        // Make photo container 30% smaller for template 3
+        const sizeMultiplier = template.id === 'template3' ? 0.7 : 1.0
+        imageWidth = Math.round(safeWidth * sizeMultiplier)
+        imageHeight = Math.round(imageWidth * 9 / 16)
       } else if (cleanCarousel.kind === 'MIDDLE') {
         console.warn(`⚠️ Carousel ${index + 1}: No imageUrl in emphasisData for MIDDLE carousel!`)
         console.warn(`   This might mean images weren't fetched from Pexels or includeImages was false`)
@@ -2165,10 +2421,18 @@ export default function CarouselImageGenerator({
             console.error(`❌ Failed to render image for carousel ${index + 1}:`, error)
             console.error(`   Error details:`, error)
           }
-        } else if (cleanCarousel.kind === 'MIDDLE') {
-          console.warn(`⚠️ Carousel ${index + 1}: Image not drawn - loadedImage=${!!loadedImage}, imageWidth=${imageWidth}, imageHeight=${imageHeight}`)
-          if (!loadedImage && imageSourceUrl) {
-            console.warn(`   Image URL exists but failed to load:`, imageSourceUrl)
+        } else if (cleanCarousel.kind === 'MIDDLE' && imageWidth > 0 && imageHeight > 0) {
+          // Draw skeleton placeholder if image is loading
+          if (isImageLoading && !loadedImage) {
+            const imageX = template.id === 'template3' ? (width - imageWidth) / 2 : safeMarginSides
+            const animationTime = Date.now() % 4000 // 4 second animation cycle
+            drawSkeletonPlaceholder(ctx, imageX, y, imageWidth, imageHeight, animationTime)
+            console.log(`⏳ Carousel ${index + 1}: Drawing skeleton placeholder`)
+          } else {
+            console.warn(`⚠️ Carousel ${index + 1}: Image not drawn - loadedImage=${!!loadedImage}, imageWidth=${imageWidth}, imageHeight=${imageHeight}`)
+            if (!loadedImage && imageSourceUrl) {
+              console.warn(`   Image URL exists but failed to load:`, imageSourceUrl)
+            }
           }
         }
     }

@@ -28,6 +28,7 @@ interface Note {
   }>
   caption: string
   underlineWords?: Record<number, { underline: string; highlight: string; imageSearch?: string; imageUrl?: string | null; originalImageUrl?: string | null }>
+  imageJobId?: string // NEW - for polling images
 }
 
 interface CreatePageProps {
@@ -259,12 +260,11 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
         if (result.data && Array.isArray(result.data.slides) && result.data.slides.length > 0) {
           const noteData = {
             ...result.data,
-            carousels: result.data.slides
+            carousels: result.data.slides,
+            imageJobId: result.data.imageJobId // Include image job ID for polling
           }
           
           setError('')
-          // Keep currentStep as 'rendering' - don't clear it yet
-          // It will be cleared when onGenerationComplete is called after database save
           
           // Refresh credits after successful generation
           try {
@@ -288,12 +288,15 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
             console.error('Error saving to localStorage:', error)
           }
           
-          // Store in ref - keep loadingNote true and currentStep 'rendering' until database save completes
-          // This keeps the "Rendering" step visible during database save
+          // Store in ref - keep user on create page until save completes
           pendingGenerationRef.current = noteData
-          // DON'T clear loadingNote or currentStep yet - wait for onGenerationComplete
-          // setLoadingNote(false) - removed
-          // setCurrentStep(null) - removed
+          setCurrentStep('rendering')
+          
+          // Don't navigate yet - wait for database save to complete
+          // Images will load in background via polling, then save will happen
+          console.log('✅ Text generated - staying on create page')
+          console.log('   Image job ID:', result.data.imageJobId)
+          console.log('   Images will load in background, then save will complete')
         } else {
           setError('Invalid response from server')
           setSelectedIdea(null)
@@ -480,21 +483,24 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
             includeImages={includeImages}
             useAIImages={useAIImages}
             aiImageStyle={aiImageStyle}
+            imageJobId={pendingNote.imageJobId}
             onGenerationComplete={(generationId) => {
               if (redirectingRef.current) return
               
-              // Only navigate if we have a valid generationId from the database save
-              // Don't use localStorage fallback - that could be a stale ID from previous generation
+              // Navigate to history page with real generationId once save completes
               if (generationId) {
-                console.log('✅ Navigating to history page with generationId:', generationId)
+                console.log('✅ Generation saved - navigating to history page with generationId:', generationId)
                 redirectingRef.current = true
-                // Navigate IMMEDIATELY - don't update any React state
-                // State updates cause re-renders which show blank page
-                // Navigation happens synchronously, so no state updates needed
+                // Clear loading state
+                setLoadingNote(false)
+                setSelectedIdea(null)
+                setCurrentStep(null)
+                pendingGenerationRef.current = null
+                // Navigate to history page with real generation ID
                 window.location.href = `/dashboard?view=history&id=${generationId}`
               } else {
-                console.error('❌ Cannot navigate: No generationId provided from database save')
-                console.error('   Database save may have failed or not completed')
+                console.warn('⚠️ Database save did not return generationId')
+                console.warn('   Generation may still be saving or failed')
                 // Show error to user and clear loading state
                 setError('Failed to save generation to database. Please try again.')
                 setLoadingNote(false)
@@ -575,7 +581,7 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                   generateIdeas()
                 }
               }}
-              placeholder="Type your idea..."
+              placeholder="Describe the post you want to create"
               disabled={loadingIdeas || loadingNote}
               style={{
                 width: '100%',

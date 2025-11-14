@@ -1,0 +1,20 @@
+{
+  "functions": {
+    "app/api/generations/save/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "x-vercel-max-body-size",
+          "value": "20971520"
+        }
+      ]
+    }
+  ]
+}
+

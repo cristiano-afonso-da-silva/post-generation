@@ -163,7 +163,14 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
           return (
             <button
               key={item.id}
-              onClick={() => onViewChange(item.id)}
+              onClick={() => {
+                if (item.id === 'create') {
+                  router.push('/dashboard?view=create')
+                } else {
+                  // Always navigate to history list (clear any id parameter)
+                  router.push('/dashboard?view=history')
+                }
+              }}
               style={{
                 display: 'flex',
                 alignItems: 'center',

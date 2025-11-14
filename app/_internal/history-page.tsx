@@ -27,6 +27,7 @@ interface Note {
   }>
   caption: string
   underlineWords?: Record<number, { underline: string; highlight: string; imageSearch?: string; imageUrl?: string | null; originalImageUrl?: string | null }>
+  imageJobId?: string // NEW - for polling images
 }
 
 interface HistoryPageProps {
@@ -237,6 +238,8 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const generationId = searchParams.get('id')
+  const imageJobId = searchParams.get('imageJobId')
+  const ideaTitleParam = searchParams.get('ideaTitle')
   const { user, loading: authLoading } = useAuth()
   const [page, setPage] = useState(1)
   const itemsPerPage = 8
@@ -245,9 +248,12 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
   const { generations, totalCount, isLoading, isError, mutate: mutateGenerations } = useGenerations(user?.id, itemsPerPage, offset)
   const totalPages = totalCount ? Math.ceil(totalCount / itemsPerPage) : 0
 
-  // Load generation if generationId is in URL
+  // Check if generationId is temporary (unsaved)
+  const isTemporaryId = generationId?.startsWith('temp-')
+  
+  // Load generation if generationId is in URL and not temporary
   const { generation, isLoading: isLoadingGeneration, mutate: mutateGeneration } = useGeneration(
-    generationId || undefined,
+    (generationId && !isTemporaryId) ? generationId : undefined,
     user?.id
   )
 
@@ -293,9 +299,60 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
     }
   }, [user, authLoading, generationId, mutateGenerations, mutateGeneration])
 
-  // Load generation data when generation is available
+  // Load generation data when generation is available OR when we have temporary ID
   useEffect(() => {
-    if (!generation || !user) return
+    if (!user) return
+
+    // If we have a temporary ID, load from localStorage
+    if (isTemporaryId && ideaTitleParam) {
+      try {
+        const storedNote = localStorage.getItem('postGeneration_note')
+        if (storedNote) {
+          const noteData = JSON.parse(storedNote)
+          console.log('📝 Loading unsaved generation from localStorage:', noteData.ideaTitle)
+          
+          const note: Note = {
+            ideaTitle: noteData.ideaTitle || ideaTitleParam,
+            carousels: noteData.carousels || noteData.slides || [],
+            caption: noteData.caption || '',
+            underlineWords: noteData.underlineWords || {},
+            imageJobId: noteData.imageJobId || imageJobId || undefined
+          }
+          
+          setNote(note)
+          setEditedCarousels(note.carousels.map((slide: any) => ({ ...slide })))
+          setEditedCaption(note.caption || '')
+          
+          const storedTemplateId = localStorage.getItem('postGeneration_templateId')
+          const storedColorThemeId = localStorage.getItem('postGeneration_colorThemeId')
+          setTemplateId(storedTemplateId || 'template1')
+          setColorThemeId(storedColorThemeId || 'purple-black')
+          setCarouselsDirty(false)
+          setExpandedCarouselIndexes([])
+          
+          // Poll for save completion
+          if (mutateGeneration) {
+            // Check if generation was saved by polling generations list
+            const checkInterval = setInterval(() => {
+              mutateGenerations()
+            }, 3000)
+            
+            // Stop polling after 5 minutes
+            setTimeout(() => {
+              clearInterval(checkInterval)
+            }, 5 * 60 * 1000)
+            
+            return () => clearInterval(checkInterval)
+          }
+        }
+      } catch (error) {
+        console.error('Error loading from localStorage:', error)
+      }
+      return
+    }
+
+    // Otherwise, load from database
+    if (!generation) return
 
     // Debug: Log what we're getting from the API
     console.log('📝 Loading generation data:', {
@@ -332,10 +389,15 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
       if (generation.image_urls && generation.image_urls.length > 0) {
         localStorage.setItem('postGeneration_canvasImages', JSON.stringify(generation.image_urls))
       }
+      
+      // Update URL if we had a temporary ID
+      if (isTemporaryId) {
+        window.history.replaceState({}, '', `/dashboard?view=history&id=${generation.id}`)
+      }
     } catch (error) {
       console.error('Error storing in localStorage:', error)
     }
-  }, [generation, user])
+  }, [generation, user, isTemporaryId, ideaTitleParam, mutateGeneration, mutateGenerations])
 
   // Sync editable carousels with note
   useEffect(() => {
@@ -971,8 +1033,15 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                       includeImages={false}
                       useAIImages={false}
                       aiImageStyle="animated"
-                      onGenerationComplete={() => {
-                        console.log('✅ Generation rendering complete')
+                      imageJobId={imageJobId || undefined}
+                      onGenerationComplete={(generationId) => {
+                        console.log('✅ Generation rendering complete', generationId)
+                        // Update URL if we got a real generationId
+                        if (generationId && isTemporaryId) {
+                          window.history.replaceState({}, '', `/dashboard?view=history&id=${generationId}`)
+                          // Reload to fetch from database
+                          window.location.reload()
+                        }
                       }}
                     />
                   </div>
