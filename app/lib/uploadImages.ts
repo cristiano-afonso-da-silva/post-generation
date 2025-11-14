@@ -99,6 +99,72 @@ export async function uploadImagesToStorage(
 }
 
 /**
+ * Check if images already exist for a generation
+ * @param userId - User ID
+ * @param generationId - Generation ID
+ * @param expectedCount - Expected number of images
+ * @returns Object with exists flag and existing URLs if they exist
+ */
+export async function checkImagesExist(
+  userId: string,
+  generationId: string,
+  expectedCount: number
+): Promise<{ exists: boolean; imageUrls?: string[]; thumbnailUrls?: string[] }> {
+  const supabase = createClientComponentClient()
+  
+  const { data: existingFiles, error } = await supabase.storage
+    .from('carousel-images')
+    .list(`${userId}/${generationId}`)
+  
+  if (error) {
+    console.warn('Error checking for existing images:', error)
+    return { exists: false }
+  }
+  
+  // Check if we have the expected number of images
+  const imageFiles = existingFiles?.filter(file => file.name.startsWith('slide-')) || []
+  if (imageFiles.length === expectedCount) {
+    console.log(`✅ Found ${imageFiles.length} existing images, skipping upload`)
+    
+    // Get URLs for existing images
+    const urlPromises = imageFiles
+      .sort((a, b) => {
+        // Sort by slide number (slide-0.png, slide-1.png, etc.)
+        const aNum = parseInt(a.name.match(/slide-(\d+)\.png/)?.[1] || '0')
+        const bNum = parseInt(b.name.match(/slide-(\d+)\.png/)?.[1] || '0')
+        return aNum - bNum
+      })
+      .map(async (file) => {
+        const filePath = `${userId}/${generationId}/${file.name}`
+        const { data: urlData, error: urlError } = await supabase.storage
+          .from('carousel-images')
+          .createSignedUrl(filePath, 3600)
+        
+        if (urlError) {
+          console.error(`Error creating signed URL for ${file.name}:`, urlError)
+          const { data: publicData } = supabase.storage
+            .from('carousel-images')
+            .getPublicUrl(filePath)
+          return publicData.publicUrl
+        }
+        
+        return urlData.signedUrl
+      })
+    
+    const imageUrls = await Promise.all(urlPromises)
+    const thumbnailUrls = imageUrls.slice(0, 2)
+    
+    return {
+      exists: true,
+      imageUrls,
+      thumbnailUrls
+    }
+  }
+  
+  return { exists: false }
+}
+
+/**
  * Delete old images for a generation
  */
 export async function deleteOldImages(

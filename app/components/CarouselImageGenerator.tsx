@@ -550,51 +550,49 @@ function CarouselImageGeneratorComponent({
       const generationId = createResult.generationId
       
       console.log('✅ Generation created/retrieved:', generationId)
-      console.log('📤 [STEP 2] Uploading images one at a time via API (avoids 413 error)...')
+      console.log('📤 [STEP 2] Uploading images directly to Supabase Storage (bypasses Vercel)...')
 
-      // Step 2: Upload images one at a time via API route
-      // This avoids Vercel's 4.5MB/6MB request body size limits by sending one image per request
+      // Step 2: Upload images directly to Supabase Storage from client
+      // This bypasses Vercel entirely, eliminating Fast Origin Transfer (incoming) costs
       let imageUrls: string[]
       let thumbnailUrls: string[]
       
       try {
+        const { checkImagesExist, deleteOldImages, uploadImagesToStorage } = await import('../lib/uploadImages')
+        
         // If updating an existing generation, delete old images first
         if (createResult.isUpdate) {
           console.log('🗑️  Deleting old images for update...')
-          const { deleteOldImages } = await import('../lib/uploadImages')
           try {
             await deleteOldImages(user.id, generationId)
           } catch (deleteError) {
             // Non-fatal - upsert will overwrite anyway
             console.warn('⚠️ Failed to delete old images (non-fatal):', deleteError)
           }
-        }
-        
-        // Upload images one at a time to avoid body size limits
-        const uploadPromises = imageDataUrls.map(async (imageDataUrl: string, i: number) => {
-          const response = await fetch('/api/generations/upload-image', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId: user.id,
-              generationId: generationId,
-              imageIndex: i,
-              imageData: imageDataUrl
-            })
-          })
-
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
-            throw new Error(`Failed to upload image ${i}: ${errorData.error || response.statusText}`)
+          // After deleting, we always need to upload new images
+          console.log('📤 Uploading new images after deleting old ones...')
+          const uploadResult = await uploadImagesToStorage(user.id, generationId, imageDataUrls)
+          imageUrls = uploadResult.imageUrls
+          thumbnailUrls = uploadResult.thumbnailUrls
+          console.log('✅ Images uploaded successfully:', imageUrls.length)
+        } else {
+          // Check if images already exist (deduplication - prevents unnecessary uploads)
+          console.log('🔍 Checking if images already exist in storage...')
+          const existingImages = await checkImagesExist(user.id, generationId, imageDataUrls.length)
+          
+          if (existingImages.exists && existingImages.imageUrls) {
+            console.log('✅ Using existing images (skipping upload to save bandwidth)')
+            imageUrls = existingImages.imageUrls
+            thumbnailUrls = existingImages.thumbnailUrls || existingImages.imageUrls.slice(0, 2)
+          } else {
+            // Upload images directly to Supabase Storage (bypasses Vercel, eliminates Fast Origin Transfer)
+            console.log('📤 Uploading images directly to Supabase Storage (client-side)...')
+            const uploadResult = await uploadImagesToStorage(user.id, generationId, imageDataUrls)
+            imageUrls = uploadResult.imageUrls
+            thumbnailUrls = uploadResult.thumbnailUrls
+            console.log('✅ Images uploaded successfully:', imageUrls.length)
           }
-
-          const result = await response.json()
-          return result.imageUrl
-        })
-
-        imageUrls = await Promise.all(uploadPromises)
-        thumbnailUrls = imageUrls.slice(0, 2)
-        console.log('✅ Images uploaded successfully:', imageUrls.length)
+        }
       } catch (uploadError: any) {
         console.error('❌ Failed to upload images:', uploadError)
         throw new Error(`Failed to upload images: ${uploadError.message || uploadError}`)

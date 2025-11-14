@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const ALLOWED_HOSTS = new Set(['image.pollinations.ai'])
 
-export const dynamic = 'force-dynamic'
+// Use revalidate for caching - images are cached for 1 hour (3600 seconds)
+// This reduces Fast Origin Transfer by serving cached images instead of re-fetching
+export const revalidate = 3600
 
 export async function GET(request: NextRequest) {
   const urlParam = request.nextUrl.searchParams.get('url')
@@ -33,8 +35,11 @@ export async function GET(request: NextRequest) {
 
   try {
     console.log('📡 Fetching remote image:', remoteUrl.toString())
+    // Use 'force-cache' to leverage Next.js caching and reduce Fast Origin Transfer
+    // Images are cached for the revalidate period (1 hour)
     const response = await fetch(remoteUrl.toString(), {
-      cache: 'no-store',
+      cache: 'force-cache',
+      next: { revalidate: 3600 }
     })
     
     console.log('📡 Remote response status:', response.status)
@@ -47,10 +52,11 @@ export async function GET(request: NextRequest) {
 
     const headers = new Headers(response.headers)
     headers.set('Access-Control-Allow-Origin', '*')
-    headers.set('Cache-Control', 'public, max-age=3600')
+    // Cache for 1 hour on client and CDN to reduce repeated requests
+    headers.set('Cache-Control', 'public, s-maxage=3600, max-age=3600, stale-while-revalidate=86400')
     headers.delete('set-cookie')
     
-    console.log('✅ Proxying image successfully')
+    console.log('✅ Proxying image successfully (cached)')
 
     return new Response(response.body, {
       status: response.status,
