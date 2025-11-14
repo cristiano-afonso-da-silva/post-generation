@@ -159,17 +159,13 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
         {menuItems.map((item) => {
           const Icon = item.icon
           const isActive = activeView === item.id
-          
+
           return (
             <button
               key={item.id}
               onClick={() => {
-                if (item.id === 'create') {
-                  router.push('/dashboard?view=create')
-                } else {
-                  // Always navigate to history list (clear any id parameter)
-                  router.push('/dashboard?view=history')
-                }
+                // Delegate view changes to parent so state + URL stay in sync
+                onViewChange(item.id)
               }}
               style={{
                 display: 'flex',

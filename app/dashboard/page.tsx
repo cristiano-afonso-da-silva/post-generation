@@ -18,6 +18,7 @@ function DashboardView() {
   const [selectedGenerationId, setSelectedGenerationId] = useState<string | null>(null)
   const { user, loading } = useAuth()
   const router = useRouter()
+  const [hasUnsavedWork, setHasUnsavedWork] = useState(false)
   
   // Sidebar collapse state with localStorage persistence
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
@@ -43,6 +44,15 @@ function DashboardView() {
   }, [view, searchParams])
 
   const handleViewChange = (newView: 'create' | 'history') => {
+    // Check if navigating from create to history with unsaved work
+    if (activeView === 'create' && newView === 'history' && hasUnsavedWork) {
+      const confirmed = window.confirm(
+        'Warning: You have unsaved work. Your progress will not be saved if you navigate away. Do you want to continue?'
+      )
+      if (!confirmed) {
+        return // Cancel navigation
+      }
+    }
     setActiveView(newView)
     router.push(`/dashboard?view=${newView}`, { scroll: false })
   }
@@ -119,7 +129,12 @@ function DashboardView() {
             display: none !important;
           }
         `}</style>
-        {activeView === 'create' && <CreateNewPage generationId={searchParams.get('id') || undefined} />}
+        {activeView === 'create' && (
+          <CreateNewPage 
+            generationId={searchParams.get('id') || undefined}
+            onHasUnsavedWorkChange={setHasUnsavedWork}
+          />
+        )}
         {activeView === 'history' && (
           <div style={{ height: '100%', overflow: 'auto' }}>
             <HistoryPage onLoadGeneration={handleLoadGeneration} />

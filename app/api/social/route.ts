@@ -964,51 +964,13 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
       };
     }
     
-    // Extract underline words WITHOUT images first (fast - just text analysis)
-    console.log(`📝 generateNote: Extracting underline words WITHOUT images (text only)`);
-    const underlineWordsWithoutImages = await extractUnderlineWordsWithGemini(data.slides);
-    
-    // If images are requested, start background job
-    let imageJobId: string | undefined = undefined
-    if (includeImages) {
-      imageJobId = generateUniqueId()
-      console.log(`🔄 Starting background image generation job: ${imageJobId}`)
-      
-      // Create job entry
-      const job: ImageJob = {
-        status: 'pending',
-        images: {},
-        startedAt: Date.now(),
-        carousels: data.slides,
-        underlineWordsWithoutImages,
-        useAIImages,
-        aiImageStyle
-      }
-      imageJobs.set(imageJobId, job)
-      
-      // Start background image fetch (don't await)
-      fetchImagesAsync(imageJobId, data.slides, underlineWordsWithoutImages, useAIImages, aiImageStyle).catch(err => {
-        console.error(`❌ Background image fetch failed for job ${imageJobId}:`, err)
-      })
-    } else {
-      // No images requested, use underlineWordsWithoutImages as final result
-      console.log(`📝 Images disabled - using text-only underline words`)
-    }
+    console.log(`🖼️ generateNote: Calling extractUnderlineWords with includeImages =`, includeImages, 'useAIImages =', useAIImages, 'aiImageStyle =', aiImageStyle);
+    const underlineWords = await extractUnderlineWords(data.slides, includeImages, useAIImages, aiImageStyle);
     
     // Calculate stats before formatting
     const hookWords = data.slides[0]?.title ? wordCount(data.slides[0].title) : 0;
     const middleCarousels = data.slides.filter((c: any) => c.kind === 'MIDDLE').length;
     const captionWords = wordCount(data.caption);
-    
-    // For formatting, merge underlineWordsWithoutImages with empty image placeholders
-    const underlineWordsForFormatting: Record<number, any> = {}
-    for (let i = 0; i < data.slides.length; i++) {
-      underlineWordsForFormatting[i] = {
-        ...underlineWordsWithoutImages[i],
-        imageUrl: null,
-        originalImageUrl: null
-      }
-    }
     
     // Add stats to data object so formatToMarkdown can use them
     const noteWithStats = {
@@ -1021,7 +983,7 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
       }
     };
     
-    const formatted = formatToMarkdown(noteWithStats, underlineWordsForFormatting);
+    const formatted = formatToMarkdown(noteWithStats, underlineWords);
     
     return {
       success: true,
@@ -1031,8 +993,7 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
         slides: data.slides,
         caption: data.caption,
         formatted,
-        underlineWords: underlineWordsWithoutImages, // Return text-only version
-        imageJobId, // Include job ID for polling
+        underlineWords,
         stats: {
           totalSlides: data.slides.length,
           hookWords,
@@ -1051,92 +1012,6 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
       success: false,
       error: error.message || 'Failed to generate note',
     };
-  }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// Image Job Store (in-memory for background image generation)
-// ════════════════════════════════════════════════════════════════════════════
-
-type ImageJobStatus = 'pending' | 'complete' | 'error'
-
-interface ImageJob {
-  status: ImageJobStatus
-  images: Record<number, { imageUrl: string | null; originalImageUrl: string | null }>
-  startedAt: number
-  carousels: any[]
-  underlineWordsWithoutImages: Record<number, any>
-  useAIImages: boolean
-  aiImageStyle: AIImageStyle
-}
-
-// Use global store to persist across hot reloads in development
-declare global {
-  // eslint-disable-next-line no-var
-  var imageJobsStore: Map<string, ImageJob> | undefined
-}
-
-const imageJobs = globalThis.imageJobsStore || new Map<string, ImageJob>()
-if (!globalThis.imageJobsStore) {
-  globalThis.imageJobsStore = imageJobs
-}
-
-// Clean up old jobs (older than 1 hour)
-setInterval(() => {
-  const oneHourAgo = Date.now() - 60 * 60 * 1000
-  for (const [jobId, job] of imageJobs.entries()) {
-    if (job.startedAt < oneHourAgo) {
-      imageJobs.delete(jobId)
-      console.log(`🧹 Cleaned up old image job: ${jobId}`)
-    }
-  }
-}, 10 * 60 * 1000) // Run cleanup every 10 minutes
-
-function generateUniqueId(): string {
-  return `img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-}
-
-// Background function to fetch images asynchronously
-async function fetchImagesAsync(
-  jobId: string,
-  carousels: any[],
-  underlineWordsWithoutImages: Record<number, any>,
-  useAIImages: boolean,
-  aiImageStyle: AIImageStyle
-) {
-  const job = imageJobs.get(jobId)
-  if (!job) {
-    console.error(`❌ Image job ${jobId} not found`)
-    return
-  }
-
-  try {
-    console.log(`🔄 Starting background image fetch for job ${jobId}`)
-    job.status = 'pending'
-
-    // Fetch images using the existing extractUnderlineWords logic
-    const underlineWordsWithImages = await extractUnderlineWords(
-      carousels,
-      true, // includeImages = true
-      useAIImages,
-      aiImageStyle
-    )
-
-    // Update job with images
-    for (let i = 0; i < carousels.length; i++) {
-      if (underlineWordsWithImages[i]) {
-        job.images[i] = {
-          imageUrl: underlineWordsWithImages[i].imageUrl || null,
-          originalImageUrl: underlineWordsWithImages[i].originalImageUrl || null
-        }
-      }
-    }
-
-    job.status = 'complete'
-    console.log(`✅ Background image fetch completed for job ${jobId}`)
-  } catch (error: any) {
-    console.error(`❌ Error in background image fetch for job ${jobId}:`, error)
-    job.status = 'error'
   }
 }
 
