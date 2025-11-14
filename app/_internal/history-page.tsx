@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { ChevronLeft, ChevronRight, Palette, Edit3, MessageSquare, Download, Menu } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import CarouselImageGenerator from '../components/CarouselImageGenerator'
+import type { CarouselImageGeneratorHandle } from '../components/CarouselImageGenerator'
 import { COLOR_THEMES } from '../config/carouselThemes'
 import { getTemplateOptions } from '../config/carouselTemplates'
 import TemplateSelectorModal from '../components/TemplateSelectorModal'
@@ -268,6 +269,7 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
   const [expandedCarouselIndexes, setExpandedCarouselIndexes] = useState<number[]>([])
   const [error, setError] = useState('')
   const [downloading, setDownloading] = useState(false)
+  const carouselGeneratorRef = useRef<CarouselImageGeneratorHandle>(null)
 
   const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] = [
     { id: 'design', label: 'Customize Design', icon: Palette },
@@ -434,21 +436,76 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
         const updatedUnderline: Note['underlineWords'] = data.data?.underlineWords || {}
         const sanitizedCarousels: Note['carousels'] = (data.data?.slides || cleanedCarousels) as Note['carousels']
 
+        // ✅ CRITICAL: Preserve existing AI image URLs when updating underline/highlight words
+        // The API sets imageUrl: null when extracting words, but we want to keep the existing AI images
+        const preservedUnderlineWords: Note['underlineWords'] = {}
+        const existingUnderlineWords = note.underlineWords || {}
+        
+        Object.keys(updatedUnderline).forEach((key) => {
+          const index = parseInt(key, 10)
+          const newWords = updatedUnderline[index]
+          const existingWords = existingUnderlineWords[index]
+          
+          // Merge: Use new underline/highlight words from Gemini, but preserve existing image URLs
+          preservedUnderlineWords[index] = {
+            underline: newWords?.underline || '',
+            highlight: newWords?.highlight || '',
+            imageSearch: newWords?.imageSearch || '',
+            // ✅ PRESERVE existing AI image URLs (don't overwrite with null)
+            imageUrl: existingWords?.imageUrl || newWords?.imageUrl || null,
+            originalImageUrl: existingWords?.originalImageUrl || newWords?.originalImageUrl || null,
+          }
+          
+          console.log(`🖼️ Carousel ${index + 1}: Preserved imageUrl =`, preservedUnderlineWords[index].imageUrl || '(none)')
+        })
+        
+        console.log('✅ Preserved AI image URLs in underlineWords:', Object.keys(preservedUnderlineWords).length, 'carousels')
+
         const updatedNote: Note = {
           ...note,
           carousels: sanitizedCarousels,
-          underlineWords: updatedUnderline
+          underlineWords: preservedUnderlineWords
         }
 
         setNote(updatedNote)
         setEditedCarousels(sanitizedCarousels.map(carousel => ({ ...carousel })))
         setCarouselsDirty(false)
 
+        // DON'T remove cached images - we want to preserve them when editing text
+        // Only update the content hash to reflect the new underline words
         try {
-          localStorage.removeItem('postGeneration_canvasImages')
-          localStorage.removeItem('postGeneration_fullContentHash')
+          const fullContentHash = JSON.stringify({ 
+            ideaTitle: note.ideaTitle, 
+            carousels: sanitizedCarousels, 
+            underlineWords: preservedUnderlineWords, 
+            templateId: templateId, 
+            colorThemeId: colorThemeId
+          })
+          localStorage.setItem('postGeneration_fullContentHash', fullContentHash)
         } catch (storageError) {
-          console.warn('Could not clear cache:', storageError)
+          console.warn('Could not update content hash:', storageError)
+        }
+
+        // ✅ IMPORTANT: Re-render carousels with new text and NEW underline/highlight words from Gemini
+        // After text is edited, we need to regenerate the canvas images with:
+        // 1. The new text content
+        // 2. The newly extracted underline/highlight words from Gemini API
+        // 3. The PRESERVED AI image URLs (so images don't disappear)
+        // This ensures that downloads include the edited text + updated styling + AI images
+        console.log('🔄 Text saved - triggering carousel re-render with new underline/highlight words from Gemini...')
+        console.log('   Updated underlineWords (with preserved AI images):', JSON.stringify(preservedUnderlineWords, null, 2))
+        
+        if (carouselGeneratorRef.current && carouselGeneratorRef.current.regenerateAndSave) {
+          // Pass the merged underlineWords (new words + preserved image URLs) to the regeneration
+          // This ensures the carousels are drawn with:
+          // - Correct highlight/underline words (from Gemini)
+          // - Existing AI image URLs (preserved)
+          carouselGeneratorRef.current.regenerateAndSave(preservedUnderlineWords).then(() => {
+            console.log('✅ Carousels re-rendered with new text + new underline/highlight words + preserved AI images!')
+          }).catch((err: any) => {
+            console.error('⚠️ Failed to regenerate carousels for download:', err)
+            // Don't fail the save operation, just warn the user
+          })
         }
       })
       .catch((err: any) => {
@@ -1081,6 +1138,7 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
                 ) : note ? (
                   <div style={{ flex: 1, minHeight: 0, minWidth: 0, display: 'flex', overflow: 'hidden' }}>
                     <CarouselImageGenerator 
+                      ref={carouselGeneratorRef}
                       carousels={carouselsDirty && editedCarousels.length > 0 ? editedCarousels : note.carousels}
                       ideaTitle={note.ideaTitle}
                       ideaIndex={null}

@@ -113,6 +113,10 @@ interface Props {
   onCarouselsReorder?: (reorderedCarousels: Carousel[]) => void
 }
 
+export interface CarouselImageGeneratorHandle {
+  regenerateAndSave: (updatedUnderlineWords?: Record<number, { underline: string; highlight: string; imageUrl?: string | null; originalImageUrl?: string | null }>) => Promise<void>
+}
+
 // Initialize images from localStorage before rendering
 const getInitialImages = (carousels: Carousel[], ideaTitle: string, underlineWords: Record<number, any>, templateId: string, colorThemeId: string): string[] => {
   try {
@@ -188,7 +192,9 @@ const yieldToEventLoop = (): Promise<void> => {
   })
 }
 
-export default function CarouselImageGenerator({ 
+import { forwardRef, useImperativeHandle } from 'react'
+
+function CarouselImageGeneratorComponent({ 
   carousels, 
   ideaTitle,
   ideaIndex = null,
@@ -202,7 +208,7 @@ export default function CarouselImageGenerator({
   aiImageStyle = 'animated',
   onGenerationComplete,
   onCarouselsReorder
-}: Props) {
+}: Props, ref: React.Ref<CarouselImageGeneratorHandle>) {
   const isMobile = useMobile()
   
   // Debug: Log underlineWords on component mount/update
@@ -245,10 +251,42 @@ export default function CarouselImageGenerator({
   const [orderedUnderlineWords, setOrderedUnderlineWords] = useState<Record<number, any>>(underlineWords)
   
   // Update local state when props change
+  // IMPORTANT: Preserve existing images to prevent them from disappearing on Reset
+  // BUT when regenerating from a text edit, we want to show the NEW images
   useEffect(() => {
     setOrderedCarousels(carousels)
-    setOrderedCarouselImages(getInitialImages(carousels, ideaTitle, underlineWords, templateId, colorThemeId))
     setOrderedUnderlineWords(underlineWords)
+    // Keep ref in sync with state (unless we're regenerating from edit, in which case ref is set separately)
+    if (!isRegeneratingFromEditRef.current) {
+      underlineWordsForGenerationRef.current = underlineWords
+    }
+    
+    // Only reload images from localStorage if we don't already have them
+    // OR if we're regenerating from a text edit (in which case we cleared them)
+    // This prevents images from disappearing when Reset is clicked
+    // But allows new images to be displayed when text is edited and saved
+    setOrderedCarouselImages(prev => {
+      // If we cleared images for regeneration, let new ones be loaded
+      if (isRegeneratingFromEditRef.current || prev.length === 0) {
+        if (prev.length === 0 && !isRegeneratingFromEditRef.current) {
+          console.log('🔄 Attempting to load images from cache...')
+        }
+        if (isRegeneratingFromEditRef.current) {
+          console.log('✨ Regenerating images with new text - showing updated images!')
+        }
+        return getInitialImages(carousels, ideaTitle, underlineWords, templateId, colorThemeId)
+      }
+      
+      // We already have images and NOT regenerating - keep them (for Reset button)
+      if (prev.length > 0 && prev.length === carousels.length) {
+        console.log('✅ Preserving existing images (count:', prev.length, ')')
+        return prev
+      }
+      
+      // No images, load from cache
+      console.log('🔄 Attempting to load images from cache...')
+      return getInitialImages(carousels, ideaTitle, underlineWords, templateId, colorThemeId)
+    })
   }, [carousels, ideaTitle, underlineWords, templateId, colorThemeId])
   
   // Sync orderedCarouselImages with carouselImages when they update
@@ -325,6 +363,70 @@ export default function CarouselImageGenerator({
   }, [onCarouselsReorder])
   
   const { user, refreshCredits } = useAuth()
+  
+  // Track when we're regenerating from a text edit so we can show new images
+  const isRegeneratingFromEditRef = useRef(false)
+  
+  // Ref to store underlineWords during regeneration (so generateAllCarousels can access latest values)
+  const underlineWordsForGenerationRef = useRef<Record<number, any>>(orderedUnderlineWords)
+  
+  // ✅ Expose regenerateAndSave method for parent component to call after text edits
+  useImperativeHandle(ref, () => ({
+    regenerateAndSave: async (updatedUnderlineWords?: Record<number, { underline: string; highlight: string; imageUrl?: string | null; originalImageUrl?: string | null }>) => {
+      console.log('📤 regenerateAndSave called - triggering full carousel regeneration with new text...')
+      
+      // If updated underlineWords are provided (from Gemini API), use them
+      // Otherwise use the current props (for backward compatibility)
+      const underlineWordsToUse = updatedUnderlineWords || orderedUnderlineWords
+      
+      if (updatedUnderlineWords) {
+        console.log('✨ Using newly extracted underline/highlight words from Gemini API')
+        console.log('   Updated underlineWords:', JSON.stringify(updatedUnderlineWords, null, 2))
+        // Update the state with new underlineWords
+        setOrderedUnderlineWords(underlineWordsToUse)
+        // Also update the ref so generateAllCarousels can access the latest values immediately
+        underlineWordsForGenerationRef.current = underlineWordsToUse
+      } else {
+        // Update ref to current state
+        underlineWordsForGenerationRef.current = orderedUnderlineWords
+      }
+      
+      // This will regenerate all canvases with the new text and save to database
+      try {
+        // Mark that we're regenerating from an edit so we show the new images
+        isRegeneratingFromEditRef.current = true
+        
+        // Clear cached images AND canvas refs so new ones are generated from scratch
+        setCarouselImages([])
+        setOrderedCarouselImages([])
+        
+        // Clear previous images ref to prevent old images from showing
+        previousImagesRef.current = []
+        
+        // Clear canvas refs to ensure fresh canvases are used (not reused with old content)
+        // This prevents the "two images layered on top of each other" bug
+        canvasRefs.current = new Array(orderedCarousels.length).fill(null)
+        
+        console.log('🧹 Cleared canvas refs - fresh canvases will be created')
+        
+        // Temporarily disable credit deduction for this regeneration (it's not a new generation)
+        const wasDeducted = hasDeductedCredit.current
+        hasDeductedCredit.current = true
+        
+        await generateAllCarousels()
+        
+        console.log('✅ Regeneration complete and images saved!')
+        
+        hasDeductedCredit.current = wasDeducted
+        isRegeneratingFromEditRef.current = false
+      } catch (error) {
+        console.error('❌ Error during regenerateAndSave:', error)
+        isRegeneratingFromEditRef.current = false
+        throw error
+      }
+    }
+  }), [orderedCarousels.length, orderedUnderlineWords])
+  
   // Initialize hasDeductedCredit from localStorage - check by ideaTitle, not content hash
   // Credits should be deducted once per ideaTitle, not once per content version
   const getInitialCreditDeductionStatus = (): boolean => {
@@ -886,9 +988,12 @@ export default function CarouselImageGenerator({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templateId, colorThemeId])
   
-  // Regenerate when carousel content changes (edits) - without deducting credits
+  // DISABLED: Auto-regeneration on content changes removed to preserve AI images
+  // When text is edited, only underline/highlight words should be updated (handled by the API)
+  // Images should remain unchanged
   useEffect(() => {
-    // Skip during initial mount; initial generation handles first render
+    // Just keep track of carousel content changes for reference
+    // But DO NOT regenerate images
     if (isInitialMount.current) {
       prevCarouselsContent.current = JSON.stringify(carousels)
       return
@@ -897,58 +1002,27 @@ export default function CarouselImageGenerator({
     const currentCarouselsContent = JSON.stringify(carousels)
     const prevContent = prevCarouselsContent.current
     
-    // Only regenerate if content changed but ideaTitle and length are the same (meaning it's an edit, not new note)
+    // Only update the tracking ref, do NOT regenerate
     if (currentCarouselsContent !== prevContent && carousels.length > 0) {
-      // Check if this is a content edit (same ideaTitle, same length) vs new note
-      const prevCarousels = JSON.parse(prevContent)
-      const isContentEdit = prevCarousels.length === carousels.length && prevCarousels.length > 0
-      
-      if (isContentEdit) {
-        console.log('📝 Carousel content edit detected → regenerating without deducting credits')
-        
-        // Preserve credit deduction state (don't deduct for edits)
-        const wasDeducted = hasDeductedCredit.current
-        hasDeductedCredit.current = true
-        
-        // Update hash for new content
-        try {
-          const fullContentHash = JSON.stringify({ 
-            ideaTitle, 
-            carousels, 
-            underlineWords, 
-            templateId, 
-            colorThemeId
-          })
-          localStorage.setItem('postGeneration_fullContentHash', fullContentHash)
-          // Store user ID to ensure localStorage is user-specific
-          if (user?.id) {
-            localStorage.setItem('postGeneration_userId', user.id)
-          }
-        } catch (error) {
-          console.error('Error updating localStorage hash:', error)
-        }
-        
-        // Debounce regeneration to avoid regenerating on every keystroke
-        const timeoutId = setTimeout(async () => {
-          try {
-            await generateAllCarousels()
-            // Only update prevCarouselsContent after successful regeneration
-            prevCarouselsContent.current = JSON.stringify(carousels)
-          } catch (error) {
-            console.error('❌ Regeneration failed:', error)
-          } finally {
-            hasDeductedCredit.current = wasDeducted
-          }
-        }, 500) // 500ms debounce
-        
-        return () => clearTimeout(timeoutId)
-      } else {
-        // Not a content edit (length changed or new note) - update immediately
-        prevCarouselsContent.current = currentCarouselsContent
-      }
-    } else {
-      // No content change - keep prevCarouselsContent in sync
+      console.log('📝 Carousel content changed - tracking updated (regeneration disabled to preserve images)')
       prevCarouselsContent.current = currentCarouselsContent
+      
+      // Update hash for new content (for caching purposes only)
+      try {
+        const fullContentHash = JSON.stringify({ 
+          ideaTitle, 
+          carousels, 
+          underlineWords, 
+          templateId, 
+          colorThemeId
+        })
+        localStorage.setItem('postGeneration_fullContentHash', fullContentHash)
+        if (user?.id) {
+          localStorage.setItem('postGeneration_userId', user.id)
+        }
+      } catch (error) {
+        console.error('Error updating localStorage hash:', error)
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carousels, ideaTitle, underlineWords, templateId, colorThemeId])
@@ -1539,8 +1613,8 @@ export default function CarouselImageGenerator({
       ctx.fillStyle = colorTheme.textColor
       ctx.textAlign = 'left'
 
-      // Get highlight word
-      const emphasisData = orderedUnderlineWords[index] || { underline: '', highlight: '' }
+      // Get highlight word - use ref first (for regeneration from edit), then fall back to state
+      const emphasisData = underlineWordsForGenerationRef.current[index] || orderedUnderlineWords[index] || { underline: '', highlight: '' }
       const highlightWord = emphasisData.highlight.toLowerCase().replace(/[.,!?;:–—\-'"`]/g, '').trim()
       
       // Find last occurrence of highlight word
@@ -1670,7 +1744,8 @@ export default function CarouselImageGenerator({
         }
       }
       
-      const emphasisData = orderedUnderlineWords[index] || { underline: '', highlight: '' }
+      // Use ref first (for regeneration from edit), then fall back to state
+      const emphasisData = underlineWordsForGenerationRef.current[index] || orderedUnderlineWords[index] || { underline: '', highlight: '' }
       const underlinePhrases = emphasisData.underline.split(',').map((p: string) => p.trim()).filter((p: string) => p)
       
       const spaceWidth = ctx.measureText(' ').width
@@ -1807,7 +1882,8 @@ export default function CarouselImageGenerator({
 
       ctx.textAlign = 'left'
       
-      const emphasisData = orderedUnderlineWords[index] || { underline: '', highlight: '', imageUrl: null, originalImageUrl: null }
+      // Use ref first (for regeneration from edit), then fall back to state
+      const emphasisData = underlineWordsForGenerationRef.current[index] || orderedUnderlineWords[index] || { underline: '', highlight: '', imageUrl: null, originalImageUrl: null }
       
       if (cleanCarousel.kind === 'MIDDLE') {
         console.log(`\n🖼️ Carousel ${index + 1} Image Check:`)
@@ -2699,4 +2775,5 @@ export default function CarouselImageGenerator({
   )
 }
 
-
+// Export with forwardRef to allow parent components to call regenerateAndSave
+export default forwardRef(CarouselImageGeneratorComponent)
