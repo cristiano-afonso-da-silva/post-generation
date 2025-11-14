@@ -852,6 +852,13 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
     
     const data = noteResult.data;
     
+    if (!data) {
+      return {
+        success: false,
+        error: 'No data returned from note generation',
+      };
+    }
+    
     console.log(`🖼️ generateNote: Calling extractUnderlineWords with includeImages =`, includeImages, 'useAIImages =', useAIImages, 'aiImageStyle =', aiImageStyle);
     const underlineWords = await extractUnderlineWords(data.slides, includeImages, useAIImages, aiImageStyle);
     
