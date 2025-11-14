@@ -116,15 +116,13 @@ const safeJsonParse = (text: string) => {
       // Third attempt: fix control characters and unescaped quotes
       // This is a more sophisticated approach that handles unterminated strings
       try {
-        // Find all string values and properly escape them
-        let fixed = cleaned;
+        let result = '';
         let inString = false;
         let escapeNext = false;
-        let result = '';
         let i = 0;
         
-        while (i < fixed.length) {
-          const char = fixed[i];
+        while (i < cleaned.length) {
+          const char = cleaned[i];
           
           if (escapeNext) {
             result += char;
@@ -159,9 +157,9 @@ const safeJsonParse = (text: string) => {
               result += '\\f';
             } else if (char === '\b') {
               result += '\\b';
-            } else if (char === '"') {
-              // This shouldn't happen due to the quote check above, but just in case
-              result += '\\"';
+            } else if (char === '\u0000') {
+              // Null character - remove it
+              result += '';
             } else {
               result += char;
             }
@@ -186,57 +184,161 @@ const safeJsonParse = (text: string) => {
         
         if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
           try {
-            const extracted = cleaned.substring(jsonStart, jsonEnd + 1);
-            return JSON.parse(extracted);
-          } catch (e4) {
-            // Last resort: try to fix common issues and parse
-            let lastAttempt = cleaned
-              // Remove any trailing commas before closing braces/brackets
-              .replace(/,(\s*[}\]])/g, '$1')
-              // Try to close any unterminated strings at the end
-              .replace(/"([^"]*)$/, '"$1"');
+            let extracted = cleaned.substring(jsonStart, jsonEnd + 1);
             
-            // Escape control characters more carefully (avoid lookbehind for compatibility)
+            // Try to fix unterminated strings in the extracted JSON
+            // Find all unterminated strings and close them
             let fixed = '';
             let inStr = false;
             let escaped = false;
-            for (let j = 0; j < lastAttempt.length; j++) {
-              const c = lastAttempt[j];
+            let stringStart = -1;
+            
+            for (let j = 0; j < extracted.length; j++) {
+              const c = extracted[j];
+              
               if (escaped) {
                 fixed += c;
                 escaped = false;
-              } else if (c === '\\') {
+                continue;
+              }
+              
+              if (c === '\\') {
                 fixed += c;
                 escaped = true;
-              } else if (c === '"') {
-                inStr = !inStr;
+                continue;
+              }
+              
+              if (c === '"') {
+                if (!inStr) {
+                  stringStart = j;
+                  inStr = true;
+                } else {
+                  inStr = false;
+                  stringStart = -1;
+                }
                 fixed += c;
-              } else if (inStr && (c === '\n' || c === '\r' || c === '\t')) {
-                fixed += c === '\n' ? '\\n' : c === '\r' ? '\\r' : '\\t';
+                continue;
+              }
+              
+              if (inStr) {
+                // Escape control characters inside strings
+                if (c === '\n') {
+                  fixed += '\\n';
+                } else if (c === '\r') {
+                  fixed += '\\r';
+                } else if (c === '\t') {
+                  fixed += '\\t';
+                } else if (c === '\f') {
+                  fixed += '\\f';
+                } else if (c === '\b') {
+                  fixed += '\\b';
+                } else if (c === '\u0000') {
+                  // Remove null characters
+                  fixed += '';
+                } else {
+                  fixed += c;
+                }
               } else {
                 fixed += c;
               }
             }
             
+            // If we ended with an unterminated string, close it
+            if (inStr && stringStart !== -1) {
+              fixed += '"';
+            }
+            
+            // Remove trailing commas before closing braces/brackets
+            fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
+            
             return JSON.parse(fixed);
+          } catch (e4) {
+            // Fifth attempt: more aggressive repair
+            try {
+              let lastAttempt = cleaned
+                // Remove any trailing commas before closing braces/brackets
+                .replace(/,(\s*[}\]])/g, '$1')
+                // Remove null characters
+                .replace(/\u0000/g, '');
+              
+              // Fix unterminated strings by finding the last unclosed quote
+              let repaired = '';
+              let inString = false;
+              let escaped = false;
+              let lastQuotePos = -1;
+              
+              for (let k = 0; k < lastAttempt.length; k++) {
+                const ch = lastAttempt[k];
+                
+                if (escaped) {
+                  repaired += ch;
+                  escaped = false;
+                  continue;
+                }
+                
+                if (ch === '\\') {
+                  repaired += ch;
+                  escaped = true;
+                  continue;
+                }
+                
+                if (ch === '"') {
+                  lastQuotePos = k;
+                  inString = !inString;
+                  repaired += ch;
+                  continue;
+                }
+                
+                if (inString) {
+                  // Escape control characters
+                  if (ch === '\n' || ch === '\r' || ch === '\t' || ch === '\f' || ch === '\b') {
+                    repaired += ch === '\n' ? '\\n' : ch === '\r' ? '\\r' : ch === '\t' ? '\\t' : ch === '\f' ? '\\f' : '\\b';
+                  } else if (ch === '\u0000') {
+                    // Skip null characters
+                  } else {
+                    repaired += ch;
+                  }
+                } else {
+                  repaired += ch;
+                }
+              }
+              
+              // If string is still open, close it
+              if (inString) {
+                repaired += '"';
+              }
+              
+              return JSON.parse(repaired);
+            } catch (e5) {
+              // If all attempts fail, throw the original error with context
+              console.error('❌ All JSON parsing attempts failed');
+              console.error('📄 Original text length:', text.length);
+              console.error('📄 Cleaned text length:', cleaned.length);
+              console.error('📄 First 500 chars:', cleaned.substring(0, 500));
+              console.error('📄 Last 500 chars:', cleaned.substring(Math.max(0, cleaned.length - 500)));
+              
+              // Try to extract error position from the error message
+              const errorMessage = e2 instanceof Error ? e2.message : String(e2);
+              const positionMatch = errorMessage.match(/position (\d+)/);
+              if (positionMatch) {
+                const pos = parseInt(positionMatch[1], 10);
+                const start = Math.max(0, pos - 200);
+                const end = Math.min(cleaned.length, pos + 200);
+                console.error(`📄 Context around error position ${pos} (chars ${start}-${end}):`);
+                console.error(cleaned.substring(start, end));
+                console.error('📄 Character at error position:', cleaned[pos] || 'N/A');
+                console.error('📄 Character code:', cleaned.charCodeAt(pos) || 'N/A');
+              }
+              
+              throw new Error(`Failed to parse JSON after multiple attempts: ${errorMessage}`);
+            }
           }
+        } else {
+          // If no JSON boundaries found, throw error
+          console.error('❌ No JSON boundaries found in response');
+          console.error('📄 Response text:', cleaned.substring(0, 1000));
+          throw new Error(`Failed to parse JSON after multiple attempts: ${e2 instanceof Error ? e2.message : String(e2)}`);
         }
-        
-        // If all attempts fail, throw the original error with context
-        console.error('❌ All JSON parsing attempts failed');
-        console.error('📄 Original text length:', text.length);
-        console.error('📄 First 500 chars:', cleaned.substring(0, 500));
-        console.error('📄 Last 500 chars:', cleaned.substring(Math.max(0, cleaned.length - 500)));
-        // Try to extract error position from the error message
-        const errorMessage = e2 instanceof Error ? e2.message : String(e2);
-        const positionMatch = errorMessage.match(/position (\d+)/);
-        if (positionMatch) {
-          const pos = parseInt(positionMatch[1], 10);
-          const start = Math.max(0, pos - 100);
-          const end = Math.min(cleaned.length, pos + 100);
-          console.error(`📄 Context around error position ${pos} (chars ${start}-${end}):`, cleaned.substring(start, end));
-        }
-        throw new Error(`Failed to parse JSON after multiple attempts: ${errorMessage}`);
       }
     }
   }
@@ -877,7 +979,21 @@ async function generateNoteWithGemini(ideaTitle: string, accountDescription: str
     
     const responseText = result.response.text();
     
+    // Check if response was truncated
+    const candidates = result.response.candidates;
+    if (candidates && candidates.length > 0) {
+      const finishReason = candidates[0].finishReason;
+      if (finishReason && finishReason !== 'STOP') {
+        console.warn(`⚠️  Response finish reason: ${finishReason} (might indicate truncation)`);
+      }
+    }
+    
     console.log('📝 Raw Gemini Response Length:', responseText.length);
+    
+    // Check for potential truncation indicators
+    if (responseText.length > 0 && !responseText.trim().endsWith('}')) {
+      console.warn('⚠️  Response does not end with closing brace - might be truncated');
+    }
     
     let data;
     try {
@@ -887,6 +1003,18 @@ async function generateNoteWithGemini(ideaTitle: string, accountDescription: str
     } catch (parseError: any) {
       console.error('❌ JSON Parse Error:', parseError.message);
       console.error('📄 Problematic JSON (first 500 chars):', responseText.substring(0, 500));
+      console.error('📄 Problematic JSON (last 500 chars):', responseText.substring(Math.max(0, responseText.length - 500)));
+      
+      // Extract position from error if available
+      const positionMatch = parseError.message?.match(/position (\d+)/);
+      if (positionMatch) {
+        const pos = parseInt(positionMatch[1], 10);
+        const start = Math.max(0, pos - 200);
+        const end = Math.min(responseText.length, pos + 200);
+        console.error(`📄 Context around error position ${pos} (chars ${start}-${end}):`);
+        console.error(responseText.substring(start, end));
+      }
+      
       throw new Error(`Failed to parse Gemini response: ${parseError.message}`);
     }
     
