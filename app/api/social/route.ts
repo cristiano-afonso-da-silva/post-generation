@@ -16,6 +16,10 @@ const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
 
 if (!GEMINI_API_KEY) {
   console.error('❌ Missing GEMINI_API_KEY in environment variables');
+  console.error('   Please add GEMINI_API_KEY to your .env.local file');
+} else {
+  console.log('✅ GEMINI_API_KEY loaded successfully');
+  console.log(`   Key preview: ${GEMINI_API_KEY.substring(0, 10)}...`);
 }
 
 if (!PEXELS_API_KEY) {
@@ -26,18 +30,25 @@ if (!PEXELS_API_KEY) {
   console.log(`   Key preview: ${PEXELS_API_KEY.substring(0, 10)}...`);
 }
 
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY!);
+// Create Gemini client only if API key is available (will be validated at request time)
+const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
 // Model for regular generation (ideas and note)
 // Note: We'll add responseSchema per request, not globally
-const model = genAI.getGenerativeModel({
-  model: GEMINI_MODEL,
-  generationConfig: {
-    temperature: 0.85,
-    topP: 0.95,
-    topK: 40,
+// Model will be created per request after validating API key
+const getModel = () => {
+  if (!genAI) {
+    throw new Error('Gemini client not initialized. GEMINI_API_KEY is missing.');
   }
-});
+  return genAI.getGenerativeModel({
+    model: GEMINI_MODEL,
+    generationConfig: {
+      temperature: 0.85,
+      topP: 0.95,
+      topK: 40,
+    }
+  });
+};
 
 // ════════════════════════════════════════════════════════════════════════════
 // Utility Functions
@@ -620,6 +631,7 @@ async function generateIdeasWithGemini(accountDescription: string) {
   const startTime = Date.now();
   
   try {
+    const model = getModel();
     const result = await callGeminiWithRetry(model, {
       contents: [{
         role: 'user',
@@ -671,6 +683,9 @@ async function generateIdeas(accountDescription: string) {
 // buildAIImagePrompt is now imported from app/config/prompts.ts
 
 async function extractUnderlineWordsWithGemini(carousels: any[]): Promise<Record<number, any>> {
+  if (!genAI) {
+    throw new Error('Gemini client not initialized. GEMINI_API_KEY is missing.');
+  }
   const underlineModel = genAI.getGenerativeModel({
     model: GEMINI_MODEL,
     generationConfig: {
@@ -845,6 +860,7 @@ async function generateNoteWithGemini(ideaTitle: string, accountDescription: str
   const startTime = Date.now();
   
   try {
+    const model = getModel();
     const result = await callGeminiWithRetry(model, {
       contents: [{
         role: 'user',
@@ -1004,6 +1020,15 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
 
 export async function POST(request: NextRequest) {
   try {
+    // Validate GEMINI_API_KEY at request time
+    if (!GEMINI_API_KEY || GEMINI_API_KEY.trim().length === 0) {
+      console.error('❌ GEMINI_API_KEY is missing or empty');
+      return NextResponse.json(
+        { success: false, error: 'GEMINI_API_KEY is not configured. Please set GEMINI_API_KEY in your environment variables.' },
+        { status: 500 }
+      );
+    }
+
     const body = await request.json();
     const { action, accountDescription, ideaTitle, includeImages, useAIImages, aiImageStyle } = body;
     
