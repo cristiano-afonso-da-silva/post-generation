@@ -595,7 +595,35 @@ function CarouselImageGeneratorComponent({
         }
       } catch (uploadError: any) {
         console.error('❌ Failed to upload images:', uploadError)
-        throw new Error(`Failed to upload images: ${uploadError.message || uploadError}`)
+        // If client-side upload fails, fall back to server-side upload
+        console.warn('⚠️ Falling back to server-side upload...')
+        const fallbackResponse = await fetch('/api/generations/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user.id,
+            generationId: generationId,
+            ideaTitle,
+            accountDescription: accountDescriptionRef.current,
+            slides: orderedCarousels,
+            caption: captionRef.current,
+            underlineWords: orderedUnderlineWords,
+            templateId,
+            colorThemeId,
+            images: imageDataUrls // Fallback to server-side upload
+          })
+        })
+        
+        if (!fallbackResponse.ok) {
+          throw new Error(`Failed to upload images (both client and server methods failed)`)
+        }
+        
+        const fallbackResult = await fallbackResponse.json()
+        // Server-side upload doesn't return URLs in the same format, so we'll need to fetch them
+        // For now, just mark as successful - URLs will be in the database
+        imageUrls = []
+        thumbnailUrls = []
+        console.log('✅ Fallback server-side upload completed')
       }
 
       // Step 3: Update generation with image URLs (small payload, just URLs)

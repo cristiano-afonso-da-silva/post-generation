@@ -39,7 +39,20 @@ export async function uploadImagesToStorage(
 ): Promise<UploadImagesResult> {
   const supabase = createClientComponentClient()
   
+  // Verify user is authenticated and matches the userId
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  
+  if (authError || !user) {
+    throw new Error(`Authentication required: ${authError?.message || 'Not authenticated'}`)
+  }
+  
+  if (user.id !== userId) {
+    throw new Error(`User ID mismatch: authenticated as ${user.id}, but trying to upload for ${userId}`)
+  }
+  
   console.log(`⚡ Starting direct upload of ${imageDataUrls.length} images to Supabase Storage...`)
+  console.log(`   👤 Authenticated as: ${user.id}`)
+  console.log(`   📁 Path prefix: ${userId}/${generationId}`)
   const uploadStartTime = Date.now()
   
   // Upload all images in parallel
@@ -49,6 +62,8 @@ export async function uploadImagesToStorage(
       const blob = dataURLtoBlob(imageDataUrl)
       
       const filePath = `${userId}/${generationId}/slide-${i}.png`
+      
+      console.log(`📤 Uploading ${filePath}...`)
       
       // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
@@ -61,6 +76,9 @@ export async function uploadImagesToStorage(
 
       if (uploadError) {
         console.error(`Error uploading slide ${i}:`, uploadError)
+        console.error(`   File path: ${filePath}`)
+        console.error(`   Authenticated user: ${user.id}`)
+        console.error(`   Expected user in path: ${userId}`)
         throw uploadError
       }
 
