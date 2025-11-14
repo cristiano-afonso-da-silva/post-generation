@@ -537,6 +537,11 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
 
   const templateOptions = getTemplateOptions()
 
+  const isMobileDevice = (): boolean => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+           (typeof window !== 'undefined' && window.innerWidth <= 768)
+  }
+
   const downloadAllCarousels = async () => {
     // Check for both imageUrls (camelCase) and image_urls (snake_case)
     const imageUrls = (generation as any)?.imageUrls || generation?.image_urls || []
@@ -548,6 +553,65 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
 
     setDownloading(true)
     try {
+      const isMobile = isMobileDevice()
+      
+      // On mobile devices, download images individually to save to photo album
+      if (isMobile) {
+        try {
+          // Download each image individually with a small delay between downloads
+          // This allows mobile browsers to save each image to the photo album
+          for (let i = 0; i < imageUrls.length; i++) {
+            const imageUrl = imageUrls[i]
+            if (!imageUrl) continue
+            
+            // Capture index in closure to avoid issues
+            const index = i
+            const currentUrl = imageUrl
+            
+            // Use setTimeout to stagger downloads and avoid browser blocking
+            setTimeout(async () => {
+              try {
+                // Fetch the image
+                const response = await fetch(currentUrl)
+                if (!response.ok) {
+                  console.error(`Failed to fetch image ${index + 1}: HTTP ${response.status}`)
+                  return
+                }
+                const blob = await response.blob()
+                
+                // Determine file name based on carousel kind
+                const carousel = note?.carousels[index] || generation.slides[index]
+                const kind = carousel?.kind || 'MIDDLE'
+                const fileName = `carousel-${index + 1}-${kind.toLowerCase()}.png`
+                
+                // Create download link
+                const link = document.createElement('a')
+                link.href = URL.createObjectURL(blob)
+                link.download = fileName
+                document.body.appendChild(link)
+                link.click()
+                document.body.removeChild(link)
+                
+                // Clean up the object URL
+                URL.revokeObjectURL(link.href)
+              } catch (error) {
+                console.error(`Failed to download image ${index + 1}:`, error)
+              }
+            }, index * 400) // 400ms delay between each download
+          }
+        } catch (error) {
+          console.error('Error downloading images on mobile:', error)
+          setDownloading(false)
+          return
+        }
+        // Set downloading to false after a delay to allow downloads to start
+        setTimeout(() => {
+          setDownloading(false)
+        }, imageUrls.length * 400 + 500)
+        return
+      }
+      
+      // On desktop, use ZIP file (original behavior)
       const zip = new JSZip()
       
       // Process all carousel images
@@ -654,7 +718,7 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
             <button
               onClick={onOpenSidebar}
               style={{
-                background: 'transparent',
+                background: 'rgb(245, 245, 245)',
                 border: 'none',
                 cursor: 'pointer',
                 padding: '8px',
@@ -663,13 +727,19 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
                 justifyContent: 'center',
                 borderRadius: '8px',
                 transition: 'background 0.2s ease',
-                flexShrink: 0
+                flexShrink: 0,
+                position: 'fixed',
+                top: '16px',
+                left: '16px',
+                zIndex: 1001,
+                width: '40px',
+                height: '40px'
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = '#f5f5f5'
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent'
+                e.currentTarget.style.background = 'rgb(245, 245, 245)'
               }}
             >
               <Menu size={20} color="#000000" />
@@ -685,7 +755,8 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
               minWidth: 0,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
+              whiteSpace: 'nowrap',
+              paddingLeft: isMobile ? '56px' : 0
             }}
           >
             {generation?.idea_title || note?.ideaTitle || 'Carousel'}
@@ -883,7 +954,8 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',
                                 flex: 1,
-                                minWidth: 0
+                                minWidth: 0,
+                                fontSize: isMobile ? '12px' : undefined
                               }}>
                                 {templateOptions.find(t => t.id === templateId)?.name || templateOptions[0]?.name || 'Select Template'}
                               </span>
@@ -896,8 +968,8 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
                             </label>
                             <div style={{
                               display: 'grid',
-                              gridTemplateColumns: 'repeat(auto-fit, minmax(32px, 1fr))',
-                              gap: '8px',
+                              gridTemplateColumns: isMobile ? 'repeat(auto-fit, minmax(24px, 1fr))' : 'repeat(auto-fit, minmax(32px, 1fr))',
+                              gap: isMobile ? '6px' : '8px',
                               maxWidth: '100%'
                             }}>
                               {COLOR_THEMES.map(theme => {
@@ -908,15 +980,15 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
                                     onClick={() => setColorThemeId(theme.id)}
                                     style={{
                                       aspectRatio: '1',
-                                      borderRadius: '8px',
+                                      borderRadius: isMobile ? '6px' : '8px',
                                       border: isSelected ? '2px solid rgb(229, 229, 229)' : 'none',
                                       background: theme.highlightColor,
                                       cursor: 'pointer',
                                       padding: 0,
                                       position: 'relative',
                                       transition: 'all 0.2s ease',
-                                      minWidth: '32px',
-                                      minHeight: '32px',
+                                      minWidth: isMobile ? '24px' : '32px',
+                                      minHeight: isMobile ? '24px' : '32px',
                                       width: '100%',
                                       maxWidth: '100%'
                                     }}
@@ -979,7 +1051,7 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
                                   {isExpanded && (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px', paddingTop: '12px' }}>
                                       <div>
-                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7280', marginBottom: '6px' }}>
+                                        <label style={{ display: 'block', fontSize: isMobile ? '11px' : '12px', fontWeight: 600, color: '#6b7280', marginBottom: '6px' }}>
                                           Title
                                         </label>
                                         <input
@@ -987,11 +1059,11 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
                                           value={carousel.title ?? ''}
                                           onChange={(e) => handleCarouselFieldChange(index, 'title', e.target.value)}
                                           placeholder="Enter carousel title"
-                                          style={{ width: '100%' }}
+                                          style={{ width: '100%', fontSize: isMobile ? '13px' : undefined }}
                                         />
                                       </div>
                                       <div>
-                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7280', marginBottom: '6px' }}>
+                                        <label style={{ display: 'block', fontSize: isMobile ? '11px' : '12px', fontWeight: 600, color: '#6b7280', marginBottom: '6px' }}>
                                           Content
                                         </label>
                                         <textarea
@@ -1000,7 +1072,7 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
                                           onChange={(e) => handleCarouselFieldChange(index, 'content', e.target.value)}
                                           placeholder="Enter carousel content"
                                           rows={kind === 'CTA' ? 5 : 6}
-                                          style={{ width: '100%', resize: 'vertical', minHeight: '120px' }}
+                                          style={{ width: '100%', resize: 'vertical', minHeight: '120px', fontSize: isMobile ? '13px' : undefined }}
                                         />
                                       </div>
                                     </div>
@@ -1067,7 +1139,7 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
                             background: '#fafafa',
                             border: '2px solid #e5e5e5',
                             borderRadius: '12px',
-                            fontSize: '15px',
+                            fontSize: isMobile ? '13px' : '15px',
                             lineHeight: '1.8',
                             color: '#000000',
                             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
