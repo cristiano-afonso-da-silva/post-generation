@@ -4,6 +4,8 @@ import { useState, useEffect, Suspense } from 'react'
 import Sidebar from '../components/Sidebar'
 import { useAuth } from '../context/AuthContext'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useMobile } from '../hooks/useMobile'
+import { Menu } from 'lucide-react'
 
 // Lazy load the heavy components
 import dynamic from 'next/dynamic'
@@ -19,8 +21,9 @@ function DashboardView() {
   const { user, loading } = useAuth()
   const router = useRouter()
   const [hasUnsavedWork, setHasUnsavedWork] = useState(false)
+  const isMobile = useMobile()
   
-  // Sidebar collapse state with localStorage persistence
+  // Sidebar collapse state with localStorage persistence (desktop only)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('sidebarCollapsed')
@@ -28,6 +31,9 @@ function DashboardView() {
     }
     return false
   })
+  
+  // Mobile sidebar open state (separate from collapsed state)
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
 
   useEffect(() => {
     if (!loading && !user) {
@@ -63,18 +69,33 @@ function DashboardView() {
   }
 
   const handleSidebarClose = () => {
-    setIsSidebarCollapsed(true)
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('sidebarCollapsed', 'true')
+    if (isMobile) {
+      setIsMobileSidebarOpen(false)
+    } else {
+      setIsSidebarCollapsed(true)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('sidebarCollapsed', 'true')
+      }
     }
   }
 
   const handleSidebarOpen = () => {
-    setIsSidebarCollapsed(false)
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('sidebarCollapsed', 'false')
+    if (isMobile) {
+      setIsMobileSidebarOpen(true)
+    } else {
+      setIsSidebarCollapsed(false)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('sidebarCollapsed', 'false')
+      }
     }
   }
+  
+  // Close mobile sidebar when view changes
+  useEffect(() => {
+    if (isMobile) {
+      setIsMobileSidebarOpen(false)
+    }
+  }, [activeView, isMobile])
 
   if (loading) {
     return (
@@ -94,33 +115,88 @@ function DashboardView() {
     return null
   }
 
+  // Determine sidebar visibility
+  const isSidebarVisible = isMobile ? isMobileSidebarOpen : !isSidebarCollapsed
+  const sidebarWidth = isSidebarCollapsed ? '64px' : '280px'
+  
   return (
     <div style={{
       display: 'flex',
       height: '100vh',
       background: '#fafafa',
       overflow: 'hidden',
+      position: 'relative',
     }}>
       <Sidebar 
         activeView={activeView} 
         onViewChange={handleViewChange}
         isCollapsed={isSidebarCollapsed}
+        isMobile={isMobile}
+        isMobileOpen={isMobileSidebarOpen}
         onClose={handleSidebarClose}
         onOpen={handleSidebarOpen}
       />
       
+      {/* Mobile backdrop overlay */}
+      {isMobile && isMobileSidebarOpen && (
+        <div
+          onClick={handleSidebarClose}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 99,
+            transition: 'opacity 0.3s ease',
+          }}
+        />
+      )}
+      
       <div 
         className="dashboard-content"
         style={{
-          marginLeft: isSidebarCollapsed ? '64px' : '280px',
+          marginLeft: isMobile ? '0' : (isSidebarCollapsed ? '64px' : '280px'),
           flex: 1,
           height: '100vh',
           overflow: activeView === 'create' ? 'hidden' : 'auto',
-          transition: 'margin-left 0.3s ease',
+          transition: isMobile ? 'none' : 'margin-left 0.3s ease',
           marginRight: 0,
           paddingRight: 0,
+          position: 'relative',
         }}
       >
+        {/* Mobile hamburger menu button */}
+        {isMobile && !isMobileSidebarOpen && (
+          <button
+            onClick={handleSidebarOpen}
+            style={{
+              position: 'fixed',
+              top: '16px',
+              left: '16px',
+              zIndex: 101,
+              background: 'transparent',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'opacity 0.2s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.opacity = '0.7'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.opacity = '1'
+            }}
+          >
+            <Menu size={20} color="#000000" />
+          </button>
+        )}
+        
         <style jsx global>{`
           .dashboard-content header {
             display: none !important;
@@ -137,7 +213,10 @@ function DashboardView() {
         )}
         {activeView === 'history' && (
           <div style={{ height: '100%', overflow: 'auto' }}>
-            <HistoryPage onLoadGeneration={handleLoadGeneration} />
+            <HistoryPage 
+              onLoadGeneration={handleLoadGeneration}
+              onOpenSidebar={isMobile ? handleSidebarOpen : undefined}
+            />
           </div>
         )}
       </div>

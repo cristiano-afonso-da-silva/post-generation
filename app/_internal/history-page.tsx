@@ -4,8 +4,9 @@ import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
 import { useGenerations, useGeneration } from '../hooks/useGenerations'
+import { useMobile } from '../hooks/useMobile'
 import Link from 'next/link'
-import { ChevronLeft, ChevronRight, Palette, Edit3, MessageSquare, Download } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Palette, Edit3, MessageSquare, Download, Menu } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import CarouselImageGenerator from '../components/CarouselImageGenerator'
 import { COLOR_THEMES } from '../config/carouselThemes'
@@ -31,6 +32,7 @@ interface Note {
 
 interface HistoryPageProps {
   onLoadGeneration?: (generationId: string) => void
+  onOpenSidebar?: () => void
 }
 
 interface HistoryCardProps {
@@ -233,11 +235,12 @@ function HistoryCard({ generation, imageUrls, onLoadGeneration }: HistoryCardPro
   )
 }
 
-function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
+function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProps = {}) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const generationId = searchParams.get('id')
   const { user, loading: authLoading } = useAuth()
+  const isMobile = useMobile()
   const [page, setPage] = useState(1)
   const itemsPerPage = 8
   const offset = (page - 1) * itemsPerPage
@@ -576,7 +579,8 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
             zIndex: 1000,
             background: '#ffffff',
             borderBottom: '1px solid #e5e5e5',
-            borderRight: '1px solid rgb(229, 229, 229)',
+            // Show right border only on desktop to visually separate from sidebar
+            borderRight: isMobile ? 'none' : '1px solid rgb(229, 229, 229)',
             padding: '16px 20px',
             display: 'flex',
             alignItems: 'center',
@@ -584,12 +588,39 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
             boxSizing: 'border-box',
             minWidth: 0,
             height: '65px',
-            flexShrink: 0
+            flexShrink: 0,
+            gap: '12px'
           }}
         >
+          {/* Mobile hamburger menu button */}
+          {isMobile && onOpenSidebar && (
+            <button
+              onClick={onOpenSidebar}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '8px',
+                transition: 'background 0.2s ease',
+                flexShrink: 0
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#f5f5f5'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent'
+              }}
+            >
+              <Menu size={20} color="#000000" />
+            </button>
+          )}
           <h1
             style={{
-              fontSize: '18px',
+              fontSize: isMobile ? '16px' : '18px',
               fontWeight: '700',
               color: '#000000',
               margin: 0,
@@ -659,17 +690,34 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
             <div 
               className="responsive-grid"
               style={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'minmax(220px, 0.22fr) minmax(0, 0.78fr)', 
-                gap: '0px',
+                // On desktop, use a two-column grid. On mobile, use a
+                // vertical flex layout so we can control height ratios.
+                display: isMobile ? 'flex' : 'grid', 
+                flexDirection: isMobile ? 'column' : undefined,
+                gridTemplateColumns: isMobile ? '1fr' : 'minmax(220px, 0.22fr) minmax(0, 0.78fr)', 
+                gap: isMobile ? '24px' : '0px',
                 alignItems: 'stretch',
                 flex: 1,
                 overflow: 'hidden',
-                minWidth: 0
+                minWidth: 0,
+                padding: '0'
               }}
             >
               {/* LEFT COLUMN - Customisation */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0', height: '100%', overflow: 'hidden', alignSelf: 'stretch' }}>
+              <div style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: '0', 
+                height: '100%', 
+                overflow: 'hidden', 
+                alignSelf: 'stretch',
+                // On mobile, show the customization controls (style/content/caption)
+                // above the carousel preview and constrain them to ~30% of the
+                // vertical space so the post itself remains the focus.
+                order: isMobile ? 1 : 1,
+                flex: isMobile ? '0 0 30%' : undefined,
+                maxHeight: isMobile ? '30vh' : undefined
+              }}>
                 <div className="card mobile-customize" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, minWidth: '220px', overflow: 'hidden', padding: '0', border: 'none', background: 'transparent', borderRadius: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}>
                   {showLoading ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, minHeight: '200px', padding: '24px' }}>
@@ -688,7 +736,8 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                         gap: '0',
                         alignItems: 'stretch',
                         border: 'none',
-                        borderRight: '1px solid rgb(229, 229, 229)',
+                        // Desktop-only right border for the left control column
+                        borderRight: isMobile ? 'none' : '1px solid rgb(229, 229, 229)',
                         padding: 0,
                         height: 'fit-content',
                         margin: '0',
@@ -731,23 +780,35 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                     </div>
 
                     {/* Tab content - scrollable with horizontal padding */}
-                    <div style={{ flex: 1, overflowY: 'auto', padding: '20px', paddingTop: '20px', paddingLeft: '20px', borderRight: '1px solid rgb(229, 229, 229)', minHeight: 0 }}>
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '20px', paddingTop: '20px', paddingLeft: '20px', borderRight: isMobile ? 'none' : '1px solid rgb(229, 229, 229)', minHeight: 0 }}>
                     {/* Tab content */}
                     {activeLeftTab === 'design' && (
                       <div style={{ marginBottom: '24px' }}>
-                        <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
+                        <h4 style={{ fontSize: isMobile ? '14px' : '16px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
                           Carousel Style
                         </h4>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
                           <div style={{ minWidth: 0 }}>
-                            <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
+                            <label style={{ display: 'block', marginBottom: '8px', fontSize: isMobile ? '11px' : '13px', fontWeight: '500', color: '#000000' }}>
                               Template
                             </label>
                             <button
                               onClick={() => setShowTemplateModal(true)}
                               className="input"
-                              style={{ 
-                                cursor: 'pointer', 
+                              style={isMobile ? {
+                                cursor: 'pointer',
+                                padding: '10px',
+                                textAlign: 'left',
+                                background: '#ffffff',
+                                border: '2px solid #e5e5e5',
+                                borderRadius: '10px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                width: '100%',
+                                minWidth: 0
+                              } : {
+                                cursor: 'pointer',
                                 padding: '12px',
                                 textAlign: 'left',
                                 background: '#ffffff',
@@ -773,7 +834,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                             </button>
                           </div>
                           <div style={{ minWidth: 0 }}>
-                            <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
+                            <label style={{ display: 'block', marginBottom: '8px', fontSize: isMobile ? '11px' : '13px', fontWeight: '500', color: '#000000' }}>
                               Color Theme
                             </label>
                             <div style={{
@@ -845,7 +906,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                                     }}
                                   >
                                     <div style={{ 
-                                      fontSize: '14px', 
+                                      fontSize: isMobile ? '12px' : '14px', 
                                       fontWeight: '500', 
                                       color: '#000000', 
                                       textTransform: 'none',
@@ -853,7 +914,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                                     }}>
                                       Carousel {index + 1} • {kind === 'MIDDLE' ? 'Content' : kind === 'HOOK' ? 'Hook' : kind === 'CTA' ? 'CTA' : kind}
                                     </div>
-                                    <span style={{ fontSize: '14px', color: '#000000', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
+                                    <span style={{ fontSize: isMobile ? '12px' : '14px', color: '#000000', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
                                       ▾
                                     </span>
                                   </button>
@@ -895,7 +956,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                         {note && (
                           <div style={{ 
                             display: 'flex', 
-                            flexDirection: 'column',
+                            flexDirection: isMobile ? 'row' : 'column',
                             gap: '12px',
                             marginTop: '24px'
                           }}>
@@ -903,7 +964,13 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                               className="button secondary"
                               onClick={resetEditedCarousels}
                               disabled={!carouselsDirty || savingCarousels}
-                              style={{ width: '100%' }}
+                              style={isMobile ? { 
+                                width: '48%',
+                                fontSize: '14px',
+                                padding: '10px 16px'
+                              } : { 
+                                width: '100%'
+                              }}
                             >
                               Reset
                             </button>
@@ -911,7 +978,13 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                               className="button"
                               onClick={saveEditedCarousels}
                               disabled={!carouselsDirty || savingCarousels}
-                              style={{ width: '100%' }}
+                              style={isMobile ? { 
+                                width: '48%',
+                                fontSize: '14px',
+                                padding: '10px 16px'
+                              } : { 
+                                width: '100%'
+                              }}
                             >
                               {savingCarousels ? 'Saving...' : 'Save'}
                             </button>
@@ -958,7 +1031,15 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                                 console.error('Failed to copy caption:', err)
                               }
                             }}
-                            style={{ width: '100%', marginTop: '12px' }}
+                            style={isMobile ? { 
+                              width: '100%', 
+                              marginTop: '12px',
+                              fontSize: '14px',
+                              padding: '10px 16px'
+                            } : { 
+                              width: '100%', 
+                              marginTop: '12px'
+                            }}
                           >
                             {captionCopied ? 'Copied' : 'Copy'}
                           </button>
@@ -972,7 +1053,24 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
               </div>
 
               {/* RIGHT COLUMN - Output */}
-              <div className="mobile-output" style={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '24px', minHeight: 0, minWidth: 0, alignSelf: 'stretch' }}>
+              <div className="mobile-output" style={{ 
+                height: '100%', 
+                // On mobile, allow vertical scrolling and let the inner thumbnail
+                // strip manage its own horizontal scrolling so it isn't clipped.
+                overflowX: isMobile ? 'visible' : 'hidden',
+                overflowY: isMobile ? 'auto' : 'hidden',
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: isMobile ? '16px' : '24px', 
+                minHeight: 0, 
+                minWidth: 0, 
+                alignSelf: 'stretch',
+                // On mobile, place the carousel preview below the controls
+                // and let it take the remaining vertical space.
+                order: isMobile ? 2 : 2,
+                flex: isMobile ? '1 1 70%' : undefined,
+                marginBottom: isMobile ? '0' : '0'
+              }}>
                 {showLoading ? (
                   <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fafafa', borderRadius: '12px' }}>
                     <div className="loading">
@@ -1018,7 +1116,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
 
   // Show history list view
   return (
-    <div style={{ minHeight: '100vh', background: '#ffffff', padding: '48px 24px 0 24px' }}>
+    <div style={{ minHeight: '100vh', background: '#ffffff', padding: isMobile ? '48px 16px 0 16px' : '48px 24px 0 24px' }}>
       {/* Main Content */}
       <div className="container" style={{ maxWidth: '1400px', margin: '0 auto' }}>
         <div style={{ marginBottom: '40px' }}>
@@ -1030,7 +1128,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
         {isLoading ? (
           <div style={{ 
             display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
+            gridTemplateColumns: isMobile ? 'repeat(auto-fit, minmax(150px, 1fr))' : 'repeat(4, 1fr)',
             gap: '24px',
           }}>
             {[1, 2, 3, 4].map((i) => (
@@ -1097,7 +1195,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
         ) : (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
+            gridTemplateColumns: isMobile ? 'repeat(auto-fit, minmax(150px, 1fr))' : 'repeat(4, 1fr)',
             gap: '24px',
             alignItems: 'stretch',
           }}>

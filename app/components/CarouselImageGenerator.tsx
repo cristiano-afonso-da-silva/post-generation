@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { getCarouselTemplate } from '../config/carouselTemplates'
 import { getColorTheme } from '../config/carouselThemes'
 import { useAuth } from '../context/AuthContext'
+import { useMobile } from '../hooks/useMobile'
 import JSZip from 'jszip'
 
 function ensureColorAlpha(color: string, alpha = 0.5): string {
@@ -202,6 +203,8 @@ export default function CarouselImageGenerator({
   onGenerationComplete,
   onCarouselsReorder
 }: Props) {
+  const isMobile = useMobile()
+  
   // Debug: Log underlineWords on component mount/update
   useEffect(() => {
     console.log('\n📦 CarouselImageGenerator: Received underlineWords:')
@@ -2477,9 +2480,9 @@ export default function CarouselImageGenerator({
                 borderRadius: '16px',
                 padding: '16px',
                 transition: 'all 0.3s ease',
-                minWidth: '400px',
-                maxWidth: '400px',
-                flex: '0 0 400px',
+                minWidth: isMobile ? '280px' : '400px',
+                maxWidth: isMobile ? '280px' : '400px',
+                flex: isMobile ? '0 0 280px' : '0 0 400px',
                 flexShrink: 0
               }}>
               <div style={{ 
@@ -2560,8 +2563,8 @@ export default function CarouselImageGenerator({
       <div
         style={{
           display: 'flex',
-          gap: '12px',
-          padding: '16px 0 16px 0',
+          gap: isMobile ? '8px' : '12px',
+          padding: isMobile ? '12px 0' : '16px 0',
           overflowX: 'auto',
           overflowY: 'hidden',
           marginTop: 'auto',
@@ -2625,9 +2628,9 @@ export default function CarouselImageGenerator({
               }}
               style={{
                 flexShrink: 0,
-                width: '64px',
-                height: '80px',
-                borderRadius: '12px',
+                width: isMobile ? '48px' : '64px',
+                height: isMobile ? '60px' : '80px',
+                borderRadius: isMobile ? '8px' : '12px',
                 overflow: 'hidden',
                 background: isDragOver ? '#fff9ed' : '#f5f5f5',
                 border: isDragOver ? '2px solid #ffbd59' : isDragging ? '2px dashed #ffbd59' : '1px solid #e5e5e5',
@@ -2670,7 +2673,7 @@ export default function CarouselImageGenerator({
                     justifyContent: 'center',
                     background: '#f5f5f5',
                     color: '#999999',
-                    fontSize: '24px',
+                    fontSize: isMobile ? '18px' : '24px',
                     fontWeight: '300'
                   }}
                 >

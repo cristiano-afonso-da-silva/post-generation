@@ -11,11 +11,13 @@ interface SidebarProps {
   activeView: 'create' | 'history'
   onViewChange: (view: 'create' | 'history') => void
   isCollapsed?: boolean
+  isMobile?: boolean
+  isMobileOpen?: boolean
   onClose?: () => void
   onOpen?: () => void
 }
 
-export default function Sidebar({ activeView, onViewChange, isCollapsed = false, onClose, onOpen }: SidebarProps) {
+export default function Sidebar({ activeView, onViewChange, isCollapsed = false, isMobile = false, isMobileOpen = false, onClose, onOpen }: SidebarProps) {
   const router = useRouter()
   const { user, credits } = useAuth()
   const [showAccountModal, setShowAccountModal] = useState(false)
@@ -26,7 +28,15 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
     { id: 'history' as const, label: 'History', icon: History },
   ]
 
-  const sidebarWidth = isCollapsed ? '64px' : '280px'
+  // On mobile, always show full width sidebar (never collapsed)
+  const sidebarWidth = isMobile ? '280px' : (isCollapsed ? '64px' : '280px')
+  
+  // On mobile, hide sidebar when closed, show as overlay when open
+  const mobileTransform = isMobile && !isMobileOpen ? 'translateX(-100%)' : 'translateX(0)'
+  const mobileVisibility = isMobile && !isMobileOpen ? 'hidden' : 'visible'
+  
+  // On mobile, always show full sidebar (not collapsed view)
+  const shouldShowCollapsed = isMobile ? false : isCollapsed
 
   return (
     <div style={{
@@ -39,11 +49,16 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
       position: 'fixed',
       left: 0,
       top: 0,
-      zIndex: 100,
-      transition: 'width 0.3s ease',
+      // Ensure sidebar always sits above page content and headers,
+      // especially on mobile where it becomes an overlay.
+      zIndex: isMobile ? 2000 : 100,
+      transition: isMobile ? 'transform 0.3s ease' : 'width 0.3s ease',
+      transform: isMobile ? mobileTransform : 'none',
+      visibility: isMobile ? mobileVisibility : 'visible',
+      boxShadow: isMobile && isMobileOpen ? '2px 0 8px rgba(0, 0, 0, 0.1)' : 'none',
     }}>
       {/* Logo */}
-      {!isCollapsed ? (
+      {!shouldShowCollapsed ? (
         <div style={{
           padding: '24px',
           flexShrink: 0,
@@ -150,7 +165,7 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
       {/* Menu Section */}
       <div style={{
         flex: 1,
-        padding: isCollapsed ? '24px 8px' : '24px',
+        padding: shouldShowCollapsed ? '24px 8px' : '24px',
         display: 'flex',
         flexDirection: 'column',
         gap: '4px',
@@ -166,11 +181,15 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
               onClick={() => {
                 // Delegate view changes to parent so state + URL stay in sync
                 onViewChange(item.id)
+                // Close mobile sidebar when item is clicked
+                if (isMobile && onClose) {
+                  onClose()
+                }
               }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: isCollapsed ? 'center' : 'flex-start',
+                justifyContent: shouldShowCollapsed ? 'center' : 'flex-start',
                 gap: '12px',
                 padding: '12px',
                 borderRadius: '8px',
@@ -182,7 +201,7 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
                 width: '100%',
-                textAlign: isCollapsed ? 'center' : 'left',
+                textAlign: shouldShowCollapsed ? 'center' : 'left',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = '#f5f5f5'
@@ -192,7 +211,7 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
               }}
             >
               <Icon size={20} />
-              {!isCollapsed && <span>{item.label}</span>}
+              {!shouldShowCollapsed && <span>{item.label}</span>}
             </button>
           )
         })}
@@ -204,7 +223,7 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
         <button
           onClick={() => setShowAccountModal(true)}
           style={{
-            padding: isCollapsed ? '16px 8px' : '16px',
+            padding: shouldShowCollapsed ? '16px 8px' : '16px',
             background: '#ffffff',
             border: 'none',
             borderTop: 'none',
@@ -213,7 +232,7 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
             transition: 'background 0.2s ease',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: isCollapsed ? 'center' : 'flex-start',
+            justifyContent: shouldShowCollapsed ? 'center' : 'flex-start',
             gap: '12px',
             flexShrink: 0,
           }}
@@ -239,7 +258,7 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
           }}>
             {user.email?.charAt(0).toUpperCase() || 'C'}
           </div>
-          {!isCollapsed && (
+          {!shouldShowCollapsed && (
             <div style={{
               flex: 1,
               minWidth: 0,

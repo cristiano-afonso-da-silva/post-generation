@@ -7,6 +7,7 @@ import { Check, ArrowRight, Zap, Palette, Download, Gauge, MessageSquare, CheckC
 import { useAuth } from './context/AuthContext'
 import AccountButton from './components/AccountButton'
 import { useState, useEffect, useCallback } from 'react'
+import { useMobile } from './hooks/useMobile'
 
 const exampleSlides = [
   { src: '/slide1.png', alt: 'Example carousel slide 1' },
@@ -54,7 +55,7 @@ const workflowPreview = [
 ]
 
 const comparisonData = [
-  { metric: 'Time per post', manual: '15–30 min', postMyNote: '~2 min' },
+  { metric: 'Time / Post', manual: '15–30 min', postMyNote: '~2 min' },
   { metric: 'Design skill', manual: 'Needed', postMyNote: 'None' },
   { metric: 'Workflow', manual: 'Manual', postMyNote: 'Automated' },
   { metric: 'Output', manual: '1 post', postMyNote: 'Batch ready' },
@@ -239,6 +240,7 @@ function SlideCarousel() {
 }
 
 export default function LandingPage() {
+  const isMobile = useMobile()
   const router = useRouter()
   const { user, loading, credits } = useAuth()
   const [card1Expanded, setCard1Expanded] = useState(false)
@@ -363,7 +365,7 @@ export default function LandingPage() {
               background: '#fff9ed',
               border: '1px solid #ffbd59',
               borderRadius: '999px',
-              fontSize: '13px',
+              fontSize: isMobile ? '10px' : 'clamp(11px, 2.5vw, 13px)',
               fontWeight: '600',
               color: '#000000',
               marginBottom: '32px',
@@ -777,7 +779,7 @@ export default function LandingPage() {
               background: '#fff9ed',
               border: '1px solid #ffbd59',
               borderRadius: '999px',
-              fontSize: '13px',
+              fontSize: isMobile ? '10px' : 'clamp(11px, 2.5vw, 13px)',
               fontWeight: '600',
               color: '#000000',
               marginTop: '80px',

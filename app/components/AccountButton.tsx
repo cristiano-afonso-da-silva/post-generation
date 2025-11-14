@@ -29,7 +29,7 @@ export default function AccountButton({ credits, subscriptionStatus, currentPlan
         aria-label="Account menu"
       >
         <span style={{ 
-          fontSize: '14px', 
+          fontSize: '12px', 
           fontWeight: '600', 
           color: '#000000',
           userSelect: 'none'

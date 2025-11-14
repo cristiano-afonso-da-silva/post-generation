@@ -9,6 +9,7 @@ import { COLOR_THEMES } from '../config/carouselThemes'
 import { getTemplateOptions } from '../config/carouselTemplates'
 import { useAuth } from '../context/AuthContext'
 import { useGeneration } from '../hooks/useGenerations'
+import { useMobile } from '../hooks/useMobile'
 import UpgradePrompt from '../components/UpgradePrompt'
 import SubscriptionModal from '../components/SubscriptionModal'
 import TemplateSelectorModal from '../components/TemplateSelectorModal'
@@ -36,6 +37,7 @@ interface CreatePageProps {
 }
 
 export default function CreatePage({ generationId, onHasUnsavedWorkChange }: CreatePageProps = {}) {
+  const isMobile = useMobile()
   const router = useRouter()
   const { user, loading: authLoading, credits, refreshCredits } = useAuth()
   const redirectingRef = useRef(false) // Prevent multiple redirects
@@ -433,7 +435,7 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
               animation: 'slideUp 0.6s ease-out',
             }}>
               <h2 style={{
-                fontSize: '28px',
+                fontSize: isMobile ? '20px' : '28px',
                 fontWeight: '700',
                 marginBottom: '16px',
                 color: '#000000',
@@ -902,7 +904,7 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
             animation: 'slideUp 0.6s ease-out',
           }}>
             <h2 style={{
-              fontSize: '28px',
+              fontSize: isMobile ? '20px' : '28px',
               fontWeight: '700',
               marginBottom: '16px',
               color: '#000000',
