@@ -293,9 +293,32 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
     }
   }, [user, authLoading, generationId, mutateGenerations, mutateGeneration])
 
+  // Clear note state when generationId changes (before new generation loads)
+  useEffect(() => {
+    // Clear the note state immediately when generationId changes
+    // This prevents showing the old post while the new one is loading
+    setNote(null)
+    setEditedCarousels([])
+    setEditedCaption('')
+    setCarouselsDirty(false)
+    setExpandedCarouselIndexes([])
+  }, [generationId])
+
   // Load generation data when generation is available
   useEffect(() => {
-    if (!generation || !user) return
+    if (!generation || !user || !generationId) return
+    
+    // CRITICAL: Only set the note if the generation ID matches the current generationId
+    // This prevents showing stale cached data from SWR, especially important in production
+    // where network latency can cause the old cached generation to briefly appear
+    if (generation.id !== generationId) {
+      console.log('🚫 Ignoring stale generation data:', {
+        generationId: generation.id,
+        expectedId: generationId,
+        isLoading: isLoadingGeneration
+      })
+      return
+    }
 
     // Debug: Log what we're getting from the API
     console.log('📝 Loading generation data:', {
@@ -335,7 +358,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
     } catch (error) {
       console.error('Error storing in localStorage:', error)
     }
-  }, [generation, user])
+  }, [generation, user, generationId, isLoadingGeneration])
 
   // Sync editable carousels with note
   useEffect(() => {
