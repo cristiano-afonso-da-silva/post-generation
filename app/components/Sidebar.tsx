@@ -3,13 +3,13 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
-import { LayoutGrid, SquarePen, History, PanelRightOpen, Menu } from 'lucide-react'
+import { SquarePen, History, PanelRightOpen, Menu } from 'lucide-react'
 import Image from 'next/image'
 import AccountModal from './AccountModal'
 
 interface SidebarProps {
-  activeView: 'dashboard' | 'create' | 'history'
-  onViewChange: (view: 'dashboard' | 'create' | 'history') => void
+  activeView: 'create' | 'history'
+  onViewChange: (view: 'create' | 'history') => void
   isCollapsed?: boolean
   onClose?: () => void
   onOpen?: () => void
@@ -23,7 +23,6 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
 
   const menuItems = [
     { id: 'create' as const, label: 'Create', icon: SquarePen },
-    { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutGrid },
     { id: 'history' as const, label: 'History', icon: History },
   ]
 
@@ -56,7 +55,7 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
             gap: '12px',
           }}>
             <div
-              onClick={() => router.push('/')}
+              onClick={() => router.push('/landing')}
               style={{
                 cursor: 'pointer',
                 transition: 'opacity 0.2s ease',

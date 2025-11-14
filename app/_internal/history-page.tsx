@@ -39,14 +39,14 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
   const generationId = searchParams.get('id')
   const { user, loading: authLoading } = useAuth()
   const [page, setPage] = useState(1)
-  const itemsPerPage = 6
+  const itemsPerPage = 8
   const offset = (page - 1) * itemsPerPage
   
-  const { generations, totalCount, isLoading, isError } = useGenerations(user?.id, itemsPerPage, offset)
+  const { generations, totalCount, isLoading, isError, mutate: mutateGenerations } = useGenerations(user?.id, itemsPerPage, offset)
   const totalPages = totalCount ? Math.ceil(totalCount / itemsPerPage) : 0
 
   // Load generation if generationId is in URL
-  const { generation, isLoading: isLoadingGeneration } = useGeneration(
+  const { generation, isLoading: isLoadingGeneration, mutate: mutateGeneration } = useGeneration(
     generationId || undefined,
     user?.id
   )
@@ -77,6 +77,21 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
       router.push('/')
     }
   }, [user, authLoading, router])
+
+  // Refetch data whenever the history page is accessed or generationId changes
+  useEffect(() => {
+    if (user && !authLoading) {
+      // Refetch the generations list every time the history page is accessed
+      if (mutateGenerations) {
+        mutateGenerations()
+      }
+      
+      // If viewing a specific generation, refetch that generation too
+      if (generationId && mutateGeneration) {
+        mutateGeneration()
+      }
+    }
+  }, [user, authLoading, generationId, mutateGenerations, mutateGeneration])
 
   // Load generation data when generation is available
   useEffect(() => {
@@ -316,7 +331,11 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
     const isDownloadDisabled = downloading || !generation || !hasImages
     
     return (
-      <div style={{ background: '#ffffff', minHeight: '100vh' }}>
+      <div style={{ 
+        background: '#ffffff', 
+        minHeight: '100vh',
+        animation: 'slideUp 0.6s ease-out'
+      }}>
         {/* Top Header Bar */}
         <div
           style={{
@@ -731,7 +750,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
         {isLoading ? (
           <div style={{ 
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+            gridTemplateColumns: 'repeat(4, 1fr)',
             gap: '24px',
           }}>
             {[1, 2, 3, 4].map((i) => (
@@ -798,7 +817,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
         ) : (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+            gridTemplateColumns: 'repeat(4, 1fr)',
             gap: '24px',
           }}>
             {generations.map((gen: any) => {
@@ -985,6 +1004,20 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
           </div>
         )}
       </div>
+
+      {/* Animations */}
+      <style jsx>{`
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(40px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   )
 }

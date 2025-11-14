@@ -250,6 +250,13 @@ export default function LandingPage() {
   const [selectedBackground, setSelectedBackground] = useState('rgb(235, 185, 173)')
   const [selectedStyle, setSelectedStyle] = useState(1) // Style 1 or 2
 
+  // Redirect logged-in users to dashboard
+  useEffect(() => {
+    if (!loading && user) {
+      router.push('/dashboard')
+    }
+  }, [user, loading, router])
+
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

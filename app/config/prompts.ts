@@ -61,8 +61,6 @@ Create a complete note with carousels and caption that follows these EXACT speci
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CAROUSEL 1: HOOK (FIRST CAROUSEL)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- topic: Short category label (1-2 words, all caps)
-  * Example: "ENTREPRENEURSHIP", "PRODUCTIVITY", "MARKETING"
 - title: A compelling hook that grabs attention (6-12 words, NOT a simple one-word title)
   * CRITICAL: This must be an engaging, attention-grabbing hook - NOT just a simple label or category
   * Create curiosity, intrigue, or a bold statement that makes people stop scrolling
@@ -72,9 +70,8 @@ CAROUSEL 1: HOOK (FIRST CAROUSEL)
     * "The One Mistake That's Costing You Thousands of Followers"
     * "I Tried This Productivity Hack For 30 Days - Here's What Happened"
     * "The Secret Most Entrepreneurs Don't Want You to Know"
-  * Use simple English - easy to understand, clear, and direct
-  * Avoid complex words or jargon
-  * Make it impossible to scroll past
+- topic: Short category label (1-2 words, all caps)
+  * Example: "ENTREPRENEURSHIP", "PRODUCTIVITY", "MARKETING"
 - subtitle: Short descriptive text (3-8 words)
   * Provides context or intrigue
   * Example: "How I Stay Focused & Sane", "The Secret Nobody Tells You"

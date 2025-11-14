@@ -666,6 +666,8 @@ export default function CarouselImageGenerator({
     if (user?.id && imageDataUrls.length > 0) {
       const isDataUrl = imageDataUrls[0]?.startsWith('data:image/')
       if (isDataUrl) {
+        // Database save is part of rendering - don't notify parent
+        // The rendering step will stay active until save completes
         const saveStartTime = performance.now()
         console.log('💾 [SAVE] Saving images to Supabase (design update or new generation)...')
         console.log('   ⏱️ Timestamp:', new Date().toISOString())
@@ -687,10 +689,15 @@ export default function CarouselImageGenerator({
     console.log('   ⏱️ Final timestamp:', new Date().toISOString())
     
     // Notify parent component that generation is complete with the generation ID
-    if (onGenerationComplete) {
+    // Only call if we have a valid generationId from database save
+    // Don't navigate if save failed or didn't happen
+    if (onGenerationComplete && savedGenerationId) {
       console.log('📞 Calling onGenerationComplete with generationId:', savedGenerationId)
       onGenerationComplete(savedGenerationId)
-    } else {
+    } else if (onGenerationComplete && !savedGenerationId) {
+      console.warn('⚠️ Database save did not return generationId - not calling onGenerationComplete')
+      console.warn('   This prevents navigation to wrong page')
+    } else if (!onGenerationComplete) {
       console.warn('⚠️ onGenerationComplete callback not provided')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1569,7 +1576,7 @@ export default function CarouselImageGenerator({
       }
       
       const emphasisData = orderedUnderlineWords[index] || { underline: '', highlight: '' }
-      const underlinePhrases = emphasisData.underline.split(',').map(p => p.trim()).filter(p => p)
+      const underlinePhrases = emphasisData.underline.split(',').map((p: string) => p.trim()).filter((p: string) => p)
       
       const spaceWidth = ctx.measureText(' ').width
       const lineHeight = template.fonts.content.lineHeight
@@ -1586,8 +1593,8 @@ export default function CarouselImageGenerator({
         const underlineMap: boolean[] = new Array(words.length).fill(false)
         
         for (const phrase of underlinePhrases) {
-          const phraseWords = phrase.toLowerCase().split(/\s+/).map(w => w.replace(/[.,!?;:–—\-'"`]/g, '').trim())
-          const cleanLineWords = words.map(w => w.toLowerCase().replace(/[.,!?;:–—\-'"`]/g, '').trim())
+          const phraseWords = phrase.toLowerCase().split(/\s+/).map((w: string) => w.replace(/[.,!?;:–—\-'"`]/g, '').trim())
+          const cleanLineWords = words.map((w: string) => w.toLowerCase().replace(/[.,!?;:–—\-'"`]/g, '').trim())
           
           for (let i = 0; i <= cleanLineWords.length - phraseWords.length; i++) {
             let matches = true
@@ -1963,7 +1970,7 @@ export default function CarouselImageGenerator({
         ctx.fillStyle = colorTheme.textColor
       const spaceWidth = ctx.measureText(' ').width
         
-        const underlinePhrases = emphasisData.underline.split(',').map(p => p.trim()).filter(p => p)
+        const underlinePhrases = emphasisData.underline.split(',').map((p: string) => p.trim()).filter((p: string) => p)
       const highlightWord = emphasisData.highlight.toLowerCase().replace(/[.,!?;:–—\-'"`]/g, '').trim()
 
         let lastHighlightLineIndex = -1
@@ -1972,7 +1979,7 @@ export default function CarouselImageGenerator({
         if (highlightWord) {
           for (let lineIdx = contentLines.length - 1; lineIdx >= 0; lineIdx--) {
             const lineWords = contentLines[lineIdx].split(' ')
-          const cleanLineWords = lineWords.map(w => w.toLowerCase().replace(/[.,!?;:–—\-'"`]/g, '').trim())
+          const cleanLineWords = lineWords.map((w: string) => w.toLowerCase().replace(/[.,!?;:–—\-'"`]/g, '').trim())
             for (let wordIdx = cleanLineWords.length - 1; wordIdx >= 0; wordIdx--) {
               if (cleanLineWords[wordIdx] === highlightWord) {
                 lastHighlightLineIndex = lineIdx
@@ -1989,8 +1996,8 @@ export default function CarouselImageGenerator({
           const underlineMap: boolean[] = new Array(words.length).fill(false)
           
           for (const phrase of underlinePhrases) {
-          const phraseWords = phrase.toLowerCase().split(/\s+/).map(w => w.replace(/[.,!?;:–—\-'"`]/g, '').trim())
-          const cleanLineWords = words.map(w => w.toLowerCase().replace(/[.,!?;:–—\-'"`]/g, '').trim())
+          const phraseWords = phrase.toLowerCase().split(/\s+/).map((w: string) => w.replace(/[.,!?;:–—\-'"`]/g, '').trim())
+          const cleanLineWords = words.map((w: string) => w.toLowerCase().replace(/[.,!?;:–—\-'"`]/g, '').trim())
             
             for (let i = 0; i <= cleanLineWords.length - phraseWords.length; i++) {
               let matches = true

@@ -4,7 +4,6 @@ import { useState, useEffect, Suspense } from 'react'
 import Sidebar from '../components/Sidebar'
 import { useAuth } from '../context/AuthContext'
 import { useRouter, useSearchParams } from 'next/navigation'
-import DashboardContent from '../components/DashboardContent'
 
 // Lazy load the heavy components
 import dynamic from 'next/dynamic'
@@ -14,8 +13,8 @@ const HistoryPage = dynamic(() => import('../_internal/history-page'), { ssr: fa
 
 function DashboardView() {
   const searchParams = useSearchParams()
-  const view = (searchParams.get('view') as 'dashboard' | 'create' | 'history') || 'dashboard'
-  const [activeView, setActiveView] = useState<'dashboard' | 'create' | 'history'>(view)
+  const view = (searchParams.get('view') as 'create' | 'history') || 'create'
+  const [activeView, setActiveView] = useState<'create' | 'history'>(view)
   const [selectedGenerationId, setSelectedGenerationId] = useState<string | null>(null)
   const { user, loading } = useAuth()
   const router = useRouter()
@@ -43,7 +42,7 @@ function DashboardView() {
     }
   }, [view, searchParams])
 
-  const handleViewChange = (newView: 'dashboard' | 'create' | 'history') => {
+  const handleViewChange = (newView: 'create' | 'history') => {
     setActiveView(newView)
     router.push(`/dashboard?view=${newView}`, { scroll: false })
   }
@@ -118,7 +117,6 @@ function DashboardView() {
             display: none !important;
           }
         `}</style>
-        {activeView === 'dashboard' && <DashboardContent />}
         {activeView === 'create' && <CreateNewPage generationId={searchParams.get('id') || undefined} />}
         {activeView === 'history' && (
           <div style={{ height: '100%', overflow: 'auto' }}>

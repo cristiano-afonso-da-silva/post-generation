@@ -198,28 +198,29 @@ export default function ModeSelectorDropdown({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between'
+                justifyContent: 'space-between',
+                width: '100%'
               }}
             >
-              <div>
-                <div
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                <span
                   style={{
                     fontSize: '14px',
                     fontWeight: isSelected ? '600' : '500',
-                    color: '#000000',
-                    marginBottom: '2px'
+                    color: '#000000'
                   }}
                 >
                   {mode.label}
-                </div>
-                <div
+                </span>
+                <span
                   style={{
-                    fontSize: '12px',
-                    color: '#666666'
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#999999'
                   }}
                 >
                   {mode.credits} {mode.credits === 1 ? 'credit' : 'credits'}
-                </div>
+                </span>
               </div>
               {isSelected && (
                 <div

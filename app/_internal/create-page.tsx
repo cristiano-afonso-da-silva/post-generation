@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Palette, Type, ArrowUp } from 'lucide-react'
+import { Palette, Type, ArrowUp, ChevronDown, FileText } from 'lucide-react'
 import '../globals.css'
 import CarouselImageGenerator from '../components/CarouselImageGenerator'
 import { COLOR_THEMES } from '../config/carouselThemes'
@@ -234,6 +234,8 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
 
     // Step progression
     setTimeout(() => setCurrentStep('analysing'), 1000)
+    // Rendering step includes both canvas rendering AND database save
+    // It will stay active until onGenerationComplete is called after database save completes
     setTimeout(() => setCurrentStep('rendering'), 2000)
 
     try {
@@ -261,7 +263,8 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
           }
           
           setError('')
-          setCurrentStep(null)
+          // Keep currentStep as 'rendering' - don't clear it yet
+          // It will be cleared when onGenerationComplete is called after database save
           
           // Refresh credits after successful generation
           try {
@@ -285,11 +288,12 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
             console.error('Error saving to localStorage:', error)
           }
           
-          // Store in ref and immediately redirect - no state updates
+          // Store in ref - keep loadingNote true and currentStep 'rendering' until database save completes
+          // This keeps the "Rendering" step visible during database save
           pendingGenerationRef.current = noteData
-          // Clear loading state
-          setLoadingNote(false)
-          setCurrentStep(null)
+          // DON'T clear loadingNote or currentStep yet - wait for onGenerationComplete
+          // setLoadingNote(false) - removed
+          // setCurrentStep(null) - removed
         } else {
           setError('Invalid response from server')
           setSelectedIdea(null)
@@ -306,7 +310,11 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
       setSelectedIdea(null)
       setCurrentStep(null)
     } finally {
-      setLoadingNote(false)
+      // Only clear loadingNote if there was an error - otherwise keep it true until database save completes
+      // If pendingGenerationRef is not set, there was an error, so clear loading
+      if (!pendingGenerationRef.current) {
+        setLoadingNote(false)
+      }
     }
   }
 
@@ -325,42 +333,177 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
     return null
   }
 
-  // If we have pending generation data, render hidden generator and redirect immediately
+  // If we have pending generation data, render hidden generator and Loading Steps
   const pendingNote = pendingGenerationRef.current
-  if (pendingNote && !generationId && !redirectingRef.current) {
+  if (pendingNote && !generationId) {
     return (
-      <div style={{ display: 'none' }}>
-        <CarouselImageGenerator
-          key={`${colorThemeId}-${templateId}`}
-          carousels={pendingNote.carousels}
-          underlineWords={pendingNote.underlineWords || {}}
-          colorThemeId={colorThemeId}
-          templateId={templateId}
-          ideaTitle={pendingNote.ideaTitle}
-          ideaIndex={selectedIdea ? ideas.findIndex(idea => idea === selectedIdea) + 1 : null}
-          includeImages={includeImages}
-          useAIImages={useAIImages}
-          aiImageStyle={aiImageStyle}
-          onGenerationComplete={(generationId) => {
-            if (redirectingRef.current) return
-            
-            let finalGenerationId = generationId
-            if (!finalGenerationId) {
-              try {
-                const storedId = localStorage.getItem('postGeneration_generationId')
-                if (storedId) finalGenerationId = storedId
-              } catch (err) {
-                console.error('Error reading generationId from localStorage:', err)
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        background: '#fafafa',
+        overflow: 'hidden',
+      }}>
+        {/* Top Content Area */}
+        <div style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '48px 24px 24px 24px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          {/* Loading Steps - Show while rendering/saving */}
+          {loadingNote && selectedIdea && (
+            <div style={{
+              maxWidth: '600px',
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: '-180px',
+              animation: 'slideUp 0.6s ease-out',
+            }}>
+              <h2 style={{
+                fontSize: '24px',
+                fontWeight: '700',
+                marginBottom: '32px',
+                color: '#000000',
+                textAlign: 'center',
+              }}>
+                {selectedIdea}
+              </h2>
+              
+              {/* Step Progress Indicators */}
+              {!note && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                {/* Generating */}
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '16px',
+                  padding: '16px',
+                  borderRadius: '8px',
+                  background: currentStep === 'generating' ? '#fff9e6' : 'transparent',
+                }}>
+                  <div style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {currentStep === 'generating' ? (
+                      <span className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></span>
+                    ) : currentStep && ['analysing', 'rendering'].includes(currentStep) ? (
+                      <span style={{ color: '#ffbd59', fontSize: '20px' }}>✓</span>
+                    ) : (
+                      <span style={{ color: '#999999', fontSize: '20px' }}>○</span>
+                    )}
+                  </div>
+                  <span style={{ 
+                    fontSize: '16px', 
+                    fontWeight: currentStep === 'generating' ? '600' : '400',
+                    color: currentStep === 'generating' ? '#000000' : currentStep && ['analysing', 'rendering'].includes(currentStep) ? '#ffbd59' : '#999999'
+                  }}>
+                    Generating
+                  </span>
+                </div>
+
+                {/* Analysing */}
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '16px',
+                  padding: '16px',
+                  borderRadius: '8px',
+                  background: currentStep === 'analysing' ? '#fff9e6' : 'transparent',
+                }}>
+                  <div style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {currentStep === 'analysing' ? (
+                      <span className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></span>
+                    ) : currentStep === 'rendering' ? (
+                      <span style={{ color: '#ffbd59', fontSize: '20px' }}>✓</span>
+                    ) : (
+                      <span style={{ color: '#999999', fontSize: '20px' }}>○</span>
+                    )}
+                  </div>
+                  <span style={{ 
+                    fontSize: '16px', 
+                    fontWeight: currentStep === 'analysing' ? '600' : '400',
+                    color: currentStep === 'analysing' ? '#000000' : currentStep === 'rendering' ? '#ffbd59' : '#999999'
+                  }}>
+                    Analysing
+                  </span>
+                </div>
+
+                {/* Rendering */}
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '16px',
+                  padding: '16px',
+                  borderRadius: '8px',
+                  background: currentStep === 'rendering' ? '#fff9e6' : 'transparent',
+                }}>
+                  <div style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {currentStep === 'rendering' ? (
+                      <span className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></span>
+                    ) : (
+                      <span style={{ color: '#999999', fontSize: '20px' }}>○</span>
+                    )}
+                  </div>
+                  <span style={{ 
+                    fontSize: '16px', 
+                    fontWeight: currentStep === 'rendering' ? '600' : '400',
+                    color: currentStep === 'rendering' ? '#000000' : '#999999'
+                  }}>
+                    Rendering
+                  </span>
+                </div>
+              </div>
+            )}
+            </div>
+          )}
+        </div>
+
+        {/* Hidden CarouselImageGenerator */}
+        <div style={{ display: 'none' }}>
+          <CarouselImageGenerator
+            key={`${colorThemeId}-${templateId}`}
+            carousels={pendingNote.carousels}
+            underlineWords={pendingNote.underlineWords || {}}
+            colorThemeId={colorThemeId}
+            templateId={templateId}
+            ideaTitle={pendingNote.ideaTitle}
+            ideaIndex={selectedIdea ? ideas.findIndex(idea => idea === selectedIdea) + 1 : null}
+            caption={pendingNote.caption || ''}
+            accountDescription={accountDescription}
+            includeImages={includeImages}
+            useAIImages={useAIImages}
+            aiImageStyle={aiImageStyle}
+            onGenerationComplete={(generationId) => {
+              if (redirectingRef.current) return
+              
+              // Only navigate if we have a valid generationId from the database save
+              // Don't use localStorage fallback - that could be a stale ID from previous generation
+              if (generationId) {
+                console.log('✅ Navigating to history page with generationId:', generationId)
+                redirectingRef.current = true
+                // Navigate IMMEDIATELY - don't update any React state
+                // State updates cause re-renders which show blank page
+                // Navigation happens synchronously, so no state updates needed
+                window.location.href = `/dashboard?view=history&id=${generationId}`
+              } else {
+                console.error('❌ Cannot navigate: No generationId provided from database save')
+                console.error('   Database save may have failed or not completed')
+                // Show error to user and clear loading state
+                setError('Failed to save generation to database. Please try again.')
+                setLoadingNote(false)
+                setSelectedIdea(null)
+                setCurrentStep(null)
+                pendingGenerationRef.current = null
+                // Don't navigate - stay on create page so user can try again
               }
-            }
-            
-            if (finalGenerationId) {
-              redirectingRef.current = true
-              pendingGenerationRef.current = null // Clear ref
-              window.location.href = `/dashboard?view=history&id=${finalGenerationId}`
-            }
-          }}
-        />
+            }}
+          />
+        </div>
       </div>
     )
   }
@@ -381,14 +524,15 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
+        justifyContent: 'center',
       }}>
         {/* Empty State */}
-        {!ideas.length && !loadingIdeas && !note && !pendingGenerationRef.current && !loadingNote && (
+        {!ideas.length && !loadingIdeas && !note && !pendingGenerationRef.current && !loadingNote && !redirectingRef.current && (
           <div style={{
             maxWidth: '800px',
             width: '100%',
-            marginTop: '10vh',
             textAlign: 'center',
+            marginTop: '-180px',
           }}>
             <h1 style={{
               fontSize: '32px',
@@ -464,17 +608,19 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                     onClick={() => setShowTemplateModal(true)}
                     disabled={loadingIdeas || loadingNote}
                     style={{
-                      width: '32px',
                       height: '32px',
+                      padding: '0 12px',
                       borderRadius: '6px',
                       border: '1px solid #e5e5e5',
                       background: '#ffffff',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
+                      gap: '8px',
                       cursor: loadingIdeas || loadingNote ? 'not-allowed' : 'pointer',
                       transition: 'all 0.2s ease',
                       opacity: loadingIdeas || loadingNote ? 0.5 : 1,
+                      whiteSpace: 'nowrap',
+                      width: 'fit-content'
                     }}
                     onMouseEnter={(e) => {
                       if (!loadingIdeas && !loadingNote) {
@@ -491,6 +637,10 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                     title="Select Template"
                   >
                     <Palette size={18} color="#666666" />
+                    <span style={{ fontSize: '14px', fontWeight: '500', color: '#000000', userSelect: 'none' }}>
+                      {templateOptions.find(t => t.id === templateId)?.name || 'Template'}
+                    </span>
+                    <ChevronDown size={16} color="#666666" />
                   </button>
 
                   {/* Mode Selector Button */}
@@ -500,17 +650,19 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                       onClick={() => setShowModeDropdown(!showModeDropdown)}
                       disabled={loadingIdeas || loadingNote}
                       style={{
-                        width: '32px',
                         height: '32px',
+                        padding: '0 12px',
                         borderRadius: '6px',
                         border: '1px solid #e5e5e5',
                         background: showModeDropdown ? '#f5f5f5' : '#ffffff',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
+                        gap: '8px',
                         cursor: loadingIdeas || loadingNote ? 'not-allowed' : 'pointer',
                         transition: 'all 0.2s ease',
                         opacity: loadingIdeas || loadingNote ? 0.5 : 1,
+                        whiteSpace: 'nowrap',
+                        width: 'fit-content'
                       }}
                       onMouseEnter={(e) => {
                         if (!loadingIdeas && !loadingNote && !showModeDropdown) {
@@ -526,7 +678,19 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                       }}
                       title="Select Mode"
                     >
-                      <Type size={18} color="#666666" />
+                      <FileText size={18} color="#666666" />
+                      <span style={{ fontSize: '14px', fontWeight: '500', color: '#000000', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {!includeImages ? (
+                          <>Text <span style={{ color: '#999999', fontWeight: '600' }}>1 credit</span></>
+                        ) : !useAIImages ? (
+                          <>Text + Image <span style={{ color: '#999999', fontWeight: '600' }}>2 credits</span></>
+                        ) : aiImageStyle === 'animated' ? (
+                          <>Text + AI Animated Image <span style={{ color: '#999999', fontWeight: '600' }}>2 credits</span></>
+                        ) : (
+                          <>Text + AI Surrealism Image <span style={{ color: '#999999', fontWeight: '600' }}>2 credits</span></>
+                        )}
+                      </span>
+                      <ChevronDown size={16} color="#666666" />
                     </button>
                     {showModeDropdown && (
                       <ModeSelectorDropdown
@@ -588,7 +752,10 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
           <div style={{
             maxWidth: '600px',
             width: '100%',
-            marginTop: '20vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginTop: '-180px',
             textAlign: 'center',
           }}>
             <div className="loading">
@@ -601,10 +768,15 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
         )}
 
         {/* Ideas Grid */}
-        {ideas.length > 0 && !note && !pendingGenerationRef.current && !loadingNote && !selectedIdea && (
+        {ideas.length > 0 && !note && !pendingGenerationRef.current && !loadingNote && !selectedIdea && !redirectingRef.current && (
           <div style={{
             maxWidth: '1000px',
             width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginTop: '-180px',
             animation: 'slideUp 0.6s ease-out',
           }}>
             <h2 style={{
@@ -681,7 +853,11 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
           <div style={{
             maxWidth: '600px',
             width: '100%',
-            marginTop: '15vh',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginTop: '-180px',
             animation: 'slideUp 0.6s ease-out',
           }}>
             <h2 style={{
@@ -751,7 +927,7 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                 </span>
               </div>
 
-              {/* Rendering */}
+              {/* Rendering - includes both canvas rendering and database save */}
               <div style={{ 
                 display: 'flex', 
                 alignItems: 'center', 
@@ -773,7 +949,7 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                   color: currentStep === 'rendering' ? '#000000' : '#999999'
                 }}>
                   Rendering
-              </span>
+                </span>
               </div>
             </div>
           )}
@@ -791,6 +967,8 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
               templateId={templateId}
               ideaTitle={note.ideaTitle}
               ideaIndex={selectedIdea ? ideas.findIndex(idea => idea === selectedIdea) + 1 : null}
+              caption={note.caption || ''}
+              accountDescription={accountDescription}
               includeImages={includeImages}
               useAIImages={useAIImages}
               aiImageStyle={aiImageStyle}

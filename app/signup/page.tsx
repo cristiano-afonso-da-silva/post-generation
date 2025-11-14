@@ -58,8 +58,8 @@ export default function SignUpPage() {
         (window.location.hostname === 'postmynote.app' || 
          window.location.hostname === 'www.postmynote.app')
       const redirectUrl = isProduction 
-        ? 'https://postmynote.app/' 
-        : `${window.location.origin}/`
+        ? 'https://postmynote.app/dashboard' 
+        : `${window.location.origin}/dashboard`
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
