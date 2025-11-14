@@ -409,12 +409,11 @@ export default function CarouselImageGenerator({
       console.log('   📝 Idea:', ideaTitle)
       console.log('   🖼️  Images:', imageDataUrls.length)
 
-      // For now, always use server-side upload to avoid RLS issues
-      // The 20MB limit should be sufficient for most cases
-      // Client-side upload can be enabled later once RLS policies are properly configured
-      console.log('📤 [UPLOAD] Using server-side upload (20MB limit)')
+      // Step 1: Create/get generation first (small payload, metadata only)
+      // This avoids Vercel's 4.5MB/6MB body size limits
+      console.log('📤 [STEP 1] Creating/getting generation (metadata only)...')
       
-      const response = await fetch('/api/generations/save', {
+      const createResponse = await fetch('/api/generations/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -427,48 +426,109 @@ export default function CarouselImageGenerator({
           underlineWords: orderedUnderlineWords,
           templateId,
           colorThemeId,
-          images: imageDataUrls // Server-side upload (with increased 20MB limit)
+          // No images or imageUrls - will upload separately
         })
       })
 
-      if (!response.ok) {
-        // Handle different error responses (413 returns HTML, not JSON)
-        let errorMessage = `Failed to save generation (${response.status})`
-        
-        if (response.status === 413) {
-          errorMessage = 'Image data too large to save. Please try generating fewer carousels or contact support.'
-        } else {
+      if (!createResponse.ok) {
+        let errorMessage = `Failed to create generation (${createResponse.status})`
+        try {
+          const errorData = await createResponse.json()
+          errorMessage = errorData.error || errorMessage
+        } catch (e) {
+          errorMessage = createResponse.statusText || errorMessage
+        }
+        console.error('❌ Failed to create generation:', errorMessage)
+        throw new Error(errorMessage)
+      }
+
+      const createResult = await createResponse.json()
+      const generationId = createResult.generationId
+      
+      console.log('✅ Generation created/retrieved:', generationId)
+      console.log('📤 [STEP 2] Uploading images directly to Supabase Storage (client-side)...')
+
+      // Step 2: Upload images directly to Supabase Storage (bypasses API body size limits)
+      // This avoids Vercel's 4.5MB/6MB request body size limits
+      let imageUrls: string[]
+      let thumbnailUrls: string[]
+      
+      try {
+        // If updating an existing generation, delete old images first
+        if (createResult.isUpdate) {
+          console.log('🗑️  Deleting old images for update...')
+          const { deleteOldImages } = await import('../lib/uploadImages')
           try {
-            const errorData = await response.json()
-            errorMessage = errorData.error || errorMessage
-          } catch (e) {
-            // If response is not JSON (e.g., HTML error page), use status text
-            errorMessage = response.statusText || errorMessage
+            await deleteOldImages(user.id, generationId)
+          } catch (deleteError) {
+            // Non-fatal - upsert will overwrite anyway
+            console.warn('⚠️ Failed to delete old images (non-fatal):', deleteError)
           }
         }
         
-        console.error('❌ Failed to auto-save generation:', errorMessage)
-        throw new Error(errorMessage)
-      } else {
-        const result = await response.json()
-        const returnedGenerationId = result.generationId
-        
-        // Store generation_id, content hash, and ideaTitle in localStorage
-        localStorage.setItem('postGeneration_generationId', returnedGenerationId)
-        localStorage.setItem('postGeneration_contentHash', currentContentHash)
-        localStorage.setItem('postGeneration_ideaTitle', ideaTitle)
-        if (user?.id) {
-          localStorage.setItem('postGeneration_userId', user.id)
-        }
-        
-        if (result.isUpdate) {
-          console.log('✅ Generation updated in history (same ideaTitle):', returnedGenerationId)
-        } else {
-          console.log('✅ Generation auto-saved to history (new ideaTitle):', returnedGenerationId)
-        }
-        
-        return returnedGenerationId
+        const uploadResult = await uploadImagesToStorage(
+          user.id,
+          generationId,
+          imageDataUrls
+        )
+        imageUrls = uploadResult.imageUrls
+        thumbnailUrls = uploadResult.thumbnailUrls
+        console.log('✅ Images uploaded successfully:', imageUrls.length)
+      } catch (uploadError: any) {
+        console.error('❌ Failed to upload images:', uploadError)
+        throw new Error(`Failed to upload images: ${uploadError.message || uploadError}`)
       }
+
+      // Step 3: Update generation with image URLs (small payload, just URLs)
+      console.log('📤 [STEP 3] Updating generation with image URLs...')
+      
+      const updateResponse = await fetch('/api/generations/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          generationId: generationId,
+          ideaTitle,
+          accountDescription: accountDescriptionRef.current,
+          slides: orderedCarousels,
+          caption: captionRef.current,
+          underlineWords: orderedUnderlineWords,
+          templateId,
+          colorThemeId,
+          imageUrls: imageUrls,
+          thumbnailUrls: thumbnailUrls,
+        })
+      })
+
+      if (!updateResponse.ok) {
+        let errorMessage = `Failed to update generation with images (${updateResponse.status})`
+        try {
+          const errorData = await updateResponse.json()
+          errorMessage = errorData.error || errorMessage
+        } catch (e) {
+          errorMessage = updateResponse.statusText || errorMessage
+        }
+        console.error('❌ Failed to update generation:', errorMessage)
+        throw new Error(errorMessage)
+      }
+
+      const updateResult = await updateResponse.json()
+      
+      // Store generation_id, content hash, and ideaTitle in localStorage
+      localStorage.setItem('postGeneration_generationId', generationId)
+      localStorage.setItem('postGeneration_contentHash', currentContentHash)
+      localStorage.setItem('postGeneration_ideaTitle', ideaTitle)
+      if (user?.id) {
+        localStorage.setItem('postGeneration_userId', user.id)
+      }
+      
+      if (updateResult.isUpdate) {
+        console.log('✅ Generation updated in history (same ideaTitle):', generationId)
+      } else {
+        console.log('✅ Generation auto-saved to history (new ideaTitle):', generationId)
+      }
+      
+      return generationId
     } catch (error: any) {
       console.error('❌ Error auto-saving generation:', error.message || error)
       return undefined

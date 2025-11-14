@@ -212,7 +212,11 @@ export async function POST(request: NextRequest) {
       const uploadTime = Date.now() - uploadStartTime
       console.log(`✅ Uploaded ${images.length} images in ${uploadTime}ms (parallel, server-side)`)
     } else {
-      throw new Error('No images or imageUrls provided')
+      // No images provided - this is allowed for initial generation creation
+      // Images will be uploaded separately and URLs updated later
+      console.log('⚠️ No images or imageUrls provided - creating generation without images')
+      imageUrls = []
+      thumbnailUrls = []
     }
 
     // Update generation with thumbnail URLs and all image URLs for caching
