@@ -433,7 +433,7 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
           throw new Error(data.error || 'Failed to refresh carousel enhancements')
         }
 
-        const updatedUnderline: Note['underlineWords'] = data.data?.underlineWords || {}
+        const updatedUnderline: Record<number, { underline: string; highlight: string; imageSearch?: string; imageUrl?: string | null; originalImageUrl?: string | null }> = data.data?.underlineWords || {}
         const sanitizedCarousels: Note['carousels'] = (data.data?.slides || cleanedCarousels) as Note['carousels']
 
         // ✅ CRITICAL: Preserve existing AI image URLs when updating underline/highlight words
@@ -441,7 +441,7 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
         const preservedUnderlineWords: Note['underlineWords'] = {}
         const existingUnderlineWords = note.underlineWords || {}
         
-        Object.keys(updatedUnderline).forEach((key) => {
+        Object.keys(updatedUnderline || {}).forEach((key) => {
           const index = parseInt(key, 10)
           const newWords = updatedUnderline[index]
           const existingWords = existingUnderlineWords[index]
