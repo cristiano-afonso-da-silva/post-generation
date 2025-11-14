@@ -41,13 +41,13 @@ const getModel = () => {
     throw new Error('Gemini client not initialized. GEMINI_API_KEY is missing.');
   }
   return genAI.getGenerativeModel({
-    model: GEMINI_MODEL,
-    generationConfig: {
-      temperature: 0.85,
-      topP: 0.95,
-      topK: 40,
-    }
-  });
+  model: GEMINI_MODEL,
+  generationConfig: {
+    temperature: 0.85,
+    topP: 0.95,
+    topK: 40,
+  }
+});
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -228,14 +228,15 @@ const safeJsonParse = (text: string) => {
         console.error('📄 First 500 chars:', cleaned.substring(0, 500));
         console.error('📄 Last 500 chars:', cleaned.substring(Math.max(0, cleaned.length - 500)));
         // Try to extract error position from the error message
-        const positionMatch = e2.message.match(/position (\d+)/);
+        const errorMessage = e2 instanceof Error ? e2.message : String(e2);
+        const positionMatch = errorMessage.match(/position (\d+)/);
         if (positionMatch) {
           const pos = parseInt(positionMatch[1], 10);
           const start = Math.max(0, pos - 100);
           const end = Math.min(cleaned.length, pos + 100);
           console.error(`📄 Context around error position ${pos} (chars ${start}-${end}):`, cleaned.substring(start, end));
         }
-        throw new Error(`Failed to parse JSON after multiple attempts: ${e2.message}`);
+        throw new Error(`Failed to parse JSON after multiple attempts: ${errorMessage}`);
       }
     }
   }
