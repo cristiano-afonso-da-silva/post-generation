@@ -91,34 +91,141 @@ async function callGeminiWithRetry(
 }
 
 const safeJsonParse = (text: string) => {
+  // First attempt: try parsing as-is
   try {
     return JSON.parse(text);
   } catch (e) {
     // Remove markdown code blocks
     let cleaned = text.replace(/^```json\s*|\s*```$/g, '').trim();
     
-    // Fix common control character issues in JSON strings
-    // Replace literal newlines, tabs, and carriage returns within string values
+    // Second attempt: try parsing after removing markdown
     try {
-      // First attempt: try to parse as-is after removing markdown
       return JSON.parse(cleaned);
     } catch (e2) {
-      // Second attempt: escape control characters
-      // This regex finds content within quotes and escapes control characters
-      cleaned = cleaned.replace(
-        /"([^"]*)"/g, 
-        (match, content) => {
-          // Escape control characters within the string
-          const escaped = content
-            .replace(/\n/g, '\\n')
-            .replace(/\r/g, '\\r')
-            .replace(/\t/g, '\\t')
-            .replace(/\f/g, '\\f')
-            .replace(/\b/g, '\\b');
-          return `"${escaped}"`;
+      // Third attempt: fix control characters and unescaped quotes
+      // This is a more sophisticated approach that handles unterminated strings
+      try {
+        // Find all string values and properly escape them
+        let fixed = cleaned;
+        let inString = false;
+        let escapeNext = false;
+        let result = '';
+        let i = 0;
+        
+        while (i < fixed.length) {
+          const char = fixed[i];
+          
+          if (escapeNext) {
+            result += char;
+            escapeNext = false;
+            i++;
+            continue;
+          }
+          
+          if (char === '\\') {
+            result += char;
+            escapeNext = true;
+            i++;
+            continue;
+          }
+          
+          if (char === '"') {
+            inString = !inString;
+            result += char;
+            i++;
+            continue;
+          }
+          
+          if (inString) {
+            // Inside a string, escape control characters and unescaped quotes
+            if (char === '\n') {
+              result += '\\n';
+            } else if (char === '\r') {
+              result += '\\r';
+            } else if (char === '\t') {
+              result += '\\t';
+            } else if (char === '\f') {
+              result += '\\f';
+            } else if (char === '\b') {
+              result += '\\b';
+            } else if (char === '"') {
+              // This shouldn't happen due to the quote check above, but just in case
+              result += '\\"';
+            } else {
+              result += char;
+            }
+          } else {
+            result += char;
+          }
+          
+          i++;
         }
-      );
-      return JSON.parse(cleaned);
+        
+        // If we ended with an unterminated string, try to close it
+        if (inString) {
+          result += '"';
+        }
+        
+        return JSON.parse(result);
+      } catch (e3) {
+        // Fourth attempt: try to find and extract valid JSON from the response
+        // Look for JSON object boundaries
+        const jsonStart = cleaned.indexOf('{');
+        const jsonEnd = cleaned.lastIndexOf('}');
+        
+        if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+          try {
+            const extracted = cleaned.substring(jsonStart, jsonEnd + 1);
+            return JSON.parse(extracted);
+          } catch (e4) {
+            // Last resort: try to fix common issues and parse
+            let lastAttempt = cleaned
+              // Remove any trailing commas before closing braces/brackets
+              .replace(/,(\s*[}\]])/g, '$1')
+              // Try to close any unterminated strings at the end
+              .replace(/"([^"]*)$/, '"$1"');
+            
+            // Escape control characters more carefully (avoid lookbehind for compatibility)
+            let fixed = '';
+            let inStr = false;
+            let escaped = false;
+            for (let j = 0; j < lastAttempt.length; j++) {
+              const c = lastAttempt[j];
+              if (escaped) {
+                fixed += c;
+                escaped = false;
+              } else if (c === '\\') {
+                fixed += c;
+                escaped = true;
+              } else if (c === '"') {
+                inStr = !inStr;
+                fixed += c;
+              } else if (inStr && (c === '\n' || c === '\r' || c === '\t')) {
+                fixed += c === '\n' ? '\\n' : c === '\r' ? '\\r' : '\\t';
+              } else {
+                fixed += c;
+              }
+            }
+            
+            return JSON.parse(fixed);
+          }
+        }
+        
+        // If all attempts fail, throw the original error with context
+        console.error('❌ All JSON parsing attempts failed');
+        console.error('📄 Original text length:', text.length);
+        console.error('📄 First 500 chars:', cleaned.substring(0, 500));
+        console.error('📄 Last 500 chars:', cleaned.substring(Math.max(0, cleaned.length - 500)));
+        // Try to extract error position from the error message
+        const positionMatch = e2.message.match(/position (\d+)/);
+        if (positionMatch) {
+          const pos = parseInt(positionMatch[1], 10);
+          const start = Math.max(0, pos - 100);
+          const end = Math.min(cleaned.length, pos + 100);
+          console.error(`📄 Context around error position ${pos} (chars ${start}-${end}):`, cleaned.substring(start, end));
+        }
+        throw new Error(`Failed to parse JSON after multiple attempts: ${e2.message}`);
+      }
     }
   }
 };
