@@ -689,7 +689,9 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
           paddingBottom: 0,
           display: 'flex',
           flexDirection: 'column',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          overflowX: 'hidden',
+          overflowY: 'hidden'
         }}
       >
         {/* Top Header Bar */}
@@ -803,12 +805,14 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
+            overflowX: 'hidden',
+            overflowY: 'hidden',
             padding: '0',
             margin: '0',
             minHeight: 0
           }}
         >
-          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ flex: 1, overflow: 'hidden', overflowX: 'hidden', overflowY: 'hidden', display: 'flex', flexDirection: 'column' }}>
             {error && (
               <div className="error" style={{ margin: '0 0 24px', flex: '0 0 auto' }}>
                 {error}
@@ -827,6 +831,8 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
                 alignItems: 'stretch',
                 flex: 1,
                 overflow: 'hidden',
+                overflowX: 'hidden',
+                overflowY: 'hidden',
                 minWidth: 0,
                 padding: '0'
               }}
@@ -837,7 +843,9 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
                 flexDirection: 'column', 
                 gap: '0', 
                 height: '100%', 
-                overflow: 'hidden', 
+                overflow: 'hidden',
+                overflowX: 'hidden',
+                overflowY: 'hidden',
                 alignSelf: 'stretch',
                 // On mobile, show the customization controls (style/content/caption)
                 // above the carousel preview and constrain them to ~30% of the
@@ -1184,10 +1192,9 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
               {/* RIGHT COLUMN - Output */}
               <div className="mobile-output" style={{ 
                 height: '100%', 
-                // On mobile, allow vertical scrolling and let the inner thumbnail
-                // strip manage its own horizontal scrolling so it isn't clipped.
-                overflowX: isMobile ? 'visible' : 'hidden',
-                overflowY: isMobile ? 'auto' : 'hidden',
+                // On mobile, prevent scrolling to avoid horizontal/vertical scroll issues
+                overflowX: 'hidden',
+                overflowY: 'hidden',
                 display: 'flex', 
                 flexDirection: 'column', 
                 gap: isMobile ? '16px' : '24px', 

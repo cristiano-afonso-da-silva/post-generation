@@ -160,7 +160,9 @@ function DashboardView() {
           marginLeft: isMobile ? '0' : (isSidebarCollapsed ? '64px' : '280px'),
           flex: 1,
           height: '100vh',
-          overflow: activeView === 'create' ? 'hidden' : 'auto',
+          overflow: activeView === 'create' ? 'hidden' : (isMobile ? 'hidden' : 'auto'),
+          overflowX: 'hidden',
+          overflowY: isMobile ? 'hidden' : (activeView === 'create' ? 'hidden' : 'auto'),
           transition: isMobile ? 'none' : 'margin-left 0.3s ease',
           marginRight: 0,
           paddingRight: 0,
@@ -212,7 +214,7 @@ function DashboardView() {
           />
         )}
         {activeView === 'history' && (
-          <div style={{ height: '100%', overflow: 'auto' }}>
+          <div style={{ height: '100%', overflow: isMobile ? 'hidden' : 'auto', overflowX: 'hidden', overflowY: isMobile ? 'hidden' : 'auto' }}>
             <HistoryPage 
               onLoadGeneration={handleLoadGeneration}
               onOpenSidebar={isMobile ? handleSidebarOpen : undefined}

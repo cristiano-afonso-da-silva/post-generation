@@ -595,35 +595,39 @@ function CarouselImageGeneratorComponent({
         }
       } catch (uploadError: any) {
         console.error('❌ Failed to upload images:', uploadError)
-        // If client-side upload fails, fall back to server-side upload
-        console.warn('⚠️ Falling back to server-side upload...')
-        const fallbackResponse = await fetch('/api/generations/save', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: user.id,
-            generationId: generationId,
-            ideaTitle,
-            accountDescription: accountDescriptionRef.current,
-            slides: orderedCarousels,
-            caption: captionRef.current,
-            underlineWords: orderedUnderlineWords,
-            templateId,
-            colorThemeId,
-            images: imageDataUrls // Fallback to server-side upload
+        // If client-side upload fails, fall back to server-side upload (one image at a time)
+        console.warn('⚠️ Falling back to server-side upload (one image at a time)...')
+        
+        try {
+          // Upload images one at a time to avoid 413 errors
+          const uploadPromises = imageDataUrls.map(async (imageData, index) => {
+            const uploadResponse = await fetch('/api/generations/upload-image', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId: user.id,
+                generationId: generationId,
+                imageIndex: index,
+                imageData: imageData
+              })
+            })
+            
+            if (!uploadResponse.ok) {
+              const errorData = await uploadResponse.json().catch(() => ({ error: 'Unknown error' }))
+              throw new Error(`Failed to upload image ${index}: ${errorData.error || uploadResponse.statusText}`)
+            }
+            
+            const result = await uploadResponse.json()
+            return result.imageUrl
           })
-        })
-        
-        if (!fallbackResponse.ok) {
-          throw new Error(`Failed to upload images (both client and server methods failed)`)
+          
+          imageUrls = await Promise.all(uploadPromises)
+          thumbnailUrls = imageUrls.slice(0, 2)
+          console.log('✅ Fallback server-side upload completed (one at a time):', imageUrls.length, 'images')
+        } catch (fallbackError: any) {
+          console.error('❌ Fallback upload also failed:', fallbackError)
+          throw new Error(`Failed to upload images (both client and server methods failed): ${fallbackError.message}`)
         }
-        
-        const fallbackResult = await fallbackResponse.json()
-        // Server-side upload doesn't return URLs in the same format, so we'll need to fetch them
-        // For now, just mark as successful - URLs will be in the database
-        imageUrls = []
-        thumbnailUrls = []
-        console.log('✅ Fallback server-side upload completed')
       }
 
       // Step 3: Update generation with image URLs (small payload, just URLs)

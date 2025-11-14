@@ -411,11 +411,14 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
         height: '100vh',
         background: '#fafafa',
         overflow: 'hidden',
+        overflowX: 'hidden',
+        overflowY: 'hidden',
       }}>
         {/* Top Content Area */}
         <div style={{
           flex: 1,
-          overflowY: 'auto',
+          overflowY: isMobile ? 'hidden' : 'auto',
+          overflowX: 'hidden',
           padding: '48px 24px 24px 24px',
           display: 'flex',
           flexDirection: 'column',
@@ -595,11 +598,14 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
       height: '100vh',
       background: '#fafafa',
       overflow: 'hidden',
+      overflowX: 'hidden',
+      overflowY: 'hidden',
     }}>
       {/* Top Content Area */}
       <div style={{
         flex: 1,
-        overflowY: 'auto',
+        overflowY: isMobile ? 'hidden' : 'auto',
+        overflowX: 'hidden',
         padding: '48px 24px 24px 24px',
         display: 'flex',
         flexDirection: 'column',

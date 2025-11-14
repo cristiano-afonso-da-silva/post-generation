@@ -40,10 +40,24 @@ export async function uploadImagesToStorage(
   const supabase = createClientComponentClient()
   
   // Verify user is authenticated and matches the userId
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  // Try getSession first (faster, uses cookies), then getUser as fallback
+  let user: any = null
+  let authError: any = null
+  
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+  
+  if (session && session.user) {
+    user = session.user
+  } else {
+    // If session check fails, try getUser as fallback
+    const { data: { user: fetchedUser }, error: getUserError } = await supabase.auth.getUser()
+    user = fetchedUser
+    authError = getUserError || sessionError
+  }
   
   if (authError || !user) {
-    throw new Error(`Authentication required: ${authError?.message || 'Not authenticated'}`)
+    const errorMsg = authError?.message || sessionError?.message || 'Auth session missing!'
+    throw new Error(`Authentication required: ${errorMsg}`)
   }
   
   if (user.id !== userId) {
