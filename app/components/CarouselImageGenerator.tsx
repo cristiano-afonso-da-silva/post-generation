@@ -5,7 +5,6 @@ import { getCarouselTemplate } from '../config/carouselTemplates'
 import { getColorTheme } from '../config/carouselThemes'
 import { useAuth } from '../context/AuthContext'
 import JSZip from 'jszip'
-import { uploadImagesToStorage } from '../lib/uploadImages'
 
 function ensureColorAlpha(color: string, alpha = 0.5): string {
   const clamped = Math.max(0, Math.min(1, alpha))
@@ -446,10 +445,10 @@ export default function CarouselImageGenerator({
       const generationId = createResult.generationId
       
       console.log('✅ Generation created/retrieved:', generationId)
-      console.log('📤 [STEP 2] Uploading images directly to Supabase Storage (client-side)...')
+      console.log('📤 [STEP 2] Uploading images one at a time via API (avoids 413 error)...')
 
-      // Step 2: Upload images directly to Supabase Storage (bypasses API body size limits)
-      // This avoids Vercel's 4.5MB/6MB request body size limits
+      // Step 2: Upload images one at a time via API route
+      // This avoids Vercel's 4.5MB/6MB request body size limits by sending one image per request
       let imageUrls: string[]
       let thumbnailUrls: string[]
       
@@ -466,13 +465,30 @@ export default function CarouselImageGenerator({
           }
         }
         
-        const uploadResult = await uploadImagesToStorage(
-          user.id,
-          generationId,
-          imageDataUrls
-        )
-        imageUrls = uploadResult.imageUrls
-        thumbnailUrls = uploadResult.thumbnailUrls
+        // Upload images one at a time to avoid body size limits
+        const uploadPromises = imageDataUrls.map(async (imageDataUrl: string, i: number) => {
+          const response = await fetch('/api/generations/upload-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: user.id,
+              generationId: generationId,
+              imageIndex: i,
+              imageData: imageDataUrl
+            })
+          })
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+            throw new Error(`Failed to upload image ${i}: ${errorData.error || response.statusText}`)
+          }
+
+          const result = await response.json()
+          return result.imageUrl
+        })
+
+        imageUrls = await Promise.all(uploadPromises)
+        thumbnailUrls = imageUrls.slice(0, 2)
         console.log('✅ Images uploaded successfully:', imageUrls.length)
       } catch (uploadError: any) {
         console.error('❌ Failed to upload images:', uploadError)
