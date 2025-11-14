@@ -5,7 +5,7 @@
 
 export type AIProvider = 'gemini';
 
-export const GEMINI_MODEL = 'gemini-2.0-flash-preview-image-generation';
+export const GEMINI_MODEL = 'gemini-2.0-flash';
 
 export const getActiveModel = (): string => {
   return GEMINI_MODEL;
