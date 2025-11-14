@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Palette, Type, ArrowUp, ChevronDown, FileText } from 'lucide-react'
+import { ArrowUp, ChevronDown } from 'lucide-react'
 import '../globals.css'
 import CarouselImageGenerator from '../components/CarouselImageGenerator'
 import { COLOR_THEMES } from '../config/carouselThemes'
@@ -367,11 +367,13 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
               animation: 'slideUp 0.6s ease-out',
             }}>
               <h2 style={{
-                fontSize: '24px',
+                fontSize: '28px',
                 fontWeight: '700',
                 marginBottom: '32px',
                 color: '#000000',
                 textAlign: 'center',
+                width: '100%',
+                minWidth: 0,
               }}>
                 {selectedIdea}
               </h2>
@@ -386,7 +388,7 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                   gap: '16px',
                   padding: '16px',
                   borderRadius: '8px',
-                  background: currentStep === 'generating' ? '#fff9e6' : 'transparent',
+                  background: 'transparent',
                 }}>
                   <div style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {currentStep === 'generating' ? (
@@ -413,7 +415,7 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                   gap: '16px',
                   padding: '16px',
                   borderRadius: '8px',
-                  background: currentStep === 'analysing' ? '#fff9e6' : 'transparent',
+                  background: 'transparent',
                 }}>
                   <div style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {currentStep === 'analysing' ? (
@@ -440,7 +442,7 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                   gap: '16px',
                   padding: '16px',
                   borderRadius: '8px',
-                  background: currentStep === 'rendering' ? '#fff9e6' : 'transparent',
+                  background: 'transparent',
                 }}>
                   <div style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {currentStep === 'rendering' ? (
@@ -547,7 +549,7 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
               color: '#666666',
               marginBottom: '48px',
             }}>
-              Enter your business description or idea below to get started
+              Enter your idea below to get started
             </p>
             {/* Textarea Input with Action Bar */}
             <div style={{
@@ -562,12 +564,18 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
               value={accountDescription}
               onChange={(e) => setAccountDescription(e.target.value)}
               onKeyDown={(e) => {
+                // Submit on Enter (without Shift) - same as clicking the button
+                if (e.key === 'Enter' && !e.shiftKey && !loadingIdeas && !loadingNote && accountDescription.trim()) {
+                  e.preventDefault()
+                  generateIdeas()
+                }
+                // Also support Cmd/Ctrl+Enter for submission
                 if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !loadingIdeas && !loadingNote) {
                   e.preventDefault()
                   generateIdeas()
                 }
               }}
-              placeholder="Enter business description"
+              placeholder="Type your idea..."
               disabled={loadingIdeas || loadingNote}
               style={{
                 width: '100%',
@@ -636,7 +644,6 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                     }}
                     title="Select Template"
                   >
-                    <Palette size={18} color="#666666" />
                     <span style={{ fontSize: '14px', fontWeight: '500', color: '#000000', userSelect: 'none' }}>
                       {templateOptions.find(t => t.id === templateId)?.name || 'Template'}
                     </span>
@@ -678,16 +685,13 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                       }}
                       title="Select Mode"
                     >
-                      <FileText size={18} color="#666666" />
                       <span style={{ fontSize: '14px', fontWeight: '500', color: '#000000', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         {!includeImages ? (
-                          <>Text <span style={{ color: '#999999', fontWeight: '600' }}>1 credit</span></>
+                          <>Text</>
                         ) : !useAIImages ? (
-                          <>Text + Image <span style={{ color: '#999999', fontWeight: '600' }}>2 credits</span></>
-                        ) : aiImageStyle === 'animated' ? (
-                          <>Text + AI Animated Image <span style={{ color: '#999999', fontWeight: '600' }}>2 credits</span></>
+                          <>Text + Image</>
                         ) : (
-                          <>Text + AI Surrealism Image <span style={{ color: '#999999', fontWeight: '600' }}>2 credits</span></>
+                          <>Text + AI Animated Image</>
                         )}
                       </span>
                       <ChevronDown size={16} color="#666666" />
@@ -861,11 +865,13 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
             animation: 'slideUp 0.6s ease-out',
           }}>
             <h2 style={{
-              fontSize: '24px',
+              fontSize: '28px',
               fontWeight: '700',
               marginBottom: '32px',
               color: '#000000',
               textAlign: 'center',
+              width: '100%',
+              minWidth: 0,
             }}>
               {selectedIdea}
             </h2>
@@ -880,7 +886,7 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                 gap: '16px',
                 padding: '16px',
                 borderRadius: '8px',
-                background: currentStep === 'generating' ? '#fff9e6' : 'transparent',
+                background: 'transparent',
               }}>
                 <div style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {currentStep === 'generating' ? (
@@ -907,7 +913,7 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                 gap: '16px',
                 padding: '16px',
                 borderRadius: '8px',
-                background: currentStep === 'analysing' ? '#fff9e6' : 'transparent',
+                background: 'transparent',
               }}>
                 <div style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {currentStep === 'analysing' ? (
@@ -934,7 +940,7 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                 gap: '16px',
                 padding: '16px',
                 borderRadius: '8px',
-                background: currentStep === 'rendering' ? '#fff9e6' : 'transparent',
+                background: 'transparent',
               }}>
                 <div style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {currentStep === 'rendering' ? (
@@ -1082,6 +1088,7 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
           isOpen={showUpgradePrompt}
           onClose={() => setShowUpgradePrompt(false)}
           currentPlan={credits?.current_plan || null}
+          onViewPlans={() => setShowSubscriptionModal(true)}
         />
       )}
 

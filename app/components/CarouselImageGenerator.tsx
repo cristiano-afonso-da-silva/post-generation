@@ -1723,7 +1723,27 @@ export default function CarouselImageGenerator({
         console.log('  originalImageUrl value:', emphasisData.originalImageUrl)
       }
       
-      const imageSourceUrl = emphasisData.imageUrl || emphasisData.originalImageUrl || null
+      let rawImageUrl = emphasisData.imageUrl || emphasisData.originalImageUrl || null
+      
+      // Route pollinations.ai images through proxy to avoid CORS issues
+      // The proxy fetches the image server-side and serves it with proper CORS headers
+      let imageSourceUrl: string | null = null
+      if (rawImageUrl) {
+        try {
+          const url = new URL(rawImageUrl)
+          if (url.hostname === 'image.pollinations.ai') {
+            // Use proxy for pollinations.ai images to avoid CORS issues
+            imageSourceUrl = `/api/image/proxy?url=${encodeURIComponent(rawImageUrl)}`
+            console.log(`      🔄 Routing pollinations.ai image through proxy`)
+          } else {
+            // Use direct URL for other sources (e.g., Pexels, which supports CORS)
+            imageSourceUrl = rawImageUrl
+          }
+        } catch (e) {
+          // If URL parsing fails, use the raw URL as-is
+          imageSourceUrl = rawImageUrl
+        }
+      }
       
       let imageHeight = 0
       let imageWidth = 0
@@ -2314,25 +2334,42 @@ export default function CarouselImageGenerator({
         marginTop: 0,
         height: '100%',
         maxHeight: '100%',
+        width: '100%',
+        maxWidth: '100%',
         display: 'flex',
         flexDirection: 'column',
-        paddingBottom: '16px',
+        padding: 0,
         overflow: 'hidden',
-        cursor: 'default'
+        cursor: 'default',
+        border: 'none',
+        borderRadius: 0,
+        minWidth: 0,
+        minHeight: 0
       }}
     >
       <div
         style={{
-          display: 'flex',
-        gap: '24px',
-          overflowX: 'auto',
-          overflowY: 'hidden',
-          paddingBottom: '16px',
-          marginBottom: '24px',
           flex: 1,
-          minHeight: 0
+          display: 'flex',
+          alignItems: 'center',
+          minHeight: 0,
+          minWidth: 0,
+          overflow: 'hidden'
         }}
       >
+        <div
+          style={{
+            display: 'flex',
+            gap: '24px',
+            overflowX: 'auto',
+            overflowY: 'hidden',
+            paddingBottom: '16px',
+            width: '100%',
+            minHeight: 0,
+            minWidth: 0,
+            flexShrink: 1
+          }}
+        >
         {orderedCarousels.map((carousel, index) => {
           const hasCurrentImage = !!orderedCarouselImages[index]
           const hasPreviousImage = !!previousImagesRef.current[index]
@@ -2348,8 +2385,10 @@ export default function CarouselImageGenerator({
                 borderRadius: '16px',
                 padding: '16px',
                 transition: 'all 0.3s ease',
-                minWidth: '320px',
-                flex: '0 0 320px'
+                minWidth: '400px',
+                maxWidth: '400px',
+                flex: '0 0 400px',
+                flexShrink: 0
               }}>
               <div style={{ 
                 position: 'relative',
@@ -2422,6 +2461,7 @@ export default function CarouselImageGenerator({
               </div>
             </div>
           )})}
+        </div>
       </div>
       
       {/* Thumbnail strip at the bottom */}
@@ -2434,7 +2474,9 @@ export default function CarouselImageGenerator({
           overflowY: 'hidden',
           marginTop: 'auto',
           flexShrink: 0,
-          justifyContent: 'center'
+          justifyContent: 'center',
+          minWidth: 0,
+          width: '100%'
         }}
       >
         {orderedCarousels.map((carousel, index) => {

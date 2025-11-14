@@ -58,6 +58,16 @@ Post Idea: "${ideaTitle}"
 TASK
 Create a complete note with carousels and caption that follows these EXACT specifications:
 
+REQUIREMENTS
+✓ No emojis, no numbering, no quotes
+✓ Each must be clearly distinct from others (no semantic overlap)
+✓ Use plain, direct language
+✓ Avoid complicated words - use day-to-day language that humans naturally use
+✓ Your post should be like talking to a friend, not like a sales pitch.
+✓ Here's a good example, learn from their tone: "Comfort kills more dreams than failure ever will. If it's easy, its costing you", "Create an Etsy listing for your digital product"
+✓ Focus on value delivery and curiosity
+✓ NO dashes (-) or semicolons (;) anywhere in the generated content
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CAROUSEL 1: HOOK (FIRST CAROUSEL)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -65,16 +75,17 @@ CAROUSEL 1: HOOK (FIRST CAROUSEL)
   * CRITICAL: This must be an engaging, attention-grabbing hook - NOT just a simple label or category
   * Create curiosity, intrigue, or a bold statement that makes people stop scrolling
   * Use questions, surprising statements, or provocative claims
-  * Examples of GOOD hooks:
-    * "Why Your Morning Routine Is Actually Making You Less Productive"
+  * Examples of GOOD hooks:    
+    * "You're One Habit Away From Burnout"
     * "The One Mistake That's Costing You Thousands of Followers"
-    * "I Tried This Productivity Hack For 30 Days - Here's What Happened"
-    * "The Secret Most Entrepreneurs Don't Want You to Know"
+    * "This Is Why You're Not Growing"
+    * "Your Goals Are Holding You Back"
+
 - topic: Short category label (1-2 words, all caps)
   * Example: "ENTREPRENEURSHIP", "PRODUCTIVITY", "MARKETING"
 - subtitle: Short descriptive text (3-8 words)
   * Provides context or intrigue
-  * Example: "How I Stay Focused & Sane", "The Secret Nobody Tells You"
+  * Example: "How I Stay Focused", "The Secret Nobody Tells You"
 - cta: Call-to-action button text (2-3 words)
   * Example: "Check details", "Learn more", "Read now"
 - content: "" (leave empty)
@@ -118,7 +129,7 @@ INSTAGRAM CAPTION (80-120 words)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Structure:
 1. Opening hook (1-2 sentences that expand on the post idea)
-2. Main value (2-3 short paragraphs, use line breaks for readability)
+2. Main value (2-3 short sentences, use line breaks for readability)
 3. Call to action (engagement prompt)
 4. Relevant hashtags (8-12 hashtags, mix of broad and niche)
 
@@ -222,7 +233,7 @@ CRITICAL INSTRUCTIONS:
 - Return them comma-separated
    - Example: "breathable fabric, everyday comfort, lightweight design"
 
-2. HIGHLIGHT: Extract THE MOST important single word
+2. HIGHLIGHT: Extract one MOST important single word
    - Must be without punctuation
    - Example: "comfort"
 

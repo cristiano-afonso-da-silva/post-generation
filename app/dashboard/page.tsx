@@ -102,11 +102,13 @@ function DashboardView() {
       <div 
         className="dashboard-content"
         style={{
-          marginLeft: isSidebarCollapsed ? '72px' : '280px',
+          marginLeft: isSidebarCollapsed ? '64px' : '280px',
           flex: 1,
           height: '100vh',
           overflow: activeView === 'create' ? 'hidden' : 'auto',
           transition: 'margin-left 0.3s ease',
+          marginRight: 0,
+          paddingRight: 0,
         }}
       >
         <style jsx global>{`

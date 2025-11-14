@@ -47,72 +47,72 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
         <div style={{
           padding: '24px',
           flexShrink: 0,
+          height: '65px',
+          boxSizing: 'border-box',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
         }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-          }}>
-            <div
-              onClick={() => router.push('/landing')}
+          <button
+            onClick={() => router.push('/')}
+            style={{
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '8px',
+              background: 'transparent',
+              border: 'none',
+              padding: '6px',
+            }}
+          >
+            <Image 
+              src="/logo.svg" 
+              alt="Post My Note logo" 
+              width={32} 
+              height={32} 
+              priority 
+            />
+          </button>
+          {onClose && (
+            <button
+              onClick={onClose}
               style={{
+                background: 'transparent',
+                border: 'none',
                 cursor: 'pointer',
-                transition: 'opacity 0.2s ease',
-                display: 'inline-block',
+                padding: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#666666',
+                transition: 'background 0.2s ease',
+                borderRadius: '8px',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.opacity = '0.7'
+                e.currentTarget.style.background = '#f5f5f5'
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.opacity = '1'
+                e.currentTarget.style.background = 'transparent'
               }}
             >
-              <Image 
-                src="/logo.svg" 
-                alt="Post My Note logo" 
-                width={32} 
-                height={32} 
-                priority 
-              />
-            </div>
-            {onClose && (
-              <button
-                onClick={onClose}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#666666',
-                  transition: 'background 0.2s ease',
-                  borderRadius: '4px',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#f5f5f5'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent'
-                }}
-              >
-                <PanelRightOpen size={20} />
-              </button>
-            )}
-          </div>
+              <PanelRightOpen size={20} />
+            </button>
+          )}
         </div>
       ) : (
         <div style={{
-          padding: '24px 8px',
+          padding: '8px 8px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
+          height: '65px',
+          boxSizing: 'border-box',
         }}>
           <button
-            onClick={onOpen}
+            onClick={() => onOpen?.()}
             onMouseEnter={() => setIsLogoHovered(true)}
             onMouseLeave={() => setIsLogoHovered(false)}
             style={{
@@ -150,7 +150,7 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
       {/* Menu Section */}
       <div style={{
         flex: 1,
-        padding: isCollapsed ? '24px 8px' : '24px 16px',
+        padding: isCollapsed ? '24px 8px' : '24px',
         display: 'flex',
         flexDirection: 'column',
         gap: '4px',

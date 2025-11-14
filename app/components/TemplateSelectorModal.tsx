@@ -160,7 +160,7 @@ export default function TemplateSelectorModal({
                   key={template.id}
                   onClick={() => handleTemplateClick(template.id)}
                   style={{
-                    border: isSelected ? '2px solid #ffbd59' : '1px solid #e5e5e5',
+                    border: isSelected ? '1px solid #ffbd59' : '1px solid #e5e5e5',
                     borderRadius: '8px',
                     padding: '0',
                     cursor: 'pointer',
@@ -183,7 +183,7 @@ export default function TemplateSelectorModal({
                   <div
                     style={{
                       padding: '12px 16px',
-                      background: isSelected ? '#f5f5f5' : '#fafafa',
+                      background: isSelected ? '#fafafa' : '#ffffff',
                       borderBottom: '1px solid #e5e5e5',
                       fontSize: '13px',
                       fontWeight: '500',

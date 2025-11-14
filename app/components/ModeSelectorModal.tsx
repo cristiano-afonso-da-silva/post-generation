@@ -35,13 +35,13 @@ const MODE_OPTIONS: ModeOption[] = [
     includeImages: false,
     useAIImages: false
   },
-  {
-    id: 'text-image',
-    label: 'Text + Image',
-    credits: 2,
-    includeImages: true,
-    useAIImages: false
-  },
+  // {
+  //   id: 'text-image',
+  //   label: 'Text + Image',
+  //   credits: 2,
+  //   includeImages: true,
+  //   useAIImages: false
+  // },
   {
     id: 'text-ai-animated',
     label: 'Text + AI Animated Image',
@@ -49,14 +49,6 @@ const MODE_OPTIONS: ModeOption[] = [
     includeImages: true,
     useAIImages: true,
     aiImageStyle: 'animated'
-  },
-  {
-    id: 'text-ai-surreal',
-    label: 'Text + AI Surrealism Image',
-    credits: 2,
-    includeImages: true,
-    useAIImages: true,
-    aiImageStyle: 'surreal'
   }
 ]
 
@@ -75,9 +67,7 @@ export default function ModeSelectorDropdown({
       ? 'text'
       : !currentMode.useAIImages
       ? 'text-image'
-      : currentMode.aiImageStyle === 'animated'
-      ? 'text-ai-animated'
-      : 'text-ai-surreal'
+      : 'text-ai-animated'
   }
 
   // Close dropdown when clicking outside
@@ -206,7 +196,7 @@ export default function ModeSelectorDropdown({
                 <span
                   style={{
                     fontSize: '14px',
-                    fontWeight: isSelected ? '600' : '500',
+                    fontWeight: '500',
                     color: '#000000'
                   }}
                 >
@@ -215,7 +205,7 @@ export default function ModeSelectorDropdown({
                 <span
                   style={{
                     fontSize: '14px',
-                    fontWeight: '600',
+                    fontWeight: '500',
                     color: '#999999'
                   }}
                 >

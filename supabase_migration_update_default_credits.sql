@@ -12,3 +12,4 @@ ALTER COLUMN credits_remaining SET DEFAULT 10;
 -- UPDATE public.user_credits SET credits_remaining = 10 WHERE credits_remaining < 10;
 
 
+

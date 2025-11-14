@@ -7,10 +7,15 @@ import {
   buildAIImagePrompt,
   type AIImageStyle
 } from '../../config/prompts';
+import { AI_PROVIDER, GEMINI_MODEL } from '../../config/aiConfig';
+import {
+  generateIdeasWithOpenAI,
+  generateNoteWithOpenAI,
+  extractUnderlineWordsWithOpenAI
+} from '../../lib/openaiClient';
 // ════════════════════════════════════════════════════════════════════════════
 // API Configuration
 // ════════════════════════════════════════════════════════════════════════════
-const GEMINI_MODEL = 'gemini-2.0-flash-exp';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
 
@@ -509,7 +514,7 @@ async function generatePollinationsImage(prompt: string, usedImageIds: Set<strin
 // API Functions
 // ════════════════════════════════════════════════════════════════════════════
 
-async function generateIdeas(accountDescription: string) {
+async function generateIdeasWithGemini(accountDescription: string) {
   const startTime = Date.now();
   
   try {
@@ -549,7 +554,7 @@ async function generateIdeas(accountDescription: string) {
       }
     };
   } catch (error: any) {
-    console.error('Error generating ideas:', error);
+    console.error('Error generating ideas with Gemini:', error);
     return {
       success: false,
       error: error.message || 'Failed to generate ideas',
@@ -557,12 +562,17 @@ async function generateIdeas(accountDescription: string) {
   }
 }
 
+async function generateIdeas(accountDescription: string) {
+  if (AI_PROVIDER === 'openai') {
+    return generateIdeasWithOpenAI(accountDescription);
+  } else {
+    return generateIdeasWithGemini(accountDescription);
+  }
+}
+
 // buildAIImagePrompt is now imported from app/config/prompts.ts
 
-async function extractUnderlineWords(carousels: any[], includeImages: boolean = true, useAIImages: boolean = false, aiImageStyle: AIImageStyle = 'animated') {
-  const imageSource = useAIImages ? 'Pollinations.AI (AI-generated)' : 'Pexels (stock photos)';
-  console.log(`\n🎨 Extracting emphasis words and ${includeImages ? `🖼️ images from ${imageSource} (enabled)` : '📝 NO images (disabled)'}`);
-  
+async function extractUnderlineWordsWithGemini(carousels: any[]): Promise<Record<number, any>> {
   const underlineModel = genAI.getGenerativeModel({
     model: GEMINI_MODEL,
     generationConfig: {
@@ -573,8 +583,6 @@ async function extractUnderlineWords(carousels: any[], includeImages: boolean = 
   });
 
   const results: Record<number, any> = {};
-  const usedPexelsIds = new Set<number>();
-  const usedPollinationsIds = new Set<string>();
 
   for (let i = 0; i < carousels.length; i++) {
     const carousel = carousels[i];
@@ -620,90 +628,6 @@ async function extractUnderlineWords(carousels: any[], includeImages: boolean = 
         originalImageUrl: null,
       };
       
-      // For MIDDLE carousels, fetch image if enabled and we have search keywords
-      if (includeImages && carousel.kind === 'MIDDLE' && imageSearchKeywords && imageSearchKeywords.trim()) {
-        console.log(`\n🖼️  MIDDLE CAROUSEL ${i + 1}: Attempting to fetch image...`);
-        console.log(`   Keywords: "${imageSearchKeywords}"`);
-        console.log(`   includeImages flag: ${includeImages}`);
-        console.log(`   useAIImages flag: ${useAIImages}`);
-        console.log(`   carousel.kind: ${carousel.kind}`);
-        console.log(`   imageSearchKeywords.trim(): "${imageSearchKeywords.trim()}"`);
-        
-        try {
-          if (useAIImages) {
-            // Use Pollinations.AI to generate an image based on the description
-            console.log(`   Using Pollinations.AI for AI-generated image`);
-            
-            // Create a more detailed prompt based on the selected AI style
-            const aiPrompt = buildAIImagePrompt(imageSearchKeywords, aiImageStyle);
-            
-            const imageResult = await generatePollinationsImage(aiPrompt, usedPollinationsIds);
-            
-            // Use the Pollinations URL directly (no proxy needed - Pollinations supports CORS)
-            results[i].imageUrl = imageResult?.url || null;
-            results[i].originalImageUrl = imageResult?.url || null;
-            
-            if (imageResult?.id) {
-              usedPollinationsIds.add(imageResult.id);
-            }
-            if (imageResult?.url) {
-              console.log(`✅ SUCCESS: AI-generated image added to carousel ${i + 1}`);
-              console.log(`   Image URL: ${imageResult.url}`);
-              console.log(`   ℹ️  Using direct Pollinations URL (supports CORS)`);
-            } else {
-              console.error(`❌ FAILED: No image URL returned from Pollinations.AI for carousel ${i + 1}`);
-              console.error(`   This could mean: API error or network issue`);
-              results[i].imageUrl = null;
-              results[i].originalImageUrl = null;
-            }
-          } else {
-            // Use Pexels to search for stock photos
-            console.log(`   Using Pexels for stock photo search`);
-            
-            const imageResult = await searchPexelsImage(imageSearchKeywords, usedPexelsIds);
-            results[i].originalImageUrl = imageResult?.url || null;
-            results[i].imageUrl = imageResult?.url || null;
-            if (imageResult?.id) {
-              usedPexelsIds.add(imageResult.id);
-            }
-            if (imageResult?.url) {
-              console.log(`✅ SUCCESS: Stock image added to carousel ${i + 1}`);
-              console.log(`   Image URL: ${imageResult.url}`);
-            } else {
-              console.error(`❌ FAILED: No image URL returned from Pexels for carousel ${i + 1}`);
-              console.error(`   Pexels API returned:`, imageResult);
-              console.error(`   This could mean: API key issue, rate limit, or no matching images`);
-              results[i].imageUrl = null;
-              results[i].originalImageUrl = null;
-            }
-          }
-        } catch (imageError: any) {
-          console.error(`❌ EXCEPTION during image fetch for carousel ${i + 1}:`);
-          console.error(`   Error:`, imageError);
-          console.error(`   Error message:`, imageError?.message);
-          console.error(`   Stack:`, imageError?.stack);
-          results[i].imageUrl = null;
-          results[i].originalImageUrl = null;
-        }
-      } else {
-        // Log why image fetch was skipped
-        if (carousel.kind === 'MIDDLE') {
-          if (!includeImages) {
-            console.log(`\n📝 MIDDLE CAROUSEL ${i + 1}: Images disabled by user (includeImages=${includeImages}) - skipping image fetch`);
-          } else if (!imageSearchKeywords || !imageSearchKeywords.trim()) {
-            console.log(`\n⚠️  MIDDLE CAROUSEL ${i + 1}: NO imageSearch keywords!`);
-            console.log(`   includeImages: ${includeImages}`);
-            console.log(`   imageSearchKeywords: "${imageSearchKeywords}"`);
-            console.log(`   This should not happen with the fallback in place.`);
-          } else {
-            console.log(`\n⚠️  MIDDLE CAROUSEL ${i + 1}: Unexpected condition - image fetch skipped`);
-            console.log(`   includeImages: ${includeImages}`);
-            console.log(`   carousel.kind: ${carousel.kind}`);
-            console.log(`   imageSearchKeywords: "${imageSearchKeywords}"`);
-          }
-        }
-      }
-      
       console.log(`\n📝 Final extraction result for carousel ${i + 1}:`, JSON.stringify(results[i], null, 2));
       
     } catch (error: any) {
@@ -715,15 +639,119 @@ async function extractUnderlineWords(carousels: any[], includeImages: boolean = 
   return results;
 }
 
-async function generateNote(ideaTitle: string, accountDescription: string, includeImages: boolean = true, useAIImages: boolean = false, aiImageStyle: AIImageStyle = 'animated') {
+async function extractUnderlineWords(carousels: any[], includeImages: boolean = true, useAIImages: boolean = false, aiImageStyle: AIImageStyle = 'animated') {
+  const imageSource = useAIImages ? 'Pollinations.AI (AI-generated)' : 'Pexels (stock photos)';
+  console.log(`\n🎨 Extracting emphasis words and ${includeImages ? `🖼️ images from ${imageSource} (enabled)` : '📝 NO images (disabled)'}`);
+  
+  // Get emphasis extraction from the appropriate provider
+  let results: Record<number, any>;
+  if (AI_PROVIDER === 'openai') {
+    results = await extractUnderlineWordsWithOpenAI(carousels);
+  } else {
+    results = await extractUnderlineWordsWithGemini(carousels);
+  }
+  
+  // Handle image fetching (provider-agnostic)
+  const usedPexelsIds = new Set<number>();
+  const usedPollinationsIds = new Set<string>();
+  
+  for (let i = 0; i < carousels.length; i++) {
+    const carousel = carousels[i];
+    const imageSearchKeywords = results[i]?.imageSearch || '';
+    
+    // For MIDDLE carousels, fetch image if enabled and we have search keywords
+    if (includeImages && carousel.kind === 'MIDDLE' && imageSearchKeywords && imageSearchKeywords.trim()) {
+      console.log(`\n🖼️  MIDDLE CAROUSEL ${i + 1}: Attempting to fetch image...`);
+      console.log(`   Keywords: "${imageSearchKeywords}"`);
+      console.log(`   includeImages flag: ${includeImages}`);
+      console.log(`   useAIImages flag: ${useAIImages}`);
+      console.log(`   carousel.kind: ${carousel.kind}`);
+      console.log(`   imageSearchKeywords.trim(): "${imageSearchKeywords.trim()}"`);
+      
+      try {
+        if (useAIImages) {
+          // Use Pollinations.AI to generate an image based on the description
+          console.log(`   Using Pollinations.AI for AI-generated image`);
+          
+          // Create a more detailed prompt based on the selected AI style
+          const aiPrompt = buildAIImagePrompt(imageSearchKeywords, aiImageStyle);
+          
+          const imageResult = await generatePollinationsImage(aiPrompt, usedPollinationsIds);
+          
+          // Store the Pollinations URL - it will be routed through proxy in CarouselImageGenerator
+          // to avoid CORS issues when loading images with crossOrigin='anonymous'
+          results[i].imageUrl = imageResult?.url || null;
+          results[i].originalImageUrl = imageResult?.url || null;
+          
+          if (imageResult?.id) {
+            usedPollinationsIds.add(imageResult.id);
+          }
+          if (imageResult?.url) {
+            console.log(`✅ SUCCESS: AI-generated image added to carousel ${i + 1}`);
+            console.log(`   Image URL: ${imageResult.url}`);
+            console.log(`   ℹ️  Will be routed through proxy to avoid CORS issues`);
+          } else {
+            console.error(`❌ FAILED: No image URL returned from Pollinations.AI for carousel ${i + 1}`);
+            console.error(`   This could mean: API error or network issue`);
+            results[i].imageUrl = null;
+            results[i].originalImageUrl = null;
+          }
+        } else {
+          // Use Pexels to search for stock photos
+          console.log(`   Using Pexels for stock photo search`);
+          
+          const imageResult = await searchPexelsImage(imageSearchKeywords, usedPexelsIds);
+          results[i].originalImageUrl = imageResult?.url || null;
+          results[i].imageUrl = imageResult?.url || null;
+          if (imageResult?.id) {
+            usedPexelsIds.add(imageResult.id);
+          }
+          if (imageResult?.url) {
+            console.log(`✅ SUCCESS: Stock image added to carousel ${i + 1}`);
+            console.log(`   Image URL: ${imageResult.url}`);
+          } else {
+            console.error(`❌ FAILED: No image URL returned from Pexels for carousel ${i + 1}`);
+            console.error(`   Pexels API returned:`, imageResult);
+            console.error(`   This could mean: API key issue, rate limit, or no matching images`);
+            results[i].imageUrl = null;
+            results[i].originalImageUrl = null;
+          }
+        }
+      } catch (imageError: any) {
+        console.error(`❌ EXCEPTION during image fetch for carousel ${i + 1}:`);
+        console.error(`   Error:`, imageError);
+        console.error(`   Error message:`, imageError?.message);
+        console.error(`   Stack:`, imageError?.stack);
+        results[i].imageUrl = null;
+        results[i].originalImageUrl = null;
+      }
+    } else {
+      // Log why image fetch was skipped
+      if (carousel.kind === 'MIDDLE') {
+        if (!includeImages) {
+          console.log(`\n📝 MIDDLE CAROUSEL ${i + 1}: Images disabled by user (includeImages=${includeImages}) - skipping image fetch`);
+        } else if (!imageSearchKeywords || !imageSearchKeywords.trim()) {
+          console.log(`\n⚠️  MIDDLE CAROUSEL ${i + 1}: NO imageSearch keywords!`);
+          console.log(`   includeImages: ${includeImages}`);
+          console.log(`   imageSearchKeywords: "${imageSearchKeywords}"`);
+          console.log(`   This should not happen with the fallback in place.`);
+        } else {
+          console.log(`\n⚠️  MIDDLE CAROUSEL ${i + 1}: Unexpected condition - image fetch skipped`);
+          console.log(`   includeImages: ${includeImages}`);
+          console.log(`   carousel.kind: ${carousel.kind}`);
+          console.log(`   imageSearchKeywords: "${imageSearchKeywords}"`);
+        }
+      }
+    }
+  }
+  
+  return results;
+}
+
+async function generateNoteWithGemini(ideaTitle: string, accountDescription: string) {
   const startTime = Date.now();
   
   try {
-    console.log(`🚀 Generating note for: "${ideaTitle}"`);
-    console.log(`🖼️ generateNote: includeImages parameter =`, includeImages);
-    console.log(`🎨 generateNote: useAIImages parameter =`, useAIImages);
-    console.log(`🎭 generateNote: aiImageStyle parameter =`, aiImageStyle);
-    
     const result = await callGeminiWithRetry(model, {
       contents: [{
         role: 'user',
@@ -779,6 +807,51 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
       data.caption = data.caption.replace(/\*/g, '');
     }
     
+    return {
+      success: true,
+      action: 'note',
+      data: {
+        ideaTitle: data.ideaTitle || ideaTitle,
+        slides: data.slides,
+        caption: data.caption,
+      },
+      meta: {
+        generationTime: `${Date.now() - startTime}ms`,
+        model: GEMINI_MODEL,
+      }
+    };
+  } catch (error: any) {
+    console.error('Error generating note with Gemini:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to generate note',
+    };
+  }
+}
+
+async function generateNote(ideaTitle: string, accountDescription: string, includeImages: boolean = true, useAIImages: boolean = false, aiImageStyle: AIImageStyle = 'animated') {
+  const startTime = Date.now();
+  
+  try {
+    console.log(`🚀 Generating note for: "${ideaTitle}"`);
+    console.log(`🖼️ generateNote: includeImages parameter =`, includeImages);
+    console.log(`🎨 generateNote: useAIImages parameter =`, useAIImages);
+    console.log(`🎭 generateNote: aiImageStyle parameter =`, aiImageStyle);
+    
+    // Get note data from the appropriate provider
+    let noteResult;
+    if (AI_PROVIDER === 'openai') {
+      noteResult = await generateNoteWithOpenAI(ideaTitle, accountDescription);
+    } else {
+      noteResult = await generateNoteWithGemini(ideaTitle, accountDescription);
+    }
+    
+    if (!noteResult.success) {
+      return noteResult;
+    }
+    
+    const data = noteResult.data;
+    
     console.log(`🖼️ generateNote: Calling extractUnderlineWords with includeImages =`, includeImages, 'useAIImages =', useAIImages, 'aiImageStyle =', aiImageStyle);
     const underlineWords = await extractUnderlineWords(data.slides, includeImages, useAIImages, aiImageStyle);
     
@@ -818,7 +891,7 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
       },
       meta: {
         generationTime: `${Date.now() - startTime}ms`,
-        model: GEMINI_MODEL,
+        model: noteResult.meta.model,
       }
     };
   } catch (error: any) {

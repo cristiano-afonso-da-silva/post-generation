@@ -112,7 +112,7 @@ h6[style*="font-family"][style*="serif"],
    ════════════════════════════════════════════════════════════════════════════ */
 
 .card {
-  background: #ffffff;
+  background: transparent;
   border: 2px solid #e5e5e5;
   border-radius: 16px;
   padding: 32px;
