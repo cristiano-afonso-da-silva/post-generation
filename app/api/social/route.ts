@@ -7,12 +7,7 @@ import {
   buildAIImagePrompt,
   type AIImageStyle
 } from '../../config/prompts';
-import { AI_PROVIDER, GEMINI_MODEL } from '../../config/aiConfig';
-import {
-  generateIdeasWithOpenAI,
-  generateNoteWithOpenAI,
-  extractUnderlineWordsWithOpenAI
-} from '../../lib/openaiClient';
+import { GEMINI_MODEL } from '../../config/aiConfig';
 // ════════════════════════════════════════════════════════════════════════════
 // API Configuration
 // ════════════════════════════════════════════════════════════════════════════
@@ -563,11 +558,7 @@ async function generateIdeasWithGemini(accountDescription: string) {
 }
 
 async function generateIdeas(accountDescription: string) {
-  if (AI_PROVIDER === 'openai') {
-    return generateIdeasWithOpenAI(accountDescription);
-  } else {
-    return generateIdeasWithGemini(accountDescription);
-  }
+  return generateIdeasWithGemini(accountDescription);
 }
 
 // buildAIImagePrompt is now imported from app/config/prompts.ts
@@ -643,13 +634,8 @@ async function extractUnderlineWords(carousels: any[], includeImages: boolean = 
   const imageSource = useAIImages ? 'Pollinations.AI (AI-generated)' : 'Pexels (stock photos)';
   console.log(`\n🎨 Extracting emphasis words and ${includeImages ? `🖼️ images from ${imageSource} (enabled)` : '📝 NO images (disabled)'}`);
   
-  // Get emphasis extraction from the appropriate provider
-  let results: Record<number, any>;
-  if (AI_PROVIDER === 'openai') {
-    results = await extractUnderlineWordsWithOpenAI(carousels);
-  } else {
-    results = await extractUnderlineWordsWithGemini(carousels);
-  }
+  // Get emphasis extraction using Gemini
+  const results: Record<number, any> = await extractUnderlineWordsWithGemini(carousels);
   
   // Handle image fetching (provider-agnostic)
   const usedPexelsIds = new Set<number>();
@@ -838,13 +824,8 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
     console.log(`🎨 generateNote: useAIImages parameter =`, useAIImages);
     console.log(`🎭 generateNote: aiImageStyle parameter =`, aiImageStyle);
     
-    // Get note data from the appropriate provider
-    let noteResult;
-    if (AI_PROVIDER === 'openai') {
-      noteResult = await generateNoteWithOpenAI(ideaTitle, accountDescription);
-    } else {
-      noteResult = await generateNoteWithGemini(ideaTitle, accountDescription);
-    }
+    // Get note data from Gemini
+    const noteResult = await generateNoteWithGemini(ideaTitle, accountDescription);
     
     if (!noteResult.success) {
       return noteResult;
