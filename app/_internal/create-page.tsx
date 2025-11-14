@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Sparkles, ChevronDown } from 'lucide-react'
+import { Palette, Type, ArrowUp } from 'lucide-react'
 import '../globals.css'
 import CarouselImageGenerator from '../components/CarouselImageGenerator'
 import { COLOR_THEMES } from '../config/carouselThemes'
@@ -11,6 +11,8 @@ import { useAuth } from '../context/AuthContext'
 import { useGeneration } from '../hooks/useGenerations'
 import UpgradePrompt from '../components/UpgradePrompt'
 import SubscriptionModal from '../components/SubscriptionModal'
+import TemplateSelectorModal from '../components/TemplateSelectorModal'
+import ModeSelectorDropdown from '../components/ModeSelectorModal'
 
 const API_URL = ''
 
@@ -66,6 +68,10 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
   const [error, setError] = useState('')
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
+  const [showTemplateModal, setShowTemplateModal] = useState(false)
+  const [showModeDropdown, setShowModeDropdown] = useState(false)
+  const modeButtonRef = useRef<HTMLButtonElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   
   // Template options
   const templateOptions = getTemplateOptions()
@@ -79,6 +85,16 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
     hasInitializedRef.current = true
     setColorThemeId('purple-black')
   }, [user, authLoading])
+
+  // Auto-focus textarea when page loads
+  useEffect(() => {
+    if (!authLoading && user && !ideas.length && !note && !loadingIdeas && !loadingNote && textareaRef.current) {
+      // Small delay to ensure the component is fully rendered
+      setTimeout(() => {
+        textareaRef.current?.focus()
+      }, 100)
+    }
+  }, [authLoading, user, ideas.length, note, loadingIdeas, loadingNote])
 
   // Clear canvas images cache when color theme changes to force regeneration
   useEffect(() => {
@@ -361,7 +377,7 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
       <div style={{
         flex: 1,
         overflowY: 'auto',
-        padding: '48px 24px',
+        padding: '48px 24px 24px 24px',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -374,7 +390,6 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
             marginTop: '10vh',
             textAlign: 'center',
           }}>
-            <Sparkles size={48} color="#ffbd59" style={{ marginBottom: '24px' }} />
             <h1 style={{
               fontSize: '32px',
               fontWeight: '700',
@@ -390,6 +405,181 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
             }}>
               Enter your business description or idea below to get started
             </p>
+            {/* Textarea Input with Action Bar */}
+            <div style={{
+              width: '100%',
+              background: '#ffffff',
+              borderRadius: '12px',
+              border: '2px solid #e5e5e5',
+              overflow: 'hidden',
+            }}>
+            <textarea
+              ref={textareaRef}
+              value={accountDescription}
+              onChange={(e) => setAccountDescription(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !loadingIdeas && !loadingNote) {
+                  e.preventDefault()
+                  generateIdeas()
+                }
+              }}
+              placeholder="Enter business description"
+              disabled={loadingIdeas || loadingNote}
+              style={{
+                width: '100%',
+                minHeight: '80px',
+                padding: '20px',
+                  border: 'none',
+                fontSize: '15px',
+                color: '#333333',
+                  background: 'transparent',
+                outline: 'none',
+                resize: 'none',
+                fontFamily: 'inherit',
+                lineHeight: '1.5',
+              }}
+              onFocus={(e) => {
+                  e.currentTarget.closest('div')!.style.borderColor = '#cccccc'
+              }}
+              onBlur={(e) => {
+                  e.currentTarget.closest('div')!.style.borderColor = '#e5e5e5'
+                }}
+              />
+              {/* Action Bar - Attached to textarea */}
+              <div style={{
+                padding: '12px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: '#ffffff',
+              }}>
+                {/* Left: Icon Buttons */}
+                <div style={{
+                  display: 'flex',
+                  gap: '8px',
+                  alignItems: 'center',
+                }}>
+                  {/* Template Selector Button */}
+                  <button
+                    onClick={() => setShowTemplateModal(true)}
+                    disabled={loadingIdeas || loadingNote}
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '6px',
+                      border: '1px solid #e5e5e5',
+                      background: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: loadingIdeas || loadingNote ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s ease',
+                      opacity: loadingIdeas || loadingNote ? 0.5 : 1,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!loadingIdeas && !loadingNote) {
+                        e.currentTarget.style.background = '#f5f5f5'
+                        e.currentTarget.style.borderColor = '#d0d0d0'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!loadingIdeas && !loadingNote) {
+                        e.currentTarget.style.background = '#ffffff'
+                        e.currentTarget.style.borderColor = '#e5e5e5'
+                      }
+                    }}
+                    title="Select Template"
+                  >
+                    <Palette size={18} color="#666666" />
+                  </button>
+
+                  {/* Mode Selector Button */}
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      ref={modeButtonRef}
+                      onClick={() => setShowModeDropdown(!showModeDropdown)}
+                      disabled={loadingIdeas || loadingNote}
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '6px',
+                        border: '1px solid #e5e5e5',
+                        background: showModeDropdown ? '#f5f5f5' : '#ffffff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: loadingIdeas || loadingNote ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s ease',
+                        opacity: loadingIdeas || loadingNote ? 0.5 : 1,
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!loadingIdeas && !loadingNote && !showModeDropdown) {
+                          e.currentTarget.style.background = '#f5f5f5'
+                          e.currentTarget.style.borderColor = '#d0d0d0'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!loadingIdeas && !loadingNote && !showModeDropdown) {
+                          e.currentTarget.style.background = '#ffffff'
+                          e.currentTarget.style.borderColor = '#e5e5e5'
+                        }
+                      }}
+                      title="Select Mode"
+                    >
+                      <Type size={18} color="#666666" />
+                    </button>
+                    {showModeDropdown && (
+                      <ModeSelectorDropdown
+                        isOpen={showModeDropdown}
+                        onClose={() => setShowModeDropdown(false)}
+                        currentMode={{
+                          includeImages,
+                          useAIImages,
+                          aiImageStyle
+                        }}
+                        onSelectMode={(mode) => {
+                          setIncludeImages(mode.includeImages)
+                          setUseAIImages(mode.useAIImages)
+                          setAiImageStyle(mode.aiImageStyle)
+                        }}
+                        buttonRef={modeButtonRef}
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {/* Right: Send Button */}
+                <button
+                  onClick={generateIdeas}
+                  disabled={loadingIdeas || loadingNote || !accountDescription.trim()}
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '6px',
+                    background: loadingIdeas || loadingNote || !accountDescription.trim() ? '#e5e5e5' : '#ffbd59',
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: loadingIdeas || loadingNote || !accountDescription.trim() ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!loadingIdeas && !loadingNote && accountDescription.trim()) {
+                      e.currentTarget.style.background = '#ffa929'
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!loadingIdeas && !loadingNote && accountDescription.trim()) {
+                      e.currentTarget.style.background = '#ffbd59'
+                    }
+                  }}
+                  title="Generate"
+                >
+                  <ArrowUp size={18} color={loadingIdeas || loadingNote || !accountDescription.trim() ? '#999999' : '#000000'} />
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -427,9 +617,10 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
               Choose an Idea
             </h2>
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+              display: 'flex',
+              flexDirection: 'column',
               gap: '16px',
+              alignItems: 'center',
             }}>
               {ideas.map((idea, index) => (
                 <button
@@ -446,6 +637,11 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                     fontSize: '15px',
                     color: '#333333',
                     lineHeight: '1.6',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    maxWidth: '600px',
+                    width: '100%',
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.borderColor = '#ffbd59'
@@ -458,6 +654,21 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                     e.currentTarget.style.boxShadow = 'none'
                   }}
                 >
+                  <span style={{
+                    minWidth: '28px',
+                    height: '28px',
+                    borderRadius: '6px',
+                    background: '#f5f5f5',
+                    color: '#000000',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: '600',
+                    fontSize: '14px',
+                    flexShrink: 0,
+                  }}>
+                    {index + 1}
+                  </span>
                   {idea}
                 </button>
               ))}
@@ -591,189 +802,49 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
         )}
       </div>
 
-      {/* Bottom Input Bar - Hide for new generations, only show when loading existing or before generation */}
-      {((!note && !pendingGenerationRef.current) || generationId) && (
-      <div style={{
-        background: '#ffffff',
-        borderTop: '1px solid #e5e5e5',
-        padding: '24px',
-        boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.05)',
-      }}>
+      {/* Bottom Bar - Only show after generation */}
+      {note && generationId && (
         <div style={{
-          maxWidth: '1200px',
-          margin: '0 auto',
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: '#ffffff',
+          borderTop: '1px solid #e5e5e5',
+          padding: '16px 24px',
+          boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.05)',
           display: 'flex',
-          gap: '12px',
           alignItems: 'center',
+          justifyContent: 'space-between',
+          zIndex: 100,
         }}>
-          {/* Template Selector (always show) */}
-            <div style={{ position: 'relative' }}>
-              <select
-              value={templateId}
-              onChange={(e) => setTemplateId(e.target.value)}
-              disabled={loadingIdeas || loadingNote}
-                style={{
-                  padding: '14px 40px 14px 16px',
-                  borderRadius: '8px',
-                  border: '2px solid #e5e5e5',
-                  fontSize: '15px',
-                  fontWeight: '500',
-                  color: '#333333',
-                  background: '#fafafa',
-                  cursor: 'pointer',
-                  appearance: 'none',
-                  minWidth: '150px',
-                }}
-              >
-                {templateOptions.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </select>
-            <ChevronDown size={20} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#666666' }} />
-            </div>
+          {/* Left: Color Theme Selector */}
+              <div style={{ position: 'relative' }}>
+                <select
+                  value={colorThemeId}
+                  onChange={(e) => setColorThemeId(e.target.value)}
+                  style={{
+                    padding: '10px 36px 10px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #e5e5e5',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    color: '#333333',
+                    background: '#ffffff',
+                    cursor: 'pointer',
+                    appearance: 'none',
+                    minWidth: '120px',
+                  }}
+                >
+                  {colorThemes.map(([id, theme]) => (
+                    <option key={id} value={id}>
+                      {theme.name}
+                    </option>
+                  ))}
+                </select>
+          </div>
 
-          {/* Image Option Selector (only before generation) */}
-          {!note && !pendingGenerationRef.current && (
-            <div style={{ position: 'relative' }}>
-              <select
-                value={
-                  !includeImages
-                    ? 'text'
-                    : !useAIImages
-                    ? 'text-image'
-                    : aiImageStyle === 'animated'
-                    ? 'text-ai-animated'
-                    : 'text-ai-surreal'
-                }
-                onChange={(e) => {
-                  const value = e.target.value
-                  if (value === 'text') {
-                    setIncludeImages(false)
-                    setUseAIImages(false)
-                  } else if (value === 'text-image') {
-                    setIncludeImages(true)
-                    setUseAIImages(false)
-                  } else if (value === 'text-ai-animated') {
-                    setIncludeImages(true)
-                    setUseAIImages(true)
-                    setAiImageStyle('animated')
-                  } else if (value === 'text-ai-surreal') {
-                    setIncludeImages(true)
-                    setUseAIImages(true)
-                    setAiImageStyle('surreal')
-                  }
-                }}
-                disabled={loadingIdeas || loadingNote}
-                style={{
-                  padding: '14px 40px 14px 16px',
-                  borderRadius: '8px',
-                  border: '2px solid #e5e5e5',
-                  fontSize: '15px',
-                  fontWeight: '500',
-                  color: '#333333',
-                  background: '#fafafa',
-                  cursor: 'pointer',
-                  appearance: 'none',
-                  minWidth: '280px',
-                }}
-              >
-                <option value="text">Text (1 credit)</option>
-                <option value="text-image">Text + Image (2 credits)</option>
-                <option value="text-ai-animated">Text + AI Animated Image (2 credits)</option>
-                <option value="text-ai-surreal">Text + AI Surrealism Image (2 credits)</option>
-              </select>
-              <ChevronDown size={20} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#666666' }} />
-            </div>
-          )}
-
-          {/* Color Theme Selector (only after generation) */}
-          {note && (
-            <div style={{ position: 'relative' }}>
-              <select
-                value={colorThemeId}
-                onChange={(e) => setColorThemeId(e.target.value)}
-                style={{
-                  padding: '14px 40px 14px 16px',
-                  borderRadius: '8px',
-                  border: '2px solid #e5e5e5',
-                  fontSize: '15px',
-                  fontWeight: '500',
-                  color: '#333333',
-                  background: '#fafafa',
-                  cursor: 'pointer',
-                  appearance: 'none',
-                  minWidth: '150px',
-                }}
-              >
-                {colorThemes.map(([id, theme]) => (
-                  <option key={id} value={id}>
-                    {theme.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={20} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#666666' }} />
-            </div>
-          )}
-
-          {/* Text Input (only before generation) */}
-          {!note && !pendingGenerationRef.current && (
-          <input
-            type="text"
-              value={accountDescription}
-              onChange={(e) => setAccountDescription(e.target.value)}
-            onKeyDown={(e) => {
-                if (e.key === 'Enter' && !loadingIdeas && !loadingNote) {
-                generateIdeas()
-              }
-            }}
-              placeholder="Describe your business or enter an idea..."
-            disabled={loadingIdeas || loadingNote}
-            style={{
-              flex: 1,
-              padding: '14px 20px',
-              borderRadius: '8px',
-              border: '2px solid #e5e5e5',
-              fontSize: '15px',
-              color: '#333333',
-              background: '#fafafa',
-              outline: 'none',
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = '#ffbd59'
-              e.currentTarget.style.background = '#ffffff'
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = '#e5e5e5'
-              e.currentTarget.style.background = '#fafafa'
-            }}
-          />
-          )}
-
-          {/* Generate Button (only before generation) */}
-          {!note && !pendingGenerationRef.current && (
-            <button
-              onClick={generateIdeas}
-              disabled={loadingIdeas || loadingNote || !accountDescription.trim()}
-              style={{
-                padding: '14px 32px',
-                borderRadius: '8px',
-                background: loadingIdeas || loadingNote || !accountDescription.trim() ? '#e5e5e5' : '#ffbd59',
-                color: loadingIdeas || loadingNote || !accountDescription.trim() ? '#999999' : '#000000',
-                border: 'none',
-                fontSize: '15px',
-                fontWeight: '600',
-                cursor: loadingIdeas || loadingNote || !accountDescription.trim() ? 'not-allowed' : 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {loadingIdeas ? 'Generating...' : 'Generate'}
-            </button>
-          )}
-
-          {/* New Post Button (only after generation) */}
-          {note && (
+          {/* Right: New Post Button */}
             <button
               onClick={() => {
                 setNote(null)
@@ -784,38 +855,47 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                 setCurrentStep(null)
               }}
               style={{
-                padding: '14px 32px',
+                padding: '10px 20px',
                 borderRadius: '8px',
                 background: '#ffbd59',
                 color: '#000000',
                 border: 'none',
-                fontSize: '15px',
+                fontSize: '14px',
                 fontWeight: '600',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#ffa929'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#ffbd59'
               }}
             >
               New Post
             </button>
-          )}
         </div>
+      )}
 
-        {/* Error Message */}
-        {error && (
-          <div style={{
-            maxWidth: '1200px',
-            margin: '12px auto 0',
-            padding: '12px 16px',
-            background: '#fee',
-            border: '1px solid #fcc',
-            borderRadius: '8px',
-            color: '#c00',
-            fontSize: '14px',
-          }}>
-            {error}
-          </div>
-        )}
-      </div>
+      {/* Error Message */}
+      {error && (
+        <div style={{
+          position: 'fixed',
+          bottom: '80px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          padding: '12px 16px',
+          background: '#fee',
+          border: '1px solid #fcc',
+          borderRadius: '8px',
+          color: '#c00',
+          fontSize: '14px',
+          zIndex: 101,
+          maxWidth: '90%',
+        }}>
+          {error}
+        </div>
       )}
 
       {/* Modals */}
@@ -836,6 +916,16 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
           subscriptionStatus={credits?.subscription_status || null}
         />
       )}
+
+      {showTemplateModal && (
+        <TemplateSelectorModal
+          isOpen={showTemplateModal}
+          onClose={() => setShowTemplateModal(false)}
+          selectedTemplateId={templateId}
+          onSelectTemplate={(id) => setTemplateId(id)}
+        />
+      )}
+
 
       {/* Animations */}
       <style jsx>{`

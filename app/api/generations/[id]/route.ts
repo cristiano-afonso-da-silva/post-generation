@@ -26,41 +26,50 @@ export async function GET(
       return NextResponse.json({ error: 'Generation not found' }, { status: 404 })
     }
 
-    // Use cached image URLs from database if available
-    let imageUrls = generation.image_urls || []
+    // Debug: Log caption field
+    console.log(`📝 Generation ${params.id}: Caption field value:`, generation.caption ? `"${generation.caption.substring(0, 50)}..."` : 'null/empty')
 
-    // If image_urls doesn't exist or is empty, fetch from storage and cache in DB
-    if (!imageUrls || imageUrls.length === 0) {
-      const { data: files, error: listError } = await supabase.storage
-        .from('carousel-images')
-        .list(`${userId}/${params.id}`)
+    // Always generate fresh signed URLs (they expire after 1 hour)
+    // Check if files exist in storage first
+    let imageUrls: string[] = []
+    const { data: files, error: listError } = await supabase.storage
+      .from('carousel-images')
+      .list(`${userId}/${params.id}`)
 
-      if (!listError && files && files.length > 0) {
-        // Sort files by name to ensure correct order (slide-0.png, slide-1.png, etc.)
-        const sortedFiles = files.sort((a, b) => {
-          const aNum = parseInt(a.name.match(/\d+/)?.[0] || '0')
-          const bNum = parseInt(b.name.match(/\d+/)?.[0] || '0')
-          return aNum - bNum
-        })
+    if (!listError && files && files.length > 0) {
+      // Sort files by name to ensure correct order (slide-0.png, slide-1.png, etc.)
+      const sortedFiles = files.sort((a, b) => {
+        const aNum = parseInt(a.name.match(/\d+/)?.[0] || '0')
+        const bNum = parseInt(b.name.match(/\d+/)?.[0] || '0')
+        return aNum - bNum
+      })
 
-        imageUrls = sortedFiles.map(file => {
-          const { data } = supabase.storage
+      // Generate fresh signed URLs for private bucket access (1 hour expiry)
+      imageUrls = await Promise.all(
+        sortedFiles.map(async (file) => {
+          const { data, error } = await supabase.storage
             .from('carousel-images')
-            .getPublicUrl(`${userId}/${params.id}/${file.name}`)
-          return data.publicUrl
+            .createSignedUrl(`${userId}/${params.id}/${file.name}`, 3600) // 1 hour expiry
+          if (error) {
+            console.error(`Error creating signed URL for ${file.name}:`, error)
+            // Fallback to public URL if signed URL fails
+            const { data: publicData } = supabase.storage
+              .from('carousel-images')
+              .getPublicUrl(`${userId}/${params.id}/${file.name}`)
+            return publicData.publicUrl
+          }
+          return data.signedUrl
         })
+      )
 
-        // Cache image URLs in database for future requests
-        await supabase
-          .from('generations')
-          .update({ image_urls: imageUrls })
-          .eq('id', params.id)
-      }
+      console.log(`✅ Generation ${params.id}: Generated ${imageUrls.length} fresh signed URLs`)
     }
 
+    // Explicitly include caption to ensure it's returned
     return NextResponse.json({ 
       generation: {
         ...generation,
+        caption: generation.caption || null, // Explicitly include caption
         imageUrls
       }
     })

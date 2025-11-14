@@ -177,12 +177,21 @@ export async function POST(request: NextRequest) {
         throw uploadError
       }
 
-      // Get public URL
-      const { data: urlData } = supabase.storage
+      // Get signed URL for private bucket access (1 hour expiry)
+      const { data: urlData, error: urlError } = await supabase.storage
         .from('carousel-images')
-        .getPublicUrl(filePath)
-
-      return urlData.publicUrl
+        .createSignedUrl(filePath, 3600) // 1 hour expiry
+      
+      if (urlError) {
+        console.error(`Error creating signed URL for slide ${i}:`, urlError)
+        // Fallback to public URL if signed URL fails
+        const { data: publicData } = supabase.storage
+          .from('carousel-images')
+          .getPublicUrl(filePath)
+        return publicData.publicUrl
+      }
+      
+      return urlData.signedUrl
     })
 
     // Wait for all uploads to complete in parallel

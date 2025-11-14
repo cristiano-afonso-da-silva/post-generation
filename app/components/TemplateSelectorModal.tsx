@@ -80,7 +80,7 @@ export default function TemplateSelectorModal({
           display: 'flex',
           flexDirection: 'column',
           position: 'relative',
-          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+          border: '1px solid #e5e5e5',
           overflow: 'hidden'
         }}
       >
@@ -160,26 +160,22 @@ export default function TemplateSelectorModal({
                   key={template.id}
                   onClick={() => handleTemplateClick(template.id)}
                   style={{
-                    border: isSelected ? '2px solid #4a90e2' : '1px solid #e5e5e5',
+                    border: isSelected ? '2px solid #ffbd59' : '1px solid #e5e5e5',
                     borderRadius: '8px',
                     padding: '0',
                     cursor: 'pointer',
-                    transition: 'all 0.2s ease',
                     background: '#ffffff',
                     position: 'relative',
-                    overflow: 'hidden',
-                    boxShadow: isSelected ? '0 4px 12px rgba(74, 144, 226, 0.15)' : 'none'
+                    overflow: 'hidden'
                   }}
                   onMouseEnter={(e) => {
                     if (!isSelected) {
-                      e.currentTarget.style.borderColor = '#4a90e2'
-                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(74, 144, 226, 0.1)'
+                      e.currentTarget.style.borderColor = '#ffbd59'
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (!isSelected) {
                       e.currentTarget.style.borderColor = '#e5e5e5'
-                      e.currentTarget.style.boxShadow = 'none'
                     }
                   }}
                 >
@@ -187,7 +183,7 @@ export default function TemplateSelectorModal({
                   <div
                     style={{
                       padding: '12px 16px',
-                      background: isSelected ? '#f0f7ff' : '#fafafa',
+                      background: isSelected ? '#f5f5f5' : '#fafafa',
                       borderBottom: '1px solid #e5e5e5',
                       fontSize: '13px',
                       fontWeight: '500',
@@ -276,7 +272,7 @@ export default function TemplateSelectorModal({
             alignItems: 'center',
             justifyContent: 'flex-end',
             gap: '12px',
-            background: '#fafafa'
+            background: '#ffffff'
           }}
         >
           <button

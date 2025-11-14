@@ -8,13 +8,13 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 /**
- * Prompt for generating 10 post ideas based on business description
+ * Prompt for generating 3 post ideas based on business description
  */
 export const IDEAS_PROMPT = (accountDescription: string) => `
 You are an expert social media strategist with deep knowledge of viral content and engagement patterns.
 
 TASK
-Generate 10 highly specific, compelling post idea titles for this account:
+Generate 3 highly specific, compelling post idea titles for this account:
 "${accountDescription}"
 
 REQUIREMENTS
@@ -39,7 +39,7 @@ BAD EXAMPLES
 OUTPUT FORMAT
 Return ONLY valid JSON matching this exact structure:
 {
-  "ideas": ["title 1", "title 2", ... "title 10"]
+  "ideas": ["title 1", "title 2", "title 3"]
 }
 
 Think strategically about what would make someone stop scrolling and engage.

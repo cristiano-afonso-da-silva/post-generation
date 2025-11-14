@@ -109,6 +109,7 @@ interface Props {
   useAIImages?: boolean
   aiImageStyle?: 'animated' | 'surreal'
   onGenerationComplete?: (generationId?: string) => void
+  onCarouselsReorder?: (reorderedCarousels: Carousel[]) => void
 }
 
 // Initialize images from localStorage before rendering
@@ -198,7 +199,8 @@ export default function CarouselImageGenerator({
   includeImages = false,
   useAIImages = false,
   aiImageStyle = 'animated',
-  onGenerationComplete
+  onGenerationComplete,
+  onCarouselsReorder
 }: Props) {
   // Debug: Log underlineWords on component mount/update
   useEffect(() => {
@@ -231,6 +233,94 @@ export default function CarouselImageGenerator({
   // Keep previous images visible during regeneration to prevent layout shifts
   const initialImages = getInitialImages(carousels, ideaTitle, underlineWords, templateId, colorThemeId)
   const previousImagesRef = useRef<string[]>(initialImages)
+  
+  // Local state for reordered carousels (allows drag-and-drop reordering)
+  const [orderedCarousels, setOrderedCarousels] = useState<Carousel[]>(carousels)
+  const [orderedCarouselImages, setOrderedCarouselImages] = useState<string[]>(() => 
+    getInitialImages(carousels, ideaTitle, underlineWords, templateId, colorThemeId)
+  )
+  const [orderedUnderlineWords, setOrderedUnderlineWords] = useState<Record<number, any>>(underlineWords)
+  
+  // Update local state when props change
+  useEffect(() => {
+    setOrderedCarousels(carousels)
+    setOrderedCarouselImages(getInitialImages(carousels, ideaTitle, underlineWords, templateId, colorThemeId))
+    setOrderedUnderlineWords(underlineWords)
+  }, [carousels, ideaTitle, underlineWords, templateId, colorThemeId])
+  
+  // Sync orderedCarouselImages with carouselImages when they update
+  useEffect(() => {
+    if (carouselImages.length > 0 && carouselImages.length === orderedCarousels.length) {
+      setOrderedCarouselImages(carouselImages)
+    }
+  }, [carouselImages])
+  
+  // Drag and drop state
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+  
+  // Handle reordering carousels
+  const handleReorder = useCallback((fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return
+    
+    setOrderedCarousels(prev => {
+      const newCarousels = [...prev]
+      const [moved] = newCarousels.splice(fromIndex, 1)
+      newCarousels.splice(toIndex, 0, moved)
+      
+      // Notify parent if callback provided
+      if (onCarouselsReorder) {
+        onCarouselsReorder(newCarousels)
+      }
+      
+      return newCarousels
+    })
+    
+    setOrderedCarouselImages(prev => {
+      const newImages = [...prev]
+      const [moved] = newImages.splice(fromIndex, 1)
+      newImages.splice(toIndex, 0, moved)
+      return newImages
+    })
+    
+    setOrderedUnderlineWords(prev => {
+      // Create a temporary array to reorder underlineWords
+      const tempArray: any[] = []
+      const maxIndex = Math.max(...Object.keys(prev).map(Number), -1)
+      
+      // Fill array with existing values
+      for (let i = 0; i <= maxIndex; i++) {
+        tempArray[i] = prev[i]
+      }
+      
+      // Reorder the array
+      const [moved] = tempArray.splice(fromIndex, 1)
+      tempArray.splice(toIndex, 0, moved)
+      
+      // Convert back to object with new indices
+      const newUnderlineWords: Record<number, any> = {}
+      tempArray.forEach((value, newIndex) => {
+        if (value !== undefined) {
+          newUnderlineWords[newIndex] = value
+        }
+      })
+      
+      return newUnderlineWords
+    })
+    
+    // Update canvas refs order
+    const newCanvasRefs = [...canvasRefs.current]
+    const [movedCanvas] = newCanvasRefs.splice(fromIndex, 1)
+    newCanvasRefs.splice(toIndex, 0, movedCanvas)
+    canvasRefs.current = newCanvasRefs
+    
+    // Update previous images ref
+    const newPreviousImages = [...previousImagesRef.current]
+    const [movedImage] = newPreviousImages.splice(fromIndex, 1)
+    newPreviousImages.splice(toIndex, 0, movedImage)
+    previousImagesRef.current = newPreviousImages
+  }, [onCarouselsReorder])
+  
   const { user, refreshCredits } = useAuth()
   // Initialize hasDeductedCredit from localStorage - check by ideaTitle, not content hash
   // Credits should be deducted once per ideaTitle, not once per content version
@@ -330,9 +420,9 @@ export default function CarouselImageGenerator({
           generationId: generationIdToSend,
           ideaTitle,
           accountDescription: accountDescriptionRef.current,
-          slides: carousels,
+          slides: orderedCarousels,
           caption: captionRef.current,
-          underlineWords,
+          underlineWords: orderedUnderlineWords,
           templateId,
           colorThemeId,
           images: imageDataUrls
@@ -376,7 +466,7 @@ export default function CarouselImageGenerator({
     const renderStartTime = performance.now()
     console.log('🎨 [RENDERING START] CarouselImageGenerator.generateAllCarousels() called')
     console.log('   ⏱️ Timestamp:', new Date().toISOString())
-    console.log('   📊 Carousels to render:', carousels.length)
+    console.log('   📊 Carousels to render:', orderedCarousels.length)
     console.log('   🎨 Template:', overrideTemplateId ?? templateId)
     console.log('   🎨 Color Theme:', overrideColorId ?? colorThemeId)
     
@@ -393,26 +483,26 @@ export default function CarouselImageGenerator({
     console.log('   ⏱️ Template/Theme loading took:', (performance.now() - templateStartTime).toFixed(2), 'ms')
     
     // Ensure canvasRefs array has correct length
-    if (canvasRefs.current.length !== carousels.length) {
-      canvasRefs.current = new Array(carousels.length).fill(null)
+    if (canvasRefs.current.length !== orderedCarousels.length) {
+      canvasRefs.current = new Array(orderedCarousels.length).fill(null)
     }
     
     // Initialize array with correct length to maintain order
-    const imageDataUrls: string[] = new Array(carousels.length).fill('')
+    const imageDataUrls: string[] = new Array(orderedCarousels.length).fill('')
     
     // Generate all carousels first without updating state (prevents layout shifts)
     // Use yield mechanism that works in background tabs
     const carouselGenerationStart = performance.now()
-    for (let i = 0; i < carousels.length; i++) {
+    for (let i = 0; i < orderedCarousels.length; i++) {
       const carouselStartTime = performance.now()
-      console.log(`   🖼️ [CAROUSEL ${i + 1}/${carousels.length}] Starting generation...`)
-      console.log(`      Type: ${carousels[i].kind}, Title: ${carousels[i].title?.substring(0, 30)}...`)
+      console.log(`   🖼️ [CAROUSEL ${i + 1}/${orderedCarousels.length}] Starting generation...`)
+      console.log(`      Type: ${orderedCarousels[i].kind}, Title: ${orderedCarousels[i].title?.substring(0, 30)}...`)
       
       // Save progress to localStorage (so rendering can resume if interrupted)
       try {
         localStorage.setItem('postGeneration_renderingProgress', JSON.stringify({
           currentIndex: i,
-          totalCarousels: carousels.length,
+          totalCarousels: orderedCarousels.length,
           ideaTitle,
           timestamp: Date.now()
         }))
@@ -425,7 +515,7 @@ export default function CarouselImageGenerator({
       
       const carouselEndTime = performance.now()
       const carouselDuration = carouselEndTime - carouselStartTime
-      console.log(`   ✅ [CAROUSEL ${i + 1}/${carousels.length}] Generated in ${carouselDuration.toFixed(2)}ms`)
+      console.log(`   ✅ [CAROUSEL ${i + 1}/${orderedCarousels.length}] Generated in ${carouselDuration.toFixed(2)}ms`)
       
       // Save canvas to data URL at the specific index to maintain order
       const canvas = canvasRefs.current[i]
@@ -441,7 +531,7 @@ export default function CarouselImageGenerator({
       
       // Yield control between carousels to prevent blocking, but continue rendering
       // This ensures rendering continues even in background tabs
-      if (i < carousels.length - 1) {
+      if (i < orderedCarousels.length - 1) {
         await yieldToEventLoop()
       }
     }
@@ -472,18 +562,20 @@ export default function CarouselImageGenerator({
       previousImagesRef.current = prev.length > 0 ? [...prev] : []
       return imageDataUrls
     })
+    // Also update orderedCarouselImages to keep them in sync
+    setOrderedCarouselImages(imageDataUrls)
     console.log('   ⏱️ setCarouselImages() call took:', (performance.now() - setStateStartTime).toFixed(2), 'ms')
     
     // Create full content hash (includes template/theme) for image matching - deterministic order
     const fullContentHash = JSON.stringify({ 
       ideaTitle, 
-      carousels, 
-      underlineWords, 
+      carousels: orderedCarousels, 
+      underlineWords: orderedUnderlineWords, 
       templateId: currentTemplateId, 
       colorThemeId: currentColorId
     })
     // Create content hash (only ideaTitle + carousels) for generation update detection
-    const contentHash = JSON.stringify({ ideaTitle, carousels })
+    const contentHash = JSON.stringify({ ideaTitle, carousels: orderedCarousels })
     
     // Save all images to localStorage with content hashes
     try {
@@ -609,7 +701,7 @@ export default function CarouselImageGenerator({
     // Check if cache should be skipped (e.g., when color theme changes)
     const skipCache = localStorage.getItem('postGeneration_skipCache') === 'true'
     
-    if (carousels.length > 0 && (carouselImages.length === 0 || skipCache)) {
+    if (orderedCarousels.length > 0 && (orderedCarouselImages.length === 0 || skipCache)) {
       // Generate if we don't have cached images OR if skipCache flag is set
       if (skipCache) {
         console.log('⏭️ Skip cache flag detected - forcing regeneration on mount')
@@ -623,14 +715,14 @@ export default function CarouselImageGenerator({
         prevDesignSettings.current = { templateId, colorThemeId }
         console.log('Initial mount flag set to false, prevDesignSettings updated:', prevDesignSettings.current)
       })
-    } else if (carousels.length > 0 && carouselImages.length > 0 && isInitialMount.current) {
+    } else if (orderedCarousels.length > 0 && orderedCarouselImages.length > 0 && isInitialMount.current) {
       // If we have images from cache, mark as not initial mount
       isInitialMount.current = false
       // Update prevDesignSettings to current values so future changes are detected
       prevDesignSettings.current = { templateId, colorThemeId }
       console.log('Initial mount flag set to false (cached images), prevDesignSettings updated:', prevDesignSettings.current)
     }
-  }, [carousels.length, carouselImages.length, generateAllCarousels])
+  }, [orderedCarousels.length, orderedCarouselImages.length, generateAllCarousels])
 
   // Regenerate when design settings change (post initial mount)
   useEffect(() => {
@@ -963,7 +1055,7 @@ export default function CarouselImageGenerator({
       return
     }
 
-    const carousel = carousels[index]
+    const carousel = orderedCarousels[index]
     console.log(`      📝 Processing carousel ${index + 1}: ${carousel.kind}`)
 
     const getLetterSpacingFor = (section: 'hook' | 'hookTopic' | 'hookSubtitle' | 'hookCTA' | 'title' | 'content' | 'cta'): number => {
@@ -1346,7 +1438,7 @@ export default function CarouselImageGenerator({
       ctx.textAlign = 'left'
 
       // Get highlight word
-      const emphasisData = underlineWords[index] || { underline: '', highlight: '' }
+      const emphasisData = orderedUnderlineWords[index] || { underline: '', highlight: '' }
       const highlightWord = emphasisData.highlight.toLowerCase().replace(/[.,!?;:–—\-'"`]/g, '').trim()
       
       // Find last occurrence of highlight word
@@ -1476,7 +1568,7 @@ export default function CarouselImageGenerator({
         }
       }
       
-      const emphasisData = underlineWords[index] || { underline: '', highlight: '' }
+      const emphasisData = orderedUnderlineWords[index] || { underline: '', highlight: '' }
       const underlinePhrases = emphasisData.underline.split(',').map(p => p.trim()).filter(p => p)
       
       const spaceWidth = ctx.measureText(' ').width
@@ -1613,7 +1705,7 @@ export default function CarouselImageGenerator({
 
       ctx.textAlign = 'left'
       
-      const emphasisData = underlineWords[index] || { underline: '', highlight: '', imageUrl: null, originalImageUrl: null }
+      const emphasisData = orderedUnderlineWords[index] || { underline: '', highlight: '', imageUrl: null, originalImageUrl: null }
       
       if (cleanCarousel.kind === 'MIDDLE') {
         console.log(`\n🖼️ Carousel ${index + 1} Image Check:`)
@@ -2129,11 +2221,11 @@ export default function CarouselImageGenerator({
   }  // Close generateCarouselImage function
 
   const downloadCarousel = (index: number) => {
-    const imageDataUrl = carouselImages[index]
+    const imageDataUrl = orderedCarouselImages[index]
     if (!imageDataUrl) return
 
     const link = document.createElement('a')
-    const carousel = carousels[index]
+    const carousel = orderedCarousels[index]
     const fileName = `carousel-${index + 1}-${carousel.kind.toLowerCase()}.png`
     
     link.download = fileName
@@ -2154,8 +2246,8 @@ export default function CarouselImageGenerator({
       try {
         // Download each image individually with a small delay between downloads
         // This allows mobile browsers to save each image to the photo album
-        for (let i = 0; i < carousels.length; i++) {
-          const imageDataUrl = carouselImages[i]
+        for (let i = 0; i < orderedCarousels.length; i++) {
+          const imageDataUrl = orderedCarouselImages[i]
           if (!imageDataUrl) continue
           
           // Use setTimeout to stagger downloads and avoid browser blocking
@@ -2174,11 +2266,11 @@ export default function CarouselImageGenerator({
       const zip = new JSZip()
       
       // Process all carousels and add them to the zip
-      for (let i = 0; i < carousels.length; i++) {
-        const imageDataUrl = carouselImages[i]
+      for (let i = 0; i < orderedCarousels.length; i++) {
+        const imageDataUrl = orderedCarouselImages[i]
         if (!imageDataUrl) continue
         
-        const carousel = carousels[i]
+        const carousel = orderedCarousels[i]
         const fileName = `carousel-${i + 1}-${carousel.kind.toLowerCase()}.png`
         
         // Convert data URL to base64
@@ -2202,7 +2294,7 @@ export default function CarouselImageGenerator({
     } catch (error) {
       console.error('Error creating zip file:', error)
       // Fallback to individual downloads if zip fails
-      carousels.forEach((_, index) => {
+      orderedCarousels.forEach((_, index) => {
         setTimeout(() => downloadCarousel(index), index * 200)
       })
     }
@@ -2222,14 +2314,6 @@ export default function CarouselImageGenerator({
         cursor: 'default'
       }}
     >
-      <h3 style={{ 
-        marginBottom: '0px', 
-        fontSize: '24px',
-        fontWeight: '700'
-      }}>
-        {ideaTitle}
-      </h3>
-
       <div
         style={{
           display: 'flex',
@@ -2242,32 +2326,24 @@ export default function CarouselImageGenerator({
           minHeight: 0
         }}
       >
-        {carousels.map((carousel, index) => {
-          const hasCurrentImage = !!carouselImages[index]
+        {orderedCarousels.map((carousel, index) => {
+          const hasCurrentImage = !!orderedCarouselImages[index]
           const hasPreviousImage = !!previousImagesRef.current[index]
           const isImageReady = hasCurrentImage || hasPreviousImage
 
           return (
-            <div key={`carousel-${index}-${carousel.kind}-${carousel.title?.substring(0, 20)}`} style={{
-              background: 'rgba(255,255,255,0.02)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: '16px',
-              padding: '16px',
-              transition: 'all 0.3s ease',
-              minWidth: '320px',
-              flex: '0 0 320px'
-            }}>
-              <div style={{ 
-                marginBottom: '12px',
-                fontSize: '12px',
-                fontWeight: '600',
-                color: '#000000',
-                textTransform: 'none',
-                letterSpacing: '0px'
+            <div 
+              key={`carousel-${index}-${carousel.kind}-${carousel.title?.substring(0, 20)}`}
+              data-carousel-index={index}
+              style={{
+                background: 'rgba(255,255,255,0.02)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '16px',
+                padding: '16px',
+                transition: 'all 0.3s ease',
+                minWidth: '320px',
+                flex: '0 0 320px'
               }}>
-                {carousel.kind === 'MIDDLE' ? 'Content' : carousel.kind === 'HOOK' ? 'Hook' : carousel.kind === 'CTA' ? 'CTA' : carousel.kind} • Carousel {index + 1}
-              </div>
-              
               <div style={{ 
                 position: 'relative',
                 paddingBottom: '125%', // 4:5 aspect ratio
@@ -2319,10 +2395,10 @@ export default function CarouselImageGenerator({
                 />
                 {/* If we already have an image, show it above the canvas */}
                 {/* Use current image if available, otherwise fall back to previous to prevent layout shifts */}
-                {(carouselImages[index] || previousImagesRef.current[index]) && (
+                {(orderedCarouselImages[index] || previousImagesRef.current[index]) && (
                   <img
-                    key={`carousel-img-${index}-${carouselImages[index] ? 'current' : 'prev'}`}
-                    src={carouselImages[index] || previousImagesRef.current[index]}
+                    key={`carousel-img-${index}-${orderedCarouselImages[index] ? 'current' : 'prev'}`}
+                    src={orderedCarouselImages[index] || previousImagesRef.current[index]}
                     alt={`Carousel ${index + 1}`}
                     style={{
                       position: 'absolute',
@@ -2337,29 +2413,144 @@ export default function CarouselImageGenerator({
                   />
                 )}
               </div>
-              
-              <button
-                onClick={() => downloadCarousel(index)}
-                className="button"
-                style={{ 
-                  width: '100%',
-                  padding: '12px',
-                  fontSize: '14px'
-                }}
-              >
-                Download Carousel {index + 1}
-              </button>
             </div>
           )})}
       </div>
-
-      <button
-        onClick={downloadAllCarousels}
-        className="button"
-        style={{ width: '100%' }}
+      
+      {/* Thumbnail strip at the bottom */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '12px',
+          padding: '16px 0 16px 0',
+          overflowX: 'auto',
+          overflowY: 'hidden',
+          marginTop: 'auto',
+          flexShrink: 0,
+          justifyContent: 'center'
+        }}
       >
-        Download All Carousels
-      </button>
+        {orderedCarousels.map((carousel, index) => {
+          const hasCurrentImage = !!orderedCarouselImages[index]
+          const hasPreviousImage = !!previousImagesRef.current[index]
+          const imageUrl = orderedCarouselImages[index] || previousImagesRef.current[index]
+          const isDragging = draggedIndex === index
+          const isDragOver = dragOverIndex === index
+          
+          return (
+            <div
+              key={`thumbnail-${index}`}
+              draggable
+              onDragStart={(e) => {
+                setDraggedIndex(index)
+                e.dataTransfer.effectAllowed = 'move'
+                e.dataTransfer.setData('text/html', index.toString())
+                // Add visual feedback
+                if (e.currentTarget) {
+                  e.currentTarget.style.opacity = '0.5'
+                }
+              }}
+              onDragEnd={(e) => {
+                setDraggedIndex(null)
+                setDragOverIndex(null)
+                // Reset visual feedback
+                if (e.currentTarget) {
+                  e.currentTarget.style.opacity = '1'
+                }
+              }}
+              onDragOver={(e) => {
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'move'
+                if (draggedIndex !== null && draggedIndex !== index) {
+                  setDragOverIndex(index)
+                }
+              }}
+              onDragLeave={(e) => {
+                // Only clear dragOver if we're actually leaving the element
+                const rect = e.currentTarget.getBoundingClientRect()
+                const x = e.clientX
+                const y = e.clientY
+                if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+                  setDragOverIndex(null)
+                }
+              }}
+              onDrop={(e) => {
+                e.preventDefault()
+                if (draggedIndex !== null && draggedIndex !== index) {
+                  handleReorder(draggedIndex, index)
+                }
+                setDraggedIndex(null)
+                setDragOverIndex(null)
+              }}
+              style={{
+                flexShrink: 0,
+                width: '64px',
+                height: '80px',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                background: isDragOver ? '#fff9ed' : '#f5f5f5',
+                border: isDragOver ? '2px solid #ffbd59' : isDragging ? '2px dashed #ffbd59' : '1px solid #e5e5e5',
+                position: 'relative',
+                cursor: isDragging ? 'grabbing' : 'grab',
+                transition: draggedIndex === null ? 'all 0.2s ease' : 'none',
+                transform: isDragOver ? 'scale(1.1)' : isDragging ? 'scale(0.95)' : 'scale(1)',
+                opacity: isDragging ? 0.5 : 1,
+                zIndex: isDragging ? 1000 : isDragOver ? 100 : 1
+              }}
+              onMouseEnter={(e) => {
+                if (draggedIndex === null) {
+                  e.currentTarget.style.transform = 'scale(1.05)'
+                  e.currentTarget.style.borderColor = '#ffbd59'
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (draggedIndex === null) {
+                  e.currentTarget.style.transform = 'scale(1)'
+                  e.currentTarget.style.borderColor = '#e5e5e5'
+                }
+              }}
+              onClick={(e) => {
+                // Only scroll if not dragging
+                if (draggedIndex === null) {
+                  const carouselElement = document.querySelector(`[data-carousel-index="${index}"]`)
+                  if (carouselElement) {
+                    carouselElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+                  }
+                }
+              }}
+            >
+              {!hasCurrentImage && !hasPreviousImage ? (
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: '#f5f5f5',
+                    color: '#999999',
+                    fontSize: '24px',
+                    fontWeight: '300'
+                  }}
+                >
+                  {index + 1}
+                </div>
+              ) : (
+                <img
+                  src={imageUrl}
+                  alt={`Carousel ${index + 1} thumbnail`}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    display: 'block'
+                  }}
+                />
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

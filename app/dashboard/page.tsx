@@ -19,6 +19,15 @@ function DashboardView() {
   const [selectedGenerationId, setSelectedGenerationId] = useState<string | null>(null)
   const { user, loading } = useAuth()
   const router = useRouter()
+  
+  // Sidebar collapse state with localStorage persistence
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('sidebarCollapsed')
+      return saved === 'true'
+    }
+    return false
+  })
 
   useEffect(() => {
     if (!loading && !user) {
@@ -42,6 +51,20 @@ function DashboardView() {
   const handleLoadGeneration = (generationId: string) => {
     setSelectedGenerationId(generationId)
     router.push(`/dashboard?view=history&id=${generationId}`, { scroll: false })
+  }
+
+  const handleSidebarClose = () => {
+    setIsSidebarCollapsed(true)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sidebarCollapsed', 'true')
+    }
+  }
+
+  const handleSidebarOpen = () => {
+    setIsSidebarCollapsed(false)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sidebarCollapsed', 'false')
+    }
   }
 
   if (loading) {
@@ -69,15 +92,22 @@ function DashboardView() {
       background: '#fafafa',
       overflow: 'hidden',
     }}>
-      <Sidebar activeView={activeView} onViewChange={handleViewChange} />
+      <Sidebar 
+        activeView={activeView} 
+        onViewChange={handleViewChange}
+        isCollapsed={isSidebarCollapsed}
+        onClose={handleSidebarClose}
+        onOpen={handleSidebarOpen}
+      />
       
       <div 
         className="dashboard-content"
         style={{
-          marginLeft: '280px',
+          marginLeft: isSidebarCollapsed ? '72px' : '280px',
           flex: 1,
           height: '100vh',
           overflow: activeView === 'create' ? 'hidden' : 'auto',
+          transition: 'margin-left 0.3s ease',
         }}
       >
         <style jsx global>{`

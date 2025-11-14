@@ -312,9 +312,9 @@ const IDEAS_SCHEMA = {
     ideas: {
       type: SchemaType.ARRAY,
       items: { type: SchemaType.STRING },
-      minItems: 10,
-      maxItems: 10,
-      description: "Array of exactly 10 post idea titles"
+      minItems: 3,
+      maxItems: 3,
+      description: "Array of exactly 3 post idea titles"
     }
   },
   required: ['ideas']

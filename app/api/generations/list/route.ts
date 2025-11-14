@@ -34,43 +34,42 @@ export async function GET(request: NextRequest) {
     // Process each generation EXACTLY like [id] endpoint does
     const generationsWithImages = await Promise.all(
       (generations || []).map(async (gen) => {
-        // Use cached image URLs from database if available (SAME AS [id] ENDPOINT)
-        let imageUrls = gen.image_urls || []
+        // Always generate fresh signed URLs (they expire after 1 hour)
+        // Check if files exist in storage first
+        let imageUrls: string[] = []
+        const { data: files, error: listError } = await supabase.storage
+          .from('carousel-images')
+          .list(`${userId}/${gen.id}`)
 
-        // If image_urls doesn't exist or is empty, fetch from storage and cache in DB
-        if (!imageUrls || imageUrls.length === 0) {
-          console.log(`⚠️ Generation ${gen.id}: Fetching from storage...`)
-          const { data: files, error: listError } = await supabase.storage
-            .from('carousel-images')
-            .list(`${userId}/${gen.id}`)
+        if (!listError && files && files.length > 0) {
+          // Sort files by name to ensure correct order (slide-0.png, slide-1.png, etc.)
+          const sortedFiles = files.sort((a, b) => {
+            const aNum = parseInt(a.name.match(/\d+/)?.[0] || '0')
+            const bNum = parseInt(b.name.match(/\d+/)?.[0] || '0')
+            return aNum - bNum
+          })
 
-          if (!listError && files && files.length > 0) {
-            // Sort files by name to ensure correct order (slide-0.png, slide-1.png, etc.)
-            const sortedFiles = files.sort((a, b) => {
-              const aNum = parseInt(a.name.match(/\d+/)?.[0] || '0')
-              const bNum = parseInt(b.name.match(/\d+/)?.[0] || '0')
-              return aNum - bNum
-            })
-
-            imageUrls = sortedFiles.map(file => {
-              const { data } = supabase.storage
+          // Generate fresh signed URLs for private bucket access (1 hour expiry)
+          imageUrls = await Promise.all(
+            sortedFiles.map(async (file) => {
+              const { data, error } = await supabase.storage
                 .from('carousel-images')
-                .getPublicUrl(`${userId}/${gen.id}/${file.name}`)
-              return data.publicUrl
+                .createSignedUrl(`${userId}/${gen.id}/${file.name}`, 3600) // 1 hour expiry
+              if (error) {
+                console.error(`Error creating signed URL for ${file.name}:`, error)
+                // Fallback to public URL if signed URL fails
+                const { data: publicData } = supabase.storage
+                  .from('carousel-images')
+                  .getPublicUrl(`${userId}/${gen.id}/${file.name}`)
+                return publicData.publicUrl
+              }
+              return data.signedUrl
             })
+          )
 
-            console.log(`✅ Generation ${gen.id}: Fetched ${imageUrls.length} URLs from storage`)
-
-            // Cache image URLs in database for future requests
-            await supabase
-              .from('generations')
-              .update({ image_urls: imageUrls })
-              .eq('id', gen.id)
-          } else {
-            console.log(`❌ Generation ${gen.id}: No files in storage`)
-          }
+          console.log(`✅ Generation ${gen.id}: Generated ${imageUrls.length} fresh signed URLs`)
         } else {
-          console.log(`✅ Generation ${gen.id}: Using ${imageUrls.length} cached URLs from database`)
+          console.log(`❌ Generation ${gen.id}: No files in storage`)
         }
 
         return {

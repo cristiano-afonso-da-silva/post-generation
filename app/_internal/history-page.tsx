@@ -5,12 +5,13 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
 import { useGenerations, useGeneration } from '../hooks/useGenerations'
 import Link from 'next/link'
-import { ChevronLeft, ChevronRight, Palette, Edit3, MessageSquare } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Palette, Edit3, MessageSquare, Download } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import CarouselImageGenerator from '../components/CarouselImageGenerator'
 import { COLOR_THEMES } from '../config/carouselThemes'
 import { getTemplateOptions } from '../config/carouselTemplates'
 import TemplateSelectorModal from '../components/TemplateSelectorModal'
+import JSZip from 'jszip'
 
 const API_URL = ''
 
@@ -63,6 +64,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
   const [captionCopied, setCaptionCopied] = useState(false)
   const [expandedCarouselIndexes, setExpandedCarouselIndexes] = useState<number[]>([])
   const [error, setError] = useState('')
+  const [downloading, setDownloading] = useState(false)
 
   const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] = [
     { id: 'design', label: 'Customize Design', icon: Palette },
@@ -80,16 +82,25 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
   useEffect(() => {
     if (!generation || !user) return
 
+    // Debug: Log what we're getting from the API
+    console.log('📝 Loading generation data:', {
+      id: generation.id,
+      hasCaption: !!generation.caption,
+      captionLength: generation.caption?.length || 0,
+      captionPreview: generation.caption ? generation.caption.substring(0, 100) : 'null/empty',
+      allKeys: Object.keys(generation)
+    })
+
     const noteData: Note = {
       ideaTitle: generation.idea_title,
       carousels: generation.slides,
-      caption: generation.caption,
+      caption: generation.caption || '', // Ensure caption is always a string
       underlineWords: generation.underline_words
     }
     
     setNote(noteData)
     setEditedCarousels(generation.slides.map((slide: any) => ({ ...slide })))
-    setEditedCaption(generation.caption || '')
+    setEditedCaption(generation.caption || '') // Ensure we set an empty string if caption is null/undefined
     setTemplateId(generation.template_id || 'template1')
     setColorThemeId(generation.color_theme_id || 'purple-black')
     setCarouselsDirty(false)
@@ -224,13 +235,66 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
     }
   }
 
-  const handleBack = () => {
-    router.push('/dashboard?view=history', { scroll: false })
-  }
-
   const templateOptions = getTemplateOptions()
 
-  if (authLoading || (generationId && isLoadingGeneration)) {
+  const downloadAllCarousels = async () => {
+    // Check for both imageUrls (camelCase) and image_urls (snake_case)
+    const imageUrls = (generation as any)?.imageUrls || generation?.image_urls || []
+    
+    if (!generation || imageUrls.length === 0) {
+      console.error('No images available to download')
+      return
+    }
+
+    setDownloading(true)
+    try {
+      const zip = new JSZip()
+      
+      // Process all carousel images
+      for (let i = 0; i < imageUrls.length; i++) {
+        const imageUrl = imageUrls[i]
+        if (!imageUrl) continue
+        
+        try {
+          // Fetch the image
+          const response = await fetch(imageUrl)
+          if (!response.ok) {
+            console.error(`Failed to fetch image ${i + 1}: HTTP ${response.status}`)
+            continue
+          }
+          const blob = await response.blob()
+          
+          // Determine file name based on carousel kind
+          const carousel = note?.carousels[i] || generation.slides[i]
+          const kind = carousel?.kind || 'MIDDLE'
+          const fileName = `carousel-${i + 1}-${kind.toLowerCase()}.png`
+          
+          // Add to zip
+          zip.file(fileName, blob)
+        } catch (error) {
+          console.error(`Failed to fetch image ${i + 1}:`, error)
+        }
+      }
+      
+      // Generate zip file and trigger download
+      const zipBlob = await zip.generateAsync({ type: 'blob' })
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(zipBlob)
+      link.download = `${note?.ideaTitle || generation.idea_title || 'carousels'}.zip`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      // Clean up the object URL
+      URL.revokeObjectURL(link.href)
+    } catch (error) {
+      console.error('Error creating zip file:', error)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  if (authLoading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div className="loading">
@@ -241,18 +305,88 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
     )
   }
 
-  // Show customization view when generation is loaded
-  if (note && generation) {
+  // Show customization view when generation is loaded or loading
+  if (generationId && (generation || isLoadingGeneration)) {
+    // Show loading state in right column while generation is loading or note is being set
+    const showLoading = isLoadingGeneration || (generation && !note)
+    
+    // Get image URLs (handle both camelCase and snake_case)
+    const imageUrls = generation ? ((generation as any)?.imageUrls || generation?.image_urls || []) : []
+    const hasImages = imageUrls.length > 0
+    const isDownloadDisabled = downloading || !generation || !hasImages
+    
     return (
       <div style={{ background: '#ffffff', minHeight: '100vh' }}>
+        {/* Top Header Bar */}
+        <div
+          style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 100,
+            background: '#ffffff',
+            borderBottom: '1px solid #e5e5e5',
+            padding: '16px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
+          }}
+        >
+          <h1
+            style={{
+              fontSize: '18px',
+              fontWeight: '700',
+              color: '#000000',
+              margin: 0,
+              flex: 1,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {generation?.idea_title || note?.ideaTitle || 'Carousel'}
+          </h1>
+          <button
+            onClick={downloadAllCarousels}
+            disabled={isDownloadDisabled}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '8px',
+              background: 'transparent',
+              color: isDownloadDisabled ? '#999999' : '#000000',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: isDownloadDisabled ? 'not-allowed' : 'pointer',
+              transition: 'background-color 0.2s, opacity 0.2s',
+              opacity: isDownloadDisabled ? 0.5 : 1
+            }}
+            onMouseEnter={(e) => {
+              if (!isDownloadDisabled) {
+                e.currentTarget.style.background = '#f5f5f5'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isDownloadDisabled) {
+                e.currentTarget.style.background = 'transparent'
+              }
+            }}
+          >
+            <Download size={20} />
+          </button>
+        </div>
+
         <div
           className="container"
           style={{
-            height: 'calc(100vh - 40px)',
+            height: 'calc(100vh - 40px - 65px)',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
-            paddingTop: '40px'
+            paddingTop: '24px',
+            paddingLeft: '24px',
+            paddingRight: '24px'
           }}
         >
           <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -276,29 +410,16 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
               {/* LEFT COLUMN - Customisation */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', overflow: 'hidden', alignSelf: 'stretch' }}>
                 <div className="card mobile-customize" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: '16px' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <button
-                      onClick={handleBack}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        background: 'none',
-                        border: 'none',
-                        padding: '8px 0',
-                        cursor: 'pointer',
-                        marginBottom: '24px',
-                        color: '#000000',
-                        fontSize: '16px',
-                        fontWeight: '600'
-                      }}
-                    >
-                      <ChevronLeft size={20} />
-                      <span>Back to History</span>
-                    </button>
-                    <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px', color: '#000000' }}>
-                      Customisation
-                    </h3>
+                  {showLoading ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, minHeight: '200px' }}>
+                      <div className="spinner"></div>
+                      <p style={{ marginTop: '16px', color: '#666666' }}>Loading...</p>
+                    </div>
+                  ) : note ? (
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px', color: '#000000' }}>
+                        Customisation
+                      </h3>
                   
                     {/* Tab buttons */}
                     <div 
@@ -547,12 +668,20 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                       </div>
                     )}
                   </div>
+                  ) : null}
                 </div>
               </div>
 
               {/* RIGHT COLUMN - Output */}
               <div className="mobile-output" style={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '24px', minHeight: 0, alignSelf: 'stretch' }}>
-                {note && (
+                {showLoading ? (
+                  <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fafafa', borderRadius: '12px' }}>
+                    <div className="loading">
+                      <div className="spinner"></div>
+                      <p style={{ marginTop: '16px', color: '#666666' }}>Loading carousel...</p>
+                    </div>
+                  </div>
+                ) : note ? (
                   <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
                     <CarouselImageGenerator 
                       carousels={carouselsDirty && editedCarousels.length > 0 ? editedCarousels : note.carousels}
@@ -571,7 +700,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                       }}
                     />
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
           </div>
@@ -673,7 +802,18 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
             gap: '24px',
           }}>
             {generations.map((gen: any) => {
-              const imageUrls = gen.image_urls || []
+              // API returns imageUrls (camelCase), not image_urls (snake_case)
+              const imageUrls = gen.imageUrls || gen.image_urls || []
+              
+              // Debug: Log the URLs being used
+              if (imageUrls.length === 0) {
+                console.warn(`⚠️ Generation ${gen.id}: No image URLs found. Available keys:`, Object.keys(gen))
+                console.warn(`   gen.imageUrls:`, gen.imageUrls)
+                console.warn(`   gen.image_urls:`, gen.image_urls)
+              } else {
+                console.log(`✅ Generation ${gen.id}: Using ${imageUrls.length} image URLs`)
+                console.log(`   First URL:`, imageUrls[0])
+              }
 
               return (
                 <div
