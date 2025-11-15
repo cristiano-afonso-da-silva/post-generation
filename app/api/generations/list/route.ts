@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
             })
           )
 
-          console.log(`✅ Generation ${gen.id}: Generated ${imageUrls.length} fresh signed URLs`)
+          // Signed URLs generated
         } else {
           console.log(`❌ Generation ${gen.id}: No files in storage`)
         }
@@ -77,8 +77,12 @@ export async function GET(request: NextRequest) {
           project_name: gen.project_name,
           idea_title: gen.idea_title,
           created_at: gen.created_at,
+          caption: gen.caption || null,
           thumbnail_urls: imageUrls.slice(0, 4), // First 4 for thumbnails
-          imageUrls: imageUrls // Include all images like [id] endpoint
+          imageUrls: imageUrls, // Include all images like [id] endpoint
+          threads_post_id: gen.threads_post_id || null,
+          threads_posted_at: gen.threads_posted_at || null,
+          threads_post_status: gen.threads_post_status || null
         }
       })
     )

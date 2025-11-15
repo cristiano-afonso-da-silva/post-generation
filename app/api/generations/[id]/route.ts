@@ -62,7 +62,7 @@ export async function GET(
         })
       )
 
-      console.log(`✅ Generation ${params.id}: Generated ${imageUrls.length} fresh signed URLs`)
+      // Signed URLs generated
     }
 
     // Explicitly include caption to ensure it's returned

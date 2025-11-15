@@ -10,11 +10,12 @@ import dynamic from 'next/dynamic'
 
 const CreateNewPage = dynamic(() => import('../_internal/create-page'), { ssr: false })
 const HistoryPage = dynamic(() => import('../_internal/history-page'), { ssr: false })
+const PostPage = dynamic(() => import('../_internal/post-page'), { ssr: false })
 
 function DashboardView() {
   const searchParams = useSearchParams()
-  const view = (searchParams.get('view') as 'create' | 'history') || 'create'
-  const [activeView, setActiveView] = useState<'create' | 'history'>(view)
+  const view = (searchParams.get('view') as 'create' | 'history' | 'post') || 'create'
+  const [activeView, setActiveView] = useState<'create' | 'history' | 'post'>(view)
   const [selectedGenerationId, setSelectedGenerationId] = useState<string | null>(null)
   const { user, loading } = useAuth()
   const router = useRouter()
@@ -42,7 +43,7 @@ function DashboardView() {
     }
   }, [view, searchParams])
 
-  const handleViewChange = (newView: 'create' | 'history') => {
+  const handleViewChange = (newView: 'create' | 'history' | 'post') => {
     setActiveView(newView)
     router.push(`/dashboard?view=${newView}`, { scroll: false })
   }
@@ -121,6 +122,11 @@ function DashboardView() {
         {activeView === 'history' && (
           <div style={{ height: '100%', overflow: 'auto' }}>
             <HistoryPage onLoadGeneration={handleLoadGeneration} />
+          </div>
+        )}
+        {activeView === 'post' && (
+          <div style={{ height: '100%', overflow: 'auto' }}>
+            <PostPage />
           </div>
         )}
       </div>

@@ -60,6 +60,9 @@ Create **`.env.local`** (Next.js + API routes):
 | `STRIPE_PRICE_ID_BASIC` / `STRIPE_PRICE_ID_PRO` | Plan IDs (if using plans) |
 | `NEXT_PUBLIC_STRIPE_BASIC_PRICE_ID` / `NEXT_PUBLIC_STRIPE_PRO_PRICE_ID` | Matching public IDs |
 | `NEXT_PUBLIC_STRIPE_PORTAL_RETURN_URL` | Where users land after portal |
+| `THREADS_APP_ID` | Threads App ID from developers.facebook.com (separate from Meta/Facebook app) |
+| `THREADS_APP_SECRET` | Threads App Secret (for Threads posting) |
+| `THREADS_REDIRECT_URI` | OAuth callback URL (e.g., `https://redirectmeto.com/http://localhost:3000/api/threads/callback`) |
 
 > **Tip:** Keep `.env` + `.env.local` in sync locally and in Vercel environment settings.
 

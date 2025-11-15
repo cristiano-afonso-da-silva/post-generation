@@ -3,13 +3,13 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
-import { SquarePen, History, PanelRightOpen, Menu } from 'lucide-react'
+import { SquarePen, History, PanelRightOpen, Menu, Send } from 'lucide-react'
 import Image from 'next/image'
 import AccountModal from './AccountModal'
 
 interface SidebarProps {
-  activeView: 'create' | 'history'
-  onViewChange: (view: 'create' | 'history') => void
+  activeView: 'create' | 'history' | 'post'
+  onViewChange: (view: 'create' | 'history' | 'post') => void
   isCollapsed?: boolean
   onClose?: () => void
   onOpen?: () => void
@@ -24,6 +24,7 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
   const menuItems = [
     { id: 'create' as const, label: 'Create', icon: SquarePen },
     { id: 'history' as const, label: 'History', icon: History },
+    { id: 'post' as const, label: 'Post', icon: Send },
   ]
 
   const sidebarWidth = isCollapsed ? '64px' : '280px'
