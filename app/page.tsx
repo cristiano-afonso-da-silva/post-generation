@@ -817,7 +817,7 @@ export default function LandingPage() {
           </p>
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '64px' }}>
             <Link
-              href={user ? "/dashboard?view=create" : "/signup"}
+              href={user ? "/dashboard?view=create" : "/desktop-only"}
               className="cta-button"
               style={{
                 display: 'inline-flex',
