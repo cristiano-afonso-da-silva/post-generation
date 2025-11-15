@@ -7,15 +7,19 @@ import {
   buildAIImagePrompt,
   type AIImageStyle
 } from '../../config/prompts';
+import { GEMINI_MODEL } from '../../config/aiConfig';
 // ════════════════════════════════════════════════════════════════════════════
 // API Configuration
 // ════════════════════════════════════════════════════════════════════════════
-const GEMINI_MODEL = 'gemini-2.0-flash-exp';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
 
 if (!GEMINI_API_KEY) {
   console.error('❌ Missing GEMINI_API_KEY in environment variables');
+  console.error('   Please add GEMINI_API_KEY to your .env.local file');
+} else {
+  console.log('✅ GEMINI_API_KEY loaded successfully');
+  console.log(`   Key preview: ${GEMINI_API_KEY.substring(0, 10)}...`);
 }
 
 if (!PEXELS_API_KEY) {
@@ -26,11 +30,17 @@ if (!PEXELS_API_KEY) {
   console.log(`   Key preview: ${PEXELS_API_KEY.substring(0, 10)}...`);
 }
 
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY!);
+// Create Gemini client only if API key is available (will be validated at request time)
+const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
 // Model for regular generation (ideas and note)
 // Note: We'll add responseSchema per request, not globally
-const model = genAI.getGenerativeModel({
+// Model will be created per request after validating API key
+const getModel = () => {
+  if (!genAI) {
+    throw new Error('Gemini client not initialized. GEMINI_API_KEY is missing.');
+  }
+  return genAI.getGenerativeModel({
   model: GEMINI_MODEL,
   generationConfig: {
     temperature: 0.85,
@@ -38,6 +48,7 @@ const model = genAI.getGenerativeModel({
     topK: 40,
   }
 });
+};
 
 // ════════════════════════════════════════════════════════════════════════════
 // Utility Functions
@@ -91,34 +102,244 @@ async function callGeminiWithRetry(
 }
 
 const safeJsonParse = (text: string) => {
+  // First attempt: try parsing as-is
   try {
     return JSON.parse(text);
   } catch (e) {
     // Remove markdown code blocks
     let cleaned = text.replace(/^```json\s*|\s*```$/g, '').trim();
     
-    // Fix common control character issues in JSON strings
-    // Replace literal newlines, tabs, and carriage returns within string values
+    // Second attempt: try parsing after removing markdown
     try {
-      // First attempt: try to parse as-is after removing markdown
       return JSON.parse(cleaned);
     } catch (e2) {
-      // Second attempt: escape control characters
-      // This regex finds content within quotes and escapes control characters
-      cleaned = cleaned.replace(
-        /"([^"]*)"/g, 
-        (match, content) => {
-          // Escape control characters within the string
-          const escaped = content
-            .replace(/\n/g, '\\n')
-            .replace(/\r/g, '\\r')
-            .replace(/\t/g, '\\t')
-            .replace(/\f/g, '\\f')
-            .replace(/\b/g, '\\b');
-          return `"${escaped}"`;
+      // Third attempt: fix control characters and unescaped quotes
+      // This is a more sophisticated approach that handles unterminated strings
+      try {
+        let result = '';
+        let inString = false;
+        let escapeNext = false;
+        let i = 0;
+        
+        while (i < cleaned.length) {
+          const char = cleaned[i];
+          
+          if (escapeNext) {
+            result += char;
+            escapeNext = false;
+            i++;
+            continue;
+          }
+          
+          if (char === '\\') {
+            result += char;
+            escapeNext = true;
+            i++;
+            continue;
+          }
+          
+          if (char === '"') {
+            inString = !inString;
+            result += char;
+            i++;
+            continue;
+          }
+          
+          if (inString) {
+            // Inside a string, escape control characters and unescaped quotes
+            if (char === '\n') {
+              result += '\\n';
+            } else if (char === '\r') {
+              result += '\\r';
+            } else if (char === '\t') {
+              result += '\\t';
+            } else if (char === '\f') {
+              result += '\\f';
+            } else if (char === '\b') {
+              result += '\\b';
+            } else if (char === '\u0000') {
+              // Null character - remove it
+              result += '';
+            } else {
+              result += char;
+            }
+          } else {
+            result += char;
+          }
+          
+          i++;
         }
-      );
-      return JSON.parse(cleaned);
+        
+        // If we ended with an unterminated string, try to close it
+        if (inString) {
+          result += '"';
+        }
+        
+        return JSON.parse(result);
+      } catch (e3) {
+        // Fourth attempt: try to find and extract valid JSON from the response
+        // Look for JSON object boundaries
+        const jsonStart = cleaned.indexOf('{');
+        const jsonEnd = cleaned.lastIndexOf('}');
+        
+        if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+          try {
+            let extracted = cleaned.substring(jsonStart, jsonEnd + 1);
+            
+            // Try to fix unterminated strings in the extracted JSON
+            // Find all unterminated strings and close them
+            let fixed = '';
+            let inStr = false;
+            let escaped = false;
+            let stringStart = -1;
+            
+            for (let j = 0; j < extracted.length; j++) {
+              const c = extracted[j];
+              
+              if (escaped) {
+                fixed += c;
+                escaped = false;
+                continue;
+              }
+              
+              if (c === '\\') {
+                fixed += c;
+                escaped = true;
+                continue;
+              }
+              
+              if (c === '"') {
+                if (!inStr) {
+                  stringStart = j;
+                  inStr = true;
+                } else {
+                  inStr = false;
+                  stringStart = -1;
+                }
+                fixed += c;
+                continue;
+              }
+              
+              if (inStr) {
+                // Escape control characters inside strings
+                if (c === '\n') {
+                  fixed += '\\n';
+                } else if (c === '\r') {
+                  fixed += '\\r';
+                } else if (c === '\t') {
+                  fixed += '\\t';
+                } else if (c === '\f') {
+                  fixed += '\\f';
+                } else if (c === '\b') {
+                  fixed += '\\b';
+                } else if (c === '\u0000') {
+                  // Remove null characters
+                  fixed += '';
+                } else {
+                  fixed += c;
+                }
+              } else {
+                fixed += c;
+              }
+            }
+            
+            // If we ended with an unterminated string, close it
+            if (inStr && stringStart !== -1) {
+              fixed += '"';
+            }
+            
+            // Remove trailing commas before closing braces/brackets
+            fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
+            
+            return JSON.parse(fixed);
+          } catch (e4) {
+            // Fifth attempt: more aggressive repair
+            try {
+              let lastAttempt = cleaned
+                // Remove any trailing commas before closing braces/brackets
+                .replace(/,(\s*[}\]])/g, '$1')
+                // Remove null characters
+                .replace(/\u0000/g, '');
+              
+              // Fix unterminated strings by finding the last unclosed quote
+              let repaired = '';
+              let inString = false;
+              let escaped = false;
+              let lastQuotePos = -1;
+              
+              for (let k = 0; k < lastAttempt.length; k++) {
+                const ch = lastAttempt[k];
+                
+                if (escaped) {
+                  repaired += ch;
+                  escaped = false;
+                  continue;
+                }
+                
+                if (ch === '\\') {
+                  repaired += ch;
+                  escaped = true;
+                  continue;
+                }
+                
+                if (ch === '"') {
+                  lastQuotePos = k;
+                  inString = !inString;
+                  repaired += ch;
+                  continue;
+                }
+                
+                if (inString) {
+                  // Escape control characters
+                  if (ch === '\n' || ch === '\r' || ch === '\t' || ch === '\f' || ch === '\b') {
+                    repaired += ch === '\n' ? '\\n' : ch === '\r' ? '\\r' : ch === '\t' ? '\\t' : ch === '\f' ? '\\f' : '\\b';
+                  } else if (ch === '\u0000') {
+                    // Skip null characters
+                  } else {
+                    repaired += ch;
+                  }
+                } else {
+                  repaired += ch;
+                }
+              }
+              
+              // If string is still open, close it
+              if (inString) {
+                repaired += '"';
+              }
+              
+              return JSON.parse(repaired);
+            } catch (e5) {
+              // If all attempts fail, throw the original error with context
+              console.error('❌ All JSON parsing attempts failed');
+              console.error('📄 Original text length:', text.length);
+              console.error('📄 Cleaned text length:', cleaned.length);
+              console.error('📄 First 500 chars:', cleaned.substring(0, 500));
+              console.error('📄 Last 500 chars:', cleaned.substring(Math.max(0, cleaned.length - 500)));
+              
+              // Try to extract error position from the error message
+              const errorMessage = e2 instanceof Error ? e2.message : String(e2);
+              const positionMatch = errorMessage.match(/position (\d+)/);
+              if (positionMatch) {
+                const pos = parseInt(positionMatch[1], 10);
+                const start = Math.max(0, pos - 200);
+                const end = Math.min(cleaned.length, pos + 200);
+                console.error(`📄 Context around error position ${pos} (chars ${start}-${end}):`);
+                console.error(cleaned.substring(start, end));
+                console.error('📄 Character at error position:', cleaned[pos] || 'N/A');
+                console.error('📄 Character code:', cleaned.charCodeAt(pos) || 'N/A');
+              }
+              
+              throw new Error(`Failed to parse JSON after multiple attempts: ${errorMessage}`);
+            }
+          }
+        } else {
+          // If no JSON boundaries found, throw error
+          console.error('❌ No JSON boundaries found in response');
+          console.error('📄 Response text:', cleaned.substring(0, 1000));
+          throw new Error(`Failed to parse JSON after multiple attempts: ${e2 instanceof Error ? e2.message : String(e2)}`);
+        }
+      }
     }
   }
 };
@@ -509,10 +730,11 @@ async function generatePollinationsImage(prompt: string, usedImageIds: Set<strin
 // API Functions
 // ════════════════════════════════════════════════════════════════════════════
 
-async function generateIdeas(accountDescription: string) {
+async function generateIdeasWithGemini(accountDescription: string) {
   const startTime = Date.now();
   
   try {
+    const model = getModel();
     const result = await callGeminiWithRetry(model, {
       contents: [{
         role: 'user',
@@ -549,7 +771,7 @@ async function generateIdeas(accountDescription: string) {
       }
     };
   } catch (error: any) {
-    console.error('Error generating ideas:', error);
+    console.error('Error generating ideas with Gemini:', error);
     return {
       success: false,
       error: error.message || 'Failed to generate ideas',
@@ -557,12 +779,16 @@ async function generateIdeas(accountDescription: string) {
   }
 }
 
+async function generateIdeas(accountDescription: string) {
+  return generateIdeasWithGemini(accountDescription);
+}
+
 // buildAIImagePrompt is now imported from app/config/prompts.ts
 
-async function extractUnderlineWords(carousels: any[], includeImages: boolean = true, useAIImages: boolean = false, aiImageStyle: AIImageStyle = 'animated') {
-  const imageSource = useAIImages ? 'Pollinations.AI (AI-generated)' : 'Pexels (stock photos)';
-  console.log(`\n🎨 Extracting emphasis words and ${includeImages ? `🖼️ images from ${imageSource} (enabled)` : '📝 NO images (disabled)'}`);
-  
+async function extractUnderlineWordsWithGemini(carousels: any[]): Promise<Record<number, any>> {
+  if (!genAI) {
+    throw new Error('Gemini client not initialized. GEMINI_API_KEY is missing.');
+  }
   const underlineModel = genAI.getGenerativeModel({
     model: GEMINI_MODEL,
     generationConfig: {
@@ -573,8 +799,6 @@ async function extractUnderlineWords(carousels: any[], includeImages: boolean = 
   });
 
   const results: Record<number, any> = {};
-  const usedPexelsIds = new Set<number>();
-  const usedPollinationsIds = new Set<string>();
 
   for (let i = 0; i < carousels.length; i++) {
     const carousel = carousels[i];
@@ -620,90 +844,6 @@ async function extractUnderlineWords(carousels: any[], includeImages: boolean = 
         originalImageUrl: null,
       };
       
-      // For MIDDLE carousels, fetch image if enabled and we have search keywords
-      if (includeImages && carousel.kind === 'MIDDLE' && imageSearchKeywords && imageSearchKeywords.trim()) {
-        console.log(`\n🖼️  MIDDLE CAROUSEL ${i + 1}: Attempting to fetch image...`);
-        console.log(`   Keywords: "${imageSearchKeywords}"`);
-        console.log(`   includeImages flag: ${includeImages}`);
-        console.log(`   useAIImages flag: ${useAIImages}`);
-        console.log(`   carousel.kind: ${carousel.kind}`);
-        console.log(`   imageSearchKeywords.trim(): "${imageSearchKeywords.trim()}"`);
-        
-        try {
-          if (useAIImages) {
-            // Use Pollinations.AI to generate an image based on the description
-            console.log(`   Using Pollinations.AI for AI-generated image`);
-            
-            // Create a more detailed prompt based on the selected AI style
-            const aiPrompt = buildAIImagePrompt(imageSearchKeywords, aiImageStyle);
-            
-            const imageResult = await generatePollinationsImage(aiPrompt, usedPollinationsIds);
-            
-            // Use the Pollinations URL directly (no proxy needed - Pollinations supports CORS)
-            results[i].imageUrl = imageResult?.url || null;
-            results[i].originalImageUrl = imageResult?.url || null;
-            
-            if (imageResult?.id) {
-              usedPollinationsIds.add(imageResult.id);
-            }
-            if (imageResult?.url) {
-              console.log(`✅ SUCCESS: AI-generated image added to carousel ${i + 1}`);
-              console.log(`   Image URL: ${imageResult.url}`);
-              console.log(`   ℹ️  Using direct Pollinations URL (supports CORS)`);
-            } else {
-              console.error(`❌ FAILED: No image URL returned from Pollinations.AI for carousel ${i + 1}`);
-              console.error(`   This could mean: API error or network issue`);
-              results[i].imageUrl = null;
-              results[i].originalImageUrl = null;
-            }
-          } else {
-            // Use Pexels to search for stock photos
-            console.log(`   Using Pexels for stock photo search`);
-            
-            const imageResult = await searchPexelsImage(imageSearchKeywords, usedPexelsIds);
-            results[i].originalImageUrl = imageResult?.url || null;
-            results[i].imageUrl = imageResult?.url || null;
-            if (imageResult?.id) {
-              usedPexelsIds.add(imageResult.id);
-            }
-            if (imageResult?.url) {
-              console.log(`✅ SUCCESS: Stock image added to carousel ${i + 1}`);
-              console.log(`   Image URL: ${imageResult.url}`);
-            } else {
-              console.error(`❌ FAILED: No image URL returned from Pexels for carousel ${i + 1}`);
-              console.error(`   Pexels API returned:`, imageResult);
-              console.error(`   This could mean: API key issue, rate limit, or no matching images`);
-              results[i].imageUrl = null;
-              results[i].originalImageUrl = null;
-            }
-          }
-        } catch (imageError: any) {
-          console.error(`❌ EXCEPTION during image fetch for carousel ${i + 1}:`);
-          console.error(`   Error:`, imageError);
-          console.error(`   Error message:`, imageError?.message);
-          console.error(`   Stack:`, imageError?.stack);
-          results[i].imageUrl = null;
-          results[i].originalImageUrl = null;
-        }
-      } else {
-        // Log why image fetch was skipped
-        if (carousel.kind === 'MIDDLE') {
-          if (!includeImages) {
-            console.log(`\n📝 MIDDLE CAROUSEL ${i + 1}: Images disabled by user (includeImages=${includeImages}) - skipping image fetch`);
-          } else if (!imageSearchKeywords || !imageSearchKeywords.trim()) {
-            console.log(`\n⚠️  MIDDLE CAROUSEL ${i + 1}: NO imageSearch keywords!`);
-            console.log(`   includeImages: ${includeImages}`);
-            console.log(`   imageSearchKeywords: "${imageSearchKeywords}"`);
-            console.log(`   This should not happen with the fallback in place.`);
-          } else {
-            console.log(`\n⚠️  MIDDLE CAROUSEL ${i + 1}: Unexpected condition - image fetch skipped`);
-            console.log(`   includeImages: ${includeImages}`);
-            console.log(`   carousel.kind: ${carousel.kind}`);
-            console.log(`   imageSearchKeywords: "${imageSearchKeywords}"`);
-          }
-        }
-      }
-      
       console.log(`\n📝 Final extraction result for carousel ${i + 1}:`, JSON.stringify(results[i], null, 2));
       
     } catch (error: any) {
@@ -715,15 +855,115 @@ async function extractUnderlineWords(carousels: any[], includeImages: boolean = 
   return results;
 }
 
-async function generateNote(ideaTitle: string, accountDescription: string, includeImages: boolean = true, useAIImages: boolean = false, aiImageStyle: AIImageStyle = 'animated') {
+async function extractUnderlineWords(carousels: any[], includeImages: boolean = true, useAIImages: boolean = false, aiImageStyle: AIImageStyle = 'animated') {
+  const imageSource = useAIImages ? 'Pollinations.AI (AI-generated)' : 'Pexels (stock photos)';
+  console.log(`\n🎨 Extracting emphasis words and ${includeImages ? `🖼️ images from ${imageSource} (enabled)` : '📝 NO images (disabled)'}`);
+  
+  // Get emphasis extraction using Gemini
+  const results: Record<number, any> = await extractUnderlineWordsWithGemini(carousels);
+  
+  // Handle image fetching (provider-agnostic)
+  const usedPexelsIds = new Set<number>();
+  const usedPollinationsIds = new Set<string>();
+  
+  for (let i = 0; i < carousels.length; i++) {
+    const carousel = carousels[i];
+    const imageSearchKeywords = results[i]?.imageSearch || '';
+    
+    // For MIDDLE carousels, fetch image if enabled and we have search keywords
+    if (includeImages && carousel.kind === 'MIDDLE' && imageSearchKeywords && imageSearchKeywords.trim()) {
+      console.log(`\n🖼️  MIDDLE CAROUSEL ${i + 1}: Attempting to fetch image...`);
+      console.log(`   Keywords: "${imageSearchKeywords}"`);
+      console.log(`   includeImages flag: ${includeImages}`);
+      console.log(`   useAIImages flag: ${useAIImages}`);
+      console.log(`   carousel.kind: ${carousel.kind}`);
+      console.log(`   imageSearchKeywords.trim(): "${imageSearchKeywords.trim()}"`);
+      
+      try {
+        if (useAIImages) {
+          // Use Pollinations.AI to generate an image based on the description
+          console.log(`   Using Pollinations.AI for AI-generated image`);
+          
+          // Create a more detailed prompt based on the selected AI style
+          const aiPrompt = buildAIImagePrompt(imageSearchKeywords, aiImageStyle);
+          
+          const imageResult = await generatePollinationsImage(aiPrompt, usedPollinationsIds);
+          
+          // Store the Pollinations URL - it will be routed through proxy in CarouselImageGenerator
+          // to avoid CORS issues when loading images with crossOrigin='anonymous'
+          results[i].imageUrl = imageResult?.url || null;
+          results[i].originalImageUrl = imageResult?.url || null;
+          
+          if (imageResult?.id) {
+            usedPollinationsIds.add(imageResult.id);
+          }
+          if (imageResult?.url) {
+            console.log(`✅ SUCCESS: AI-generated image added to carousel ${i + 1}`);
+            console.log(`   Image URL: ${imageResult.url}`);
+            console.log(`   ℹ️  Will be routed through proxy to avoid CORS issues`);
+          } else {
+            console.error(`❌ FAILED: No image URL returned from Pollinations.AI for carousel ${i + 1}`);
+            console.error(`   This could mean: API error or network issue`);
+            results[i].imageUrl = null;
+            results[i].originalImageUrl = null;
+          }
+        } else {
+          // Use Pexels to search for stock photos
+          console.log(`   Using Pexels for stock photo search`);
+          
+          const imageResult = await searchPexelsImage(imageSearchKeywords, usedPexelsIds);
+          results[i].originalImageUrl = imageResult?.url || null;
+          results[i].imageUrl = imageResult?.url || null;
+          if (imageResult?.id) {
+            usedPexelsIds.add(imageResult.id);
+          }
+          if (imageResult?.url) {
+            console.log(`✅ SUCCESS: Stock image added to carousel ${i + 1}`);
+            console.log(`   Image URL: ${imageResult.url}`);
+          } else {
+            console.error(`❌ FAILED: No image URL returned from Pexels for carousel ${i + 1}`);
+            console.error(`   Pexels API returned:`, imageResult);
+            console.error(`   This could mean: API key issue, rate limit, or no matching images`);
+            results[i].imageUrl = null;
+            results[i].originalImageUrl = null;
+          }
+        }
+      } catch (imageError: any) {
+        console.error(`❌ EXCEPTION during image fetch for carousel ${i + 1}:`);
+        console.error(`   Error:`, imageError);
+        console.error(`   Error message:`, imageError?.message);
+        console.error(`   Stack:`, imageError?.stack);
+        results[i].imageUrl = null;
+        results[i].originalImageUrl = null;
+      }
+    } else {
+      // Log why image fetch was skipped
+      if (carousel.kind === 'MIDDLE') {
+        if (!includeImages) {
+          console.log(`\n📝 MIDDLE CAROUSEL ${i + 1}: Images disabled by user (includeImages=${includeImages}) - skipping image fetch`);
+        } else if (!imageSearchKeywords || !imageSearchKeywords.trim()) {
+          console.log(`\n⚠️  MIDDLE CAROUSEL ${i + 1}: NO imageSearch keywords!`);
+          console.log(`   includeImages: ${includeImages}`);
+          console.log(`   imageSearchKeywords: "${imageSearchKeywords}"`);
+          console.log(`   This should not happen with the fallback in place.`);
+        } else {
+          console.log(`\n⚠️  MIDDLE CAROUSEL ${i + 1}: Unexpected condition - image fetch skipped`);
+          console.log(`   includeImages: ${includeImages}`);
+          console.log(`   carousel.kind: ${carousel.kind}`);
+          console.log(`   imageSearchKeywords: "${imageSearchKeywords}"`);
+        }
+      }
+    }
+  }
+  
+  return results;
+}
+
+async function generateNoteWithGemini(ideaTitle: string, accountDescription: string) {
   const startTime = Date.now();
   
   try {
-    console.log(`🚀 Generating note for: "${ideaTitle}"`);
-    console.log(`🖼️ generateNote: includeImages parameter =`, includeImages);
-    console.log(`🎨 generateNote: useAIImages parameter =`, useAIImages);
-    console.log(`🎭 generateNote: aiImageStyle parameter =`, aiImageStyle);
-    
+    const model = getModel();
     const result = await callGeminiWithRetry(model, {
       contents: [{
         role: 'user',
@@ -739,7 +979,21 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
     
     const responseText = result.response.text();
     
+    // Check if response was truncated
+    const candidates = result.response.candidates;
+    if (candidates && candidates.length > 0) {
+      const finishReason = candidates[0].finishReason;
+      if (finishReason && finishReason !== 'STOP') {
+        console.warn(`⚠️  Response finish reason: ${finishReason} (might indicate truncation)`);
+      }
+    }
+    
     console.log('📝 Raw Gemini Response Length:', responseText.length);
+    
+    // Check for potential truncation indicators
+    if (responseText.length > 0 && !responseText.trim().endsWith('}')) {
+      console.warn('⚠️  Response does not end with closing brace - might be truncated');
+    }
     
     let data;
     try {
@@ -749,6 +1003,18 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
     } catch (parseError: any) {
       console.error('❌ JSON Parse Error:', parseError.message);
       console.error('📄 Problematic JSON (first 500 chars):', responseText.substring(0, 500));
+      console.error('📄 Problematic JSON (last 500 chars):', responseText.substring(Math.max(0, responseText.length - 500)));
+      
+      // Extract position from error if available
+      const positionMatch = parseError.message?.match(/position (\d+)/);
+      if (positionMatch) {
+        const pos = parseInt(positionMatch[1], 10);
+        const start = Math.max(0, pos - 200);
+        const end = Math.min(responseText.length, pos + 200);
+        console.error(`📄 Context around error position ${pos} (chars ${start}-${end}):`);
+        console.error(responseText.substring(start, end));
+      }
+      
       throw new Error(`Failed to parse Gemini response: ${parseError.message}`);
     }
     
@@ -777,6 +1043,53 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
     // Remove asterisks from caption
     if (data.caption) {
       data.caption = data.caption.replace(/\*/g, '');
+    }
+    
+    return {
+      success: true,
+      action: 'note',
+      data: {
+        ideaTitle: data.ideaTitle || ideaTitle,
+        slides: data.slides,
+        caption: data.caption,
+      },
+      meta: {
+        generationTime: `${Date.now() - startTime}ms`,
+        model: GEMINI_MODEL,
+      }
+    };
+  } catch (error: any) {
+    console.error('Error generating note with Gemini:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to generate note',
+    };
+  }
+}
+
+async function generateNote(ideaTitle: string, accountDescription: string, includeImages: boolean = true, useAIImages: boolean = false, aiImageStyle: AIImageStyle = 'animated') {
+  const startTime = Date.now();
+  
+  try {
+    console.log(`🚀 Generating note for: "${ideaTitle}"`);
+    console.log(`🖼️ generateNote: includeImages parameter =`, includeImages);
+    console.log(`🎨 generateNote: useAIImages parameter =`, useAIImages);
+    console.log(`🎭 generateNote: aiImageStyle parameter =`, aiImageStyle);
+    
+    // Get note data from Gemini
+    const noteResult = await generateNoteWithGemini(ideaTitle, accountDescription);
+    
+    if (!noteResult.success) {
+      return noteResult;
+    }
+    
+    const data = noteResult.data;
+    
+    if (!data) {
+      return {
+        success: false,
+        error: 'No data returned from note generation',
+      };
     }
     
     console.log(`🖼️ generateNote: Calling extractUnderlineWords with includeImages =`, includeImages, 'useAIImages =', useAIImages, 'aiImageStyle =', aiImageStyle);
@@ -818,7 +1131,7 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
       },
       meta: {
         generationTime: `${Date.now() - startTime}ms`,
-        model: GEMINI_MODEL,
+        model: noteResult.meta.model,
       }
     };
   } catch (error: any) {
@@ -836,6 +1149,15 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
 
 export async function POST(request: NextRequest) {
   try {
+    // Validate GEMINI_API_KEY at request time
+    if (!GEMINI_API_KEY || GEMINI_API_KEY.trim().length === 0) {
+      console.error('❌ GEMINI_API_KEY is missing or empty');
+      return NextResponse.json(
+        { success: false, error: 'GEMINI_API_KEY is not configured. Please set GEMINI_API_KEY in your environment variables.' },
+        { status: 500 }
+      );
+    }
+
     const body = await request.json();
     const { action, accountDescription, ideaTitle, includeImages, useAIImages, aiImageStyle } = body;
     

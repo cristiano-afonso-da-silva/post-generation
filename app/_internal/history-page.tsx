@@ -4,10 +4,12 @@ import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
 import { useGenerations, useGeneration } from '../hooks/useGenerations'
+import { useMobile } from '../hooks/useMobile'
 import Link from 'next/link'
-import { ChevronLeft, ChevronRight, Palette, Edit3, MessageSquare, Download } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Palette, Edit3, MessageSquare, Download, Menu } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import CarouselImageGenerator from '../components/CarouselImageGenerator'
+import type { CarouselImageGeneratorHandle } from '../components/CarouselImageGenerator'
 import { COLOR_THEMES } from '../config/carouselThemes'
 import { getTemplateOptions } from '../config/carouselTemplates'
 import TemplateSelectorModal from '../components/TemplateSelectorModal'
@@ -31,13 +33,215 @@ interface Note {
 
 interface HistoryPageProps {
   onLoadGeneration?: (generationId: string) => void
+  onOpenSidebar?: () => void
 }
 
-function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
+interface HistoryCardProps {
+  generation: any
+  imageUrls: string[]
+  onLoadGeneration: (id: string) => void
+}
+
+function HistoryCard({ generation, imageUrls, onLoadGeneration }: HistoryCardProps) {
+  const [imageLoadedStates, setImageLoadedStates] = useState<Record<number, boolean>>({})
+  const [imageErrorStates, setImageErrorStates] = useState<Record<number, boolean>>({})
+
+  const handleImageLoad = (index: number) => {
+    setImageLoadedStates(prev => ({ ...prev, [index]: true }))
+  }
+
+  const handleImageError = (index: number) => {
+    setImageErrorStates(prev => ({ ...prev, [index]: true }))
+    setImageLoadedStates(prev => ({ ...prev, [index]: true })) // Mark as "loaded" to hide skeleton
+  }
+
+  const isImageLoading = (index: number) => {
+    return !imageLoadedStates[index] && !imageErrorStates[index]
+  }
+
+  return (
+    <div
+      onClick={() => onLoadGeneration(generation.id)}
+      className="card"
+      style={{
+        cursor: 'pointer',
+        padding: '0',
+        overflow: 'hidden',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {/* Images Grid - Show first 2 slides */}
+      <div style={{
+        position: 'relative',
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '2px',
+        background: '#e5e5e5',
+        aspectRatio: '2/1',
+        minHeight: '200px',
+        width: '100%',
+      }}>
+        {imageUrls.length >= 2 ? (
+          <>
+            {/* First Image */}
+            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+              {isImageLoading(0) && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    background: 'linear-gradient(90deg, #e5e5e5 25%, #f0f0f0 50%, #e5e5e5 75%)',
+                    backgroundSize: '200% 100%',
+                    animation: 'skeleton-loading 1.5s ease-in-out infinite',
+                    zIndex: 1,
+                  }}
+                />
+              )}
+              <img
+                src={imageUrls[0]}
+                alt="Slide 1"
+                crossOrigin="anonymous"
+                onLoad={() => handleImageLoad(0)}
+                onError={() => handleImageError(0)}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  display: 'block',
+                  position: 'relative',
+                  zIndex: imageLoadedStates[0] ? 2 : 0,
+                  opacity: imageLoadedStates[0] ? 1 : 0,
+                  transition: 'opacity 0.3s ease-in-out',
+                }}
+              />
+            </div>
+            {/* Second Image */}
+            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+              {isImageLoading(1) && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    background: 'linear-gradient(90deg, #e5e5e5 25%, #f0f0f0 50%, #e5e5e5 75%)',
+                    backgroundSize: '200% 100%',
+                    animation: 'skeleton-loading 1.5s ease-in-out infinite',
+                    zIndex: 1,
+                  }}
+                />
+              )}
+              <img
+                src={imageUrls[1]}
+                alt="Slide 2"
+                crossOrigin="anonymous"
+                onLoad={() => handleImageLoad(1)}
+                onError={() => handleImageError(1)}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  display: 'block',
+                  position: 'relative',
+                  zIndex: imageLoadedStates[1] ? 2 : 0,
+                  opacity: imageLoadedStates[1] ? 1 : 0,
+                  transition: 'opacity 0.3s ease-in-out',
+                }}
+              />
+            </div>
+          </>
+        ) : imageUrls.length === 1 ? (
+          <div style={{ gridColumn: '1 / -1', position: 'relative', width: '100%', height: '100%' }}>
+            {isImageLoading(0) && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  background: 'linear-gradient(90deg, #e5e5e5 25%, #f0f0f0 50%, #e5e5e5 75%)',
+                  backgroundSize: '200% 100%',
+                  animation: 'skeleton-loading 1.5s ease-in-out infinite',
+                  zIndex: 1,
+                }}
+              />
+            )}
+            <img
+              src={imageUrls[0]}
+              alt="Slide 1"
+              crossOrigin="anonymous"
+              onLoad={() => handleImageLoad(0)}
+              onError={() => handleImageError(0)}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block',
+                position: 'relative',
+                zIndex: imageLoadedStates[0] ? 2 : 0,
+                opacity: imageLoadedStates[0] ? 1 : 0,
+                transition: 'opacity 0.3s ease-in-out',
+              }}
+            />
+          </div>
+        ) : (
+          <div style={{
+            gridColumn: '1 / -1',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#f5f5f5',
+            color: '#999999',
+            fontSize: '14px',
+            height: '100%',
+          }}>
+            No preview
+          </div>
+        )}
+      </div>
+
+      {/* Project Info */}
+      <div style={{ padding: '20px', flexShrink: 0 }}>
+        <h3 style={{
+          fontSize: '16px',
+          fontWeight: '700',
+          marginBottom: '8px',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          {generation.project_name || generation.idea_title}
+        </h3>
+        <p style={{
+          fontSize: '13px',
+          color: '#666666',
+        }}>
+          {new Date(generation.created_at).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProps = {}) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const generationId = searchParams.get('id')
   const { user, loading: authLoading } = useAuth()
+  const isMobile = useMobile()
   const [page, setPage] = useState(1)
   const itemsPerPage = 8
   const offset = (page - 1) * itemsPerPage
@@ -65,6 +269,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
   const [expandedCarouselIndexes, setExpandedCarouselIndexes] = useState<number[]>([])
   const [error, setError] = useState('')
   const [downloading, setDownloading] = useState(false)
+  const carouselGeneratorRef = useRef<CarouselImageGeneratorHandle>(null)
 
   const leftTabs: { id: typeof activeLeftTab; label: string; icon: LucideIcon }[] = [
     { id: 'design', label: 'Customize Design', icon: Palette },
@@ -78,24 +283,36 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
     }
   }, [user, authLoading, router])
 
-  // Refetch data whenever the history page is accessed or generationId changes
+  // Note: Removed automatic refetch on mount - SWR handles caching and deduplication automatically
+  // Data will be fetched automatically when the component mounts via useSWR hooks
+  // Only refetch when explicitly needed (user actions, not page mounts)
+
+  // Clear note state when generationId changes (before new generation loads)
   useEffect(() => {
-    if (user && !authLoading) {
-      // Refetch the generations list every time the history page is accessed
-      if (mutateGenerations) {
-        mutateGenerations()
-      }
-      
-      // If viewing a specific generation, refetch that generation too
-      if (generationId && mutateGeneration) {
-        mutateGeneration()
-      }
-    }
-  }, [user, authLoading, generationId, mutateGenerations, mutateGeneration])
+    // Clear the note state immediately when generationId changes
+    // This prevents showing the old post while the new one is loading
+    setNote(null)
+    setEditedCarousels([])
+    setEditedCaption('')
+    setCarouselsDirty(false)
+    setExpandedCarouselIndexes([])
+  }, [generationId])
 
   // Load generation data when generation is available
   useEffect(() => {
-    if (!generation || !user) return
+    if (!generation || !user || !generationId) return
+    
+    // CRITICAL: Only set the note if the generation ID matches the current generationId
+    // This prevents showing stale cached data from SWR, especially important in production
+    // where network latency can cause the old cached generation to briefly appear
+    if (generation.id !== generationId) {
+      console.log('🚫 Ignoring stale generation data:', {
+        generationId: generation.id,
+        expectedId: generationId,
+        isLoading: isLoadingGeneration
+      })
+      return
+    }
 
     // Debug: Log what we're getting from the API
     console.log('📝 Loading generation data:', {
@@ -116,7 +333,9 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
     setNote(noteData)
     setEditedCarousels(generation.slides.map((slide: any) => ({ ...slide })))
     setEditedCaption(generation.caption || '') // Ensure we set an empty string if caption is null/undefined
-    setTemplateId(generation.template_id || 'template1')
+    const templateOptions = getTemplateOptions()
+    const validTemplateId = templateOptions.find(t => t.id === generation.template_id)?.id || 'template1'
+    setTemplateId(validTemplateId)
     setColorThemeId(generation.color_theme_id || 'purple-black')
     setCarouselsDirty(false)
     setExpandedCarouselIndexes([])
@@ -133,7 +352,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
     } catch (error) {
       console.error('Error storing in localStorage:', error)
     }
-  }, [generation, user])
+  }, [generation, user, generationId, isLoadingGeneration])
 
   // Sync editable carousels with note
   useEffect(() => {
@@ -203,24 +422,79 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
           throw new Error(data.error || 'Failed to refresh carousel enhancements')
         }
 
-        const updatedUnderline: Note['underlineWords'] = data.data?.underlineWords || {}
+        const updatedUnderline: Record<number, { underline: string; highlight: string; imageSearch?: string; imageUrl?: string | null; originalImageUrl?: string | null }> = data.data?.underlineWords || {}
         const sanitizedCarousels: Note['carousels'] = (data.data?.slides || cleanedCarousels) as Note['carousels']
+
+        // ✅ CRITICAL: Preserve existing AI image URLs when updating underline/highlight words
+        // The API sets imageUrl: null when extracting words, but we want to keep the existing AI images
+        const preservedUnderlineWords: Note['underlineWords'] = {}
+        const existingUnderlineWords = note.underlineWords || {}
+        
+        Object.keys(updatedUnderline || {}).forEach((key) => {
+          const index = parseInt(key, 10)
+          const newWords = updatedUnderline[index]
+          const existingWords = existingUnderlineWords[index]
+          
+          // Merge: Use new underline/highlight words from Gemini, but preserve existing image URLs
+          preservedUnderlineWords[index] = {
+            underline: newWords?.underline || '',
+            highlight: newWords?.highlight || '',
+            imageSearch: newWords?.imageSearch || '',
+            // ✅ PRESERVE existing AI image URLs (don't overwrite with null)
+            imageUrl: existingWords?.imageUrl || newWords?.imageUrl || null,
+            originalImageUrl: existingWords?.originalImageUrl || newWords?.originalImageUrl || null,
+          }
+          
+          console.log(`🖼️ Carousel ${index + 1}: Preserved imageUrl =`, preservedUnderlineWords[index].imageUrl || '(none)')
+        })
+        
+        console.log('✅ Preserved AI image URLs in underlineWords:', Object.keys(preservedUnderlineWords).length, 'carousels')
 
         const updatedNote: Note = {
           ...note,
           carousels: sanitizedCarousels,
-          underlineWords: updatedUnderline
+          underlineWords: preservedUnderlineWords
         }
 
         setNote(updatedNote)
         setEditedCarousels(sanitizedCarousels.map(carousel => ({ ...carousel })))
         setCarouselsDirty(false)
 
+        // DON'T remove cached images - we want to preserve them when editing text
+        // Only update the content hash to reflect the new underline words
         try {
-          localStorage.removeItem('postGeneration_canvasImages')
-          localStorage.removeItem('postGeneration_fullContentHash')
+          const fullContentHash = JSON.stringify({ 
+            ideaTitle: note.ideaTitle, 
+            carousels: sanitizedCarousels, 
+            underlineWords: preservedUnderlineWords, 
+            templateId: templateId, 
+            colorThemeId: colorThemeId
+          })
+          localStorage.setItem('postGeneration_fullContentHash', fullContentHash)
         } catch (storageError) {
-          console.warn('Could not clear cache:', storageError)
+          console.warn('Could not update content hash:', storageError)
+        }
+
+        // ✅ IMPORTANT: Re-render carousels with new text and NEW underline/highlight words from Gemini
+        // After text is edited, we need to regenerate the canvas images with:
+        // 1. The new text content
+        // 2. The newly extracted underline/highlight words from Gemini API
+        // 3. The PRESERVED AI image URLs (so images don't disappear)
+        // This ensures that downloads include the edited text + updated styling + AI images
+        console.log('🔄 Text saved - triggering carousel re-render with new underline/highlight words from Gemini...')
+        console.log('   Updated underlineWords (with preserved AI images):', JSON.stringify(preservedUnderlineWords, null, 2))
+        
+        if (carouselGeneratorRef.current && carouselGeneratorRef.current.regenerateAndSave) {
+          // Pass the merged underlineWords (new words + preserved image URLs) to the regeneration
+          // This ensures the carousels are drawn with:
+          // - Correct highlight/underline words (from Gemini)
+          // - Existing AI image URLs (preserved)
+          carouselGeneratorRef.current.regenerateAndSave(preservedUnderlineWords).then(() => {
+            console.log('✅ Carousels re-rendered with new text + new underline/highlight words + preserved AI images!')
+          }).catch((err: any) => {
+            console.error('⚠️ Failed to regenerate carousels for download:', err)
+            // Don't fail the save operation, just warn the user
+          })
         }
       })
       .catch((err: any) => {
@@ -252,6 +526,11 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
 
   const templateOptions = getTemplateOptions()
 
+  const isMobileDevice = (): boolean => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+           (typeof window !== 'undefined' && window.innerWidth <= 768)
+  }
+
   const downloadAllCarousels = async () => {
     // Check for both imageUrls (camelCase) and image_urls (snake_case)
     const imageUrls = (generation as any)?.imageUrls || generation?.image_urls || []
@@ -263,6 +542,65 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
 
     setDownloading(true)
     try {
+      const isMobile = isMobileDevice()
+      
+      // On mobile devices, download images individually to save to photo album
+      if (isMobile) {
+        try {
+          // Download each image individually with a small delay between downloads
+          // This allows mobile browsers to save each image to the photo album
+          for (let i = 0; i < imageUrls.length; i++) {
+            const imageUrl = imageUrls[i]
+            if (!imageUrl) continue
+            
+            // Capture index in closure to avoid issues
+            const index = i
+            const currentUrl = imageUrl
+            
+            // Use setTimeout to stagger downloads and avoid browser blocking
+            setTimeout(async () => {
+              try {
+                // Fetch the image
+                const response = await fetch(currentUrl)
+                if (!response.ok) {
+                  console.error(`Failed to fetch image ${index + 1}: HTTP ${response.status}`)
+                  return
+                }
+                const blob = await response.blob()
+                
+                // Determine file name based on carousel kind
+                const carousel = note?.carousels[index] || generation.slides[index]
+                const kind = carousel?.kind || 'MIDDLE'
+                const fileName = `carousel-${index + 1}-${kind.toLowerCase()}.png`
+                
+                // Create download link
+                const link = document.createElement('a')
+                link.href = URL.createObjectURL(blob)
+                link.download = fileName
+                document.body.appendChild(link)
+                link.click()
+                document.body.removeChild(link)
+                
+                // Clean up the object URL
+                URL.revokeObjectURL(link.href)
+              } catch (error) {
+                console.error(`Failed to download image ${index + 1}:`, error)
+              }
+            }, index * 400) // 400ms delay between each download
+          }
+        } catch (error) {
+          console.error('Error downloading images on mobile:', error)
+          setDownloading(false)
+          return
+        }
+        // Set downloading to false after a delay to allow downloads to start
+        setTimeout(() => {
+          setDownloading(false)
+        }, imageUrls.length * 400 + 500)
+        return
+      }
+      
+      // On desktop, use ZIP file (original behavior)
       const zip = new JSZip()
       
       // Process all carousel images
@@ -329,38 +667,77 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
     const imageUrls = generation ? ((generation as any)?.imageUrls || generation?.image_urls || []) : []
     const hasImages = imageUrls.length > 0
     const isDownloadDisabled = downloading || !generation || !hasImages
-    
+
     return (
-      <div style={{ 
-        background: '#ffffff', 
-        minHeight: '100vh',
-        animation: 'slideUp 0.6s ease-out'
-      }}>
+      <div
+        style={{
+          background: '#ffffff',
+          height: '100vh',
+          width: '100%',
+          animation: 'slideUp 0.6s ease-out',
+          paddingBottom: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          overflowX: 'hidden',
+          overflowY: 'hidden'
+        }}
+      >
         {/* Top Header Bar */}
         <div
           style={{
             position: 'sticky',
             top: 0,
-            zIndex: 100,
+            zIndex: 1000,
             background: '#ffffff',
             borderBottom: '1px solid #e5e5e5',
-            padding: '16px 24px',
+            // Show right border only on desktop to visually separate from sidebar
+            borderRight: isMobile ? 'none' : '1px solid rgb(229, 229, 229)',
+            padding: '16px 20px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
+            boxSizing: 'border-box',
+            minWidth: 0,
+            height: '65px',
+            flexShrink: 0,
+            gap: '12px'
           }}
         >
+          {/* Mobile hamburger menu button - now inside header */}
+          {isMobile && onOpenSidebar && (
+            <button
+              onClick={onOpenSidebar}
+              style={{
+                background: 'rgb(245, 245, 245)',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '8px',
+                flexShrink: 0,
+                width: '40px',
+                height: '40px',
+                WebkitTapHighlightColor: 'transparent'
+              }}
+            >
+              <Menu size={20} color="#000000" />
+            </button>
+          )}
           <h1
             style={{
-              fontSize: '18px',
+              fontSize: isMobile ? '16px' : '18px',
               fontWeight: '700',
               color: '#000000',
               margin: 0,
               flex: 1,
+              minWidth: 0,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
+              whiteSpace: 'nowrap',
+              paddingLeft: 0
             }}
           >
             {generation?.idea_title || note?.ideaTitle || 'Carousel'}
@@ -379,14 +756,28 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
               borderRadius: '8px',
               cursor: isDownloadDisabled ? 'not-allowed' : 'pointer',
               transition: 'background-color 0.2s, opacity 0.2s',
-              opacity: isDownloadDisabled ? 0.5 : 1
+              opacity: isDownloadDisabled ? 0.5 : 1,
+              flexShrink: 0,
+              marginLeft: '12px'
             }}
             onMouseEnter={(e) => {
-              if (!isDownloadDisabled) {
+              // Only apply hover on devices that support hover (not touch devices)
+              if (!isDownloadDisabled && !isMobile && window.matchMedia('(hover: hover)').matches) {
                 e.currentTarget.style.background = '#f5f5f5'
               }
             }}
             onMouseLeave={(e) => {
+              if (!isDownloadDisabled && !isMobile && window.matchMedia('(hover: hover)').matches) {
+                e.currentTarget.style.background = 'transparent'
+              }
+            }}
+            onTouchStart={(e) => {
+              // Prevent hover state on touch devices
+              if (!isDownloadDisabled) {
+                e.currentTarget.style.background = 'transparent'
+              }
+            }}
+            onTouchEnd={(e) => {
               if (!isDownloadDisabled) {
                 e.currentTarget.style.background = 'transparent'
               }
@@ -399,16 +790,20 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
         <div
           className="container"
           style={{
-            height: 'calc(100vh - 40px - 65px)',
+            flex: 1,
+            width: '100%',
+            maxWidth: '100%',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
-            paddingTop: '24px',
-            paddingLeft: '24px',
-            paddingRight: '24px'
+            overflowX: 'hidden',
+            overflowY: 'hidden',
+            padding: '0',
+            margin: '0',
+            minHeight: 0
           }}
         >
-          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ flex: 1, overflow: 'hidden', overflowX: 'hidden', overflowY: 'hidden', display: 'flex', flexDirection: 'column' }}>
             {error && (
               <div className="error" style={{ margin: '0 0 24px', flex: '0 0 auto' }}>
                 {error}
@@ -418,40 +813,64 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
             <div 
               className="responsive-grid"
               style={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'minmax(260px, 0.3fr) minmax(0, 0.7fr)', 
-                gap: '32px',
+                // On desktop, use a two-column grid. On mobile, use a
+                // vertical flex layout so we can control height ratios.
+                display: isMobile ? 'flex' : 'grid', 
+                flexDirection: isMobile ? 'column' : undefined,
+                gridTemplateColumns: isMobile ? '1fr' : 'minmax(220px, 0.22fr) minmax(0, 0.78fr)', 
+                gap: isMobile ? '24px' : '0px',
                 alignItems: 'stretch',
                 flex: 1,
-                overflow: 'hidden'
+                overflow: 'hidden',
+                overflowX: 'hidden',
+                overflowY: 'hidden',
+                minWidth: 0,
+                padding: '0'
               }}
             >
               {/* LEFT COLUMN - Customisation */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', overflow: 'hidden', alignSelf: 'stretch' }}>
-                <div className="card mobile-customize" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: '16px' }}>
+              <div style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: '0', 
+                height: '100%', 
+                overflow: 'hidden',
+                overflowX: 'hidden',
+                overflowY: 'hidden',
+                alignSelf: 'stretch',
+                // On mobile, show the customization controls (style/content/caption)
+                // above the carousel preview and constrain them to ~30% of the
+                // vertical space so the post itself remains the focus.
+                order: isMobile ? 1 : 1,
+                flex: isMobile ? '0 0 30%' : undefined,
+                maxHeight: isMobile ? '30vh' : undefined
+              }}>
+                <div className="card mobile-customize" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, minWidth: '220px', overflow: 'hidden', padding: '0', border: 'none', background: 'transparent', borderRadius: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}>
                   {showLoading ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, minHeight: '200px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, minHeight: '200px', padding: '24px' }}>
                       <div className="spinner"></div>
                       <p style={{ marginTop: '16px', color: '#666666' }}>Loading...</p>
                     </div>
                   ) : note ? (
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '24px', color: '#000000' }}>
-                        Customisation
-                      </h3>
-                  
-                    {/* Tab buttons */}
+                    <>
+                    {/* Sticky Tab buttons */}
                     <div 
                       style={{ 
+                        position: 'sticky',
+                        top: 0,
+                        zIndex: 100,
                         display: 'flex', 
                         gap: '0',
                         alignItems: 'stretch',
-                        border: '2px solid #e5e5e5',
-                        borderRadius: '12px',
-                        padding: '2px',
-                        background: '#ededed',
+                        border: 'none',
+                        // Desktop-only right border for the left control column
+                        borderRight: isMobile ? 'none' : '1px solid rgb(229, 229, 229)',
+                        padding: 0,
                         height: 'fit-content',
-                        marginBottom: '24px'
+                        margin: '0',
+                        flexShrink: 0,
+                        borderRadius: 0,
+                        overflow: 'hidden'
                       }}
                     >
                       {leftTabs.map(tab => {
@@ -465,39 +884,58 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              padding: '8px 16px',
+                              padding: '10px 10px',
+                              paddingRight: '12px',
                               flex: 1,
                               border: 'none',
-                              borderRadius: '10px',
-                              background: isActive ? '#d8d8d8' : '#ededed',
+                              background: isActive ? '#f5f5f5' : 'transparent',
                               cursor: 'pointer',
-                              transition: 'all 0.2s ease'
+                              transition: 'all 0.2s ease',
+                              borderRadius: 0,
+                              borderTopLeftRadius: 0,
+                              borderTopRightRadius: 0,
+                              borderBottomLeftRadius: 0,
+                              borderBottomRightRadius: 0
                             }}
                             title={tab.label}
                             aria-label={tab.label}
                           >
-                            <TabIcon size={20} color="#000000" />
+                            <TabIcon size={18} color="#000000" />
                           </button>
                         )
                       })}
                     </div>
 
+                    {/* Tab content - scrollable with horizontal padding */}
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '20px', paddingTop: '20px', paddingLeft: '20px', borderRight: isMobile ? 'none' : '1px solid rgb(229, 229, 229)', minHeight: 0 }}>
                     {/* Tab content */}
                     {activeLeftTab === 'design' && (
                       <div style={{ marginBottom: '24px' }}>
-                        <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
+                        <h4 style={{ fontSize: isMobile ? '14px' : '16px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
                           Carousel Style
                         </h4>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
-                          <div>
-                            <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                          <div style={{ minWidth: 0 }}>
+                            <label style={{ display: 'block', marginBottom: '8px', fontSize: isMobile ? '11px' : '13px', fontWeight: '500', color: '#000000' }}>
                               Template
                             </label>
                             <button
                               onClick={() => setShowTemplateModal(true)}
                               className="input"
-                              style={{ 
-                                cursor: 'pointer', 
+                              style={isMobile ? {
+                                cursor: 'pointer',
+                                padding: '10px',
+                                textAlign: 'left',
+                                background: '#ffffff',
+                                border: '2px solid #e5e5e5',
+                                borderRadius: '10px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                width: '100%',
+                                minWidth: 0
+                              } : {
+                                cursor: 'pointer',
                                 padding: '12px',
                                 textAlign: 'left',
                                 background: '#ffffff',
@@ -506,29 +944,59 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
-                                width: '100%'
+                                width: '100%',
+                                minWidth: 0
                               }}
                             >
-                              <span>{templateOptions.find(t => t.id === templateId)?.name || 'Select Template'}</span>
-                              <span style={{ fontSize: '12px', color: '#666666' }}>▼</span>
+                              <span style={{ 
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                flex: 1,
+                                minWidth: 0,
+                                fontSize: isMobile ? '12px' : undefined
+                              }}>
+                                {templateOptions.find(t => t.id === templateId)?.name || templateOptions[0]?.name || 'Select Template'}
+                              </span>
+                              <span style={{ fontSize: '12px', color: '#666666', flexShrink: 0, marginLeft: '8px' }}>▼</span>
                             </button>
                           </div>
-                          <div>
-                            <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: '#000000' }}>
+                          <div style={{ minWidth: 0 }}>
+                            <label style={{ display: 'block', marginBottom: '8px', fontSize: isMobile ? '11px' : '13px', fontWeight: '500', color: '#000000' }}>
                               Color Theme
                             </label>
-                            <select
-                              value={colorThemeId}
-                              onChange={(e) => setColorThemeId(e.target.value)}
-                              className="input"
-                              style={{ cursor: 'pointer', padding: '12px' }}
-                            >
-                              {COLOR_THEMES.map(theme => (
-                                <option key={theme.id} value={theme.id}>
-                                  {theme.name}
-                                </option>
-                              ))}
-                            </select>
+                            <div style={{
+                              display: 'grid',
+                              gridTemplateColumns: isMobile ? 'repeat(auto-fit, minmax(24px, 1fr))' : 'repeat(auto-fit, minmax(32px, 1fr))',
+                              gap: isMobile ? '6px' : '8px',
+                              maxWidth: '100%'
+                            }}>
+                              {COLOR_THEMES.map(theme => {
+                                const isSelected = colorThemeId === theme.id
+                                return (
+                                  <button
+                                    key={theme.id}
+                                    onClick={() => setColorThemeId(theme.id)}
+                                    style={{
+                                      aspectRatio: '1',
+                                      borderRadius: isMobile ? '6px' : '8px',
+                                      border: isSelected ? '2px solid rgb(229, 229, 229)' : 'none',
+                                      background: theme.highlightColor,
+                                      cursor: 'pointer',
+                                      padding: 0,
+                                      position: 'relative',
+                                      transition: 'all 0.2s ease',
+                                      minWidth: isMobile ? '24px' : '32px',
+                                      minHeight: isMobile ? '24px' : '32px',
+                                      width: '100%',
+                                      maxWidth: '100%'
+                                    }}
+                                    title={theme.name}
+                                    aria-label={theme.name}
+                                  />
+                                )
+                              })}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -566,7 +1034,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                                     }}
                                   >
                                     <div style={{ 
-                                      fontSize: '14px', 
+                                      fontSize: isMobile ? '12px' : '14px', 
                                       fontWeight: '500', 
                                       color: '#000000', 
                                       textTransform: 'none',
@@ -574,7 +1042,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                                     }}>
                                       Carousel {index + 1} • {kind === 'MIDDLE' ? 'Content' : kind === 'HOOK' ? 'Hook' : kind === 'CTA' ? 'CTA' : kind}
                                     </div>
-                                    <span style={{ fontSize: '14px', color: '#000000', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
+                                    <span style={{ fontSize: isMobile ? '12px' : '14px', color: '#000000', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
                                       ▾
                                     </span>
                                   </button>
@@ -582,7 +1050,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                                   {isExpanded && (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px', paddingTop: '12px' }}>
                                       <div>
-                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7280', marginBottom: '6px' }}>
+                                        <label style={{ display: 'block', fontSize: isMobile ? '11px' : '12px', fontWeight: 600, color: '#6b7280', marginBottom: '6px' }}>
                                           Title
                                         </label>
                                         <input
@@ -590,11 +1058,11 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                                           value={carousel.title ?? ''}
                                           onChange={(e) => handleCarouselFieldChange(index, 'title', e.target.value)}
                                           placeholder="Enter carousel title"
-                                          style={{ width: '100%' }}
+                                          style={{ width: '100%', fontSize: isMobile ? '13px' : undefined }}
                                         />
                                       </div>
                                       <div>
-                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7280', marginBottom: '6px' }}>
+                                        <label style={{ display: 'block', fontSize: isMobile ? '11px' : '12px', fontWeight: 600, color: '#6b7280', marginBottom: '6px' }}>
                                           Content
                                         </label>
                                         <textarea
@@ -603,7 +1071,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                                           onChange={(e) => handleCarouselFieldChange(index, 'content', e.target.value)}
                                           placeholder="Enter carousel content"
                                           rows={kind === 'CTA' ? 5 : 6}
-                                          style={{ width: '100%', resize: 'vertical', minHeight: '120px' }}
+                                          style={{ width: '100%', resize: 'vertical', minHeight: '120px', fontSize: isMobile ? '13px' : undefined }}
                                         />
                                       </div>
                                     </div>
@@ -616,7 +1084,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                         {note && (
                           <div style={{ 
                             display: 'flex', 
-                            flexDirection: 'column',
+                            flexDirection: isMobile ? 'row' : 'column',
                             gap: '12px',
                             marginTop: '24px'
                           }}>
@@ -624,7 +1092,13 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                               className="button secondary"
                               onClick={resetEditedCarousels}
                               disabled={!carouselsDirty || savingCarousels}
-                              style={{ width: '100%' }}
+                              style={isMobile ? { 
+                                width: '48%',
+                                fontSize: '14px',
+                                padding: '10px 16px'
+                              } : { 
+                                width: '100%'
+                              }}
                             >
                               Reset
                             </button>
@@ -632,7 +1106,13 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                               className="button"
                               onClick={saveEditedCarousels}
                               disabled={!carouselsDirty || savingCarousels}
-                              style={{ width: '100%' }}
+                              style={isMobile ? { 
+                                width: '48%',
+                                fontSize: '14px',
+                                padding: '10px 16px'
+                              } : { 
+                                width: '100%'
+                              }}
                             >
                               {savingCarousels ? 'Saving...' : 'Save'}
                             </button>
@@ -644,7 +1124,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                     {activeLeftTab === 'caption' && (
                       <div style={{ marginBottom: '24px' }}>
                         <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', color: '#000000' }}>
-                          Instagram Caption
+                          Carousel Caption
                         </h3>
                         <textarea
                           className="input"
@@ -658,7 +1138,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                             background: '#fafafa',
                             border: '2px solid #e5e5e5',
                             borderRadius: '12px',
-                            fontSize: '15px',
+                            fontSize: isMobile ? '13px' : '15px',
                             lineHeight: '1.8',
                             color: '#000000',
                             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
@@ -679,20 +1159,45 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                                 console.error('Failed to copy caption:', err)
                               }
                             }}
-                            style={{ width: '100%', marginTop: '12px' }}
+                            style={isMobile ? { 
+                              width: '100%', 
+                              marginTop: '12px',
+                              fontSize: '14px',
+                              padding: '10px 16px'
+                            } : { 
+                              width: '100%', 
+                              marginTop: '12px'
+                            }}
                           >
                             {captionCopied ? 'Copied' : 'Copy'}
                           </button>
                         )}
                       </div>
                     )}
-                  </div>
+                    </div>
+                    </>
                   ) : null}
                 </div>
               </div>
 
               {/* RIGHT COLUMN - Output */}
-              <div className="mobile-output" style={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '24px', minHeight: 0, alignSelf: 'stretch' }}>
+              <div className="mobile-output" style={{ 
+                height: '100%', 
+                // On mobile, prevent scrolling to avoid horizontal/vertical scroll issues
+                overflowX: 'hidden',
+                overflowY: 'hidden',
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: isMobile ? '16px' : '24px', 
+                minHeight: 0, 
+                minWidth: 0, 
+                alignSelf: 'stretch',
+                // On mobile, place the carousel preview below the controls
+                // and let it take the remaining vertical space.
+                order: isMobile ? 2 : 2,
+                flex: isMobile ? '1 1 70%' : undefined,
+                marginBottom: isMobile ? '0' : '0'
+              }}>
                 {showLoading ? (
                   <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fafafa', borderRadius: '12px' }}>
                     <div className="loading">
@@ -701,8 +1206,9 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
                     </div>
                   </div>
                 ) : note ? (
-                  <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+                  <div style={{ flex: 1, minHeight: 0, minWidth: 0, display: 'flex', overflow: 'hidden' }}>
                     <CarouselImageGenerator 
+                      ref={carouselGeneratorRef}
                       carousels={carouselsDirty && editedCarousels.length > 0 ? editedCarousels : note.carousels}
                       ideaTitle={note.ideaTitle}
                       ideaIndex={null}
@@ -738,7 +1244,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
 
   // Show history list view
   return (
-    <div style={{ minHeight: '100vh', background: '#ffffff', padding: '48px 24px' }}>
+    <div style={{ minHeight: '100vh', background: '#ffffff', padding: isMobile ? '48px 16px 0 16px' : '48px 24px 0 24px' }}>
       {/* Main Content */}
       <div className="container" style={{ maxWidth: '1400px', margin: '0 auto' }}>
         <div style={{ marginBottom: '40px' }}>
@@ -750,7 +1256,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
         {isLoading ? (
           <div style={{ 
             display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
+            gridTemplateColumns: isMobile ? 'repeat(auto-fit, minmax(150px, 1fr))' : 'repeat(4, 1fr)',
             gap: '24px',
           }}>
             {[1, 2, 3, 4].map((i) => (
@@ -817,8 +1323,9 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
         ) : (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
+            gridTemplateColumns: isMobile ? 'repeat(auto-fit, minmax(150px, 1fr))' : 'repeat(4, 1fr)',
             gap: '24px',
+            alignItems: 'stretch',
           }}>
             {generations.map((gen: any) => {
               // API returns imageUrls (camelCase), not image_urls (snake_case)
@@ -835,116 +1342,12 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
               }
 
               return (
-                <div
+                <HistoryCard
                   key={gen.id}
-                  onClick={() => loadGeneration(gen.id)}
-                  className="card"
-                  style={{
-                    cursor: 'pointer',
-                    padding: '0',
-                    overflow: 'hidden',
-                  }}
-                >
-                  {/* Images Grid - Show first 2 slides */}
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: '2px',
-                    background: '#e5e5e5',
-                    aspectRatio: '2/1',
-                  }}>
-                    {imageUrls.length >= 2 ? (
-                      <>
-                        <img
-                          src={imageUrls[0]}
-                          alt="Slide 1"
-                          crossOrigin="anonymous"
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            display: 'block',
-                          }}
-                          onError={(e) => {
-                            console.error('Failed to load image 1:', imageUrls[0])
-                            e.currentTarget.style.display = 'none'
-                          }}
-                        />
-                        <img
-                          src={imageUrls[1]}
-                          alt="Slide 2"
-                          crossOrigin="anonymous"
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            display: 'block',
-                          }}
-                          onError={(e) => {
-                            console.error('Failed to load image 2:', imageUrls[1])
-                            e.currentTarget.style.display = 'none'
-                          }}
-                        />
-                      </>
-                    ) : imageUrls.length === 1 ? (
-                      <div style={{ gridColumn: '1 / -1' }}>
-                        <img
-                          src={imageUrls[0]}
-                          alt="Slide 1"
-                          crossOrigin="anonymous"
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            display: 'block',
-                          }}
-                          onError={(e) => {
-                            console.error('Failed to load image:', imageUrls[0])
-                            e.currentTarget.style.display = 'none'
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div style={{
-                        gridColumn: '1 / -1',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: '#f5f5f5',
-                        color: '#999999',
-                        fontSize: '14px',
-                      }}>
-                        No preview
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Project Info */}
-                  <div style={{ padding: '20px' }}>
-                    <h3 style={{
-                      fontSize: '16px',
-                      fontWeight: '700',
-                      marginBottom: '8px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {gen.project_name || gen.idea_title}
-                    </h3>
-                    <p style={{
-                      fontSize: '13px',
-                      color: '#666666',
-                    }}>
-                      {new Date(gen.created_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </p>
-                  </div>
-                </div>
+                  generation={gen}
+                  imageUrls={imageUrls}
+                  onLoadGeneration={loadGeneration}
+                />
               )
             })}
           </div>
@@ -957,8 +1360,7 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
             justifyContent: 'center',
             alignItems: 'center',
             gap: '12px',
-            marginTop: '48px',
-            paddingBottom: '24px'
+            marginTop: '48px'
           }}>
             <button
               onClick={() => setPage(page - 1)}
@@ -1015,6 +1417,20 @@ function HistoryPageContent({ onLoadGeneration }: HistoryPageProps = {}) {
           to {
             opacity: 1;
             transform: translateY(0);
+          }
+        }
+        @keyframes skeleton-loading {
+          0% {
+            background-position: 200% 0;
+          }
+          100% {
+            background-position: -200% 0;
+          }
+        }
+        /* Prevent hover states on touch devices */
+        @media (hover: none) {
+          button {
+            -webkit-tap-highlight-color: transparent;
           }
         }
       `}</style>

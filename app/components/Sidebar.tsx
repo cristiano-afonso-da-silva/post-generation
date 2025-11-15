@@ -11,11 +11,13 @@ interface SidebarProps {
   activeView: 'create' | 'history' | 'post'
   onViewChange: (view: 'create' | 'history' | 'post') => void
   isCollapsed?: boolean
+  isMobile?: boolean
+  isMobileOpen?: boolean
   onClose?: () => void
   onOpen?: () => void
 }
 
-export default function Sidebar({ activeView, onViewChange, isCollapsed = false, onClose, onOpen }: SidebarProps) {
+export default function Sidebar({ activeView, onViewChange, isCollapsed = false, isMobile = false, isMobileOpen = false, onClose, onOpen }: SidebarProps) {
   const router = useRouter()
   const { user, credits } = useAuth()
   const [showAccountModal, setShowAccountModal] = useState(false)
@@ -27,7 +29,15 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
     { id: 'post' as const, label: 'Post', icon: Send },
   ]
 
-  const sidebarWidth = isCollapsed ? '64px' : '280px'
+  // On mobile, always show full width sidebar (never collapsed)
+  const sidebarWidth = isMobile ? '280px' : (isCollapsed ? '64px' : '280px')
+  
+  // On mobile, hide sidebar when closed, show as overlay when open
+  const mobileTransform = isMobile && !isMobileOpen ? 'translateX(-100%)' : 'translateX(0)'
+  const mobileVisibility = isMobile && !isMobileOpen ? 'hidden' : 'visible'
+  
+  // On mobile, always show full sidebar (not collapsed view)
+  const shouldShowCollapsed = isMobile ? false : isCollapsed
 
   return (
     <div style={{
@@ -40,80 +50,85 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
       position: 'fixed',
       left: 0,
       top: 0,
-      zIndex: 100,
-      transition: 'width 0.3s ease',
+      // Ensure sidebar always sits above page content and headers,
+      // especially on mobile where it becomes an overlay.
+      zIndex: isMobile ? 2000 : 100,
+      transition: isMobile ? 'transform 0.3s ease' : 'width 0.3s ease',
+      transform: isMobile ? mobileTransform : 'none',
+      visibility: isMobile ? mobileVisibility : 'visible',
+      boxShadow: isMobile && isMobileOpen ? '2px 0 8px rgba(0, 0, 0, 0.1)' : 'none',
     }}>
       {/* Logo */}
-      {!isCollapsed ? (
+      {!shouldShowCollapsed ? (
         <div style={{
           padding: '24px',
           flexShrink: 0,
+          height: '65px',
+          boxSizing: 'border-box',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
         }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-          }}>
-            <div
-              onClick={() => router.push('/landing')}
+          <button
+            onClick={() => router.push('/')}
+            style={{
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '8px',
+              background: 'transparent',
+              border: 'none',
+              padding: '6px',
+            }}
+          >
+            <Image 
+              src="/logo.svg" 
+              alt="Post My Note logo" 
+              width={32} 
+              height={32} 
+              priority 
+            />
+          </button>
+          {onClose && (
+            <button
+              onClick={onClose}
               style={{
+                background: 'transparent',
+                border: 'none',
                 cursor: 'pointer',
-                transition: 'opacity 0.2s ease',
-                display: 'inline-block',
+                padding: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#666666',
+                transition: 'background 0.2s ease',
+                borderRadius: '8px',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.opacity = '0.7'
+                e.currentTarget.style.background = '#f5f5f5'
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.opacity = '1'
+                e.currentTarget.style.background = 'transparent'
               }}
             >
-              <Image 
-                src="/logo.svg" 
-                alt="Post My Note logo" 
-                width={32} 
-                height={32} 
-                priority 
-              />
-            </div>
-            {onClose && (
-              <button
-                onClick={onClose}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#666666',
-                  transition: 'background 0.2s ease',
-                  borderRadius: '4px',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#f5f5f5'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent'
-                }}
-              >
-                <PanelRightOpen size={20} />
-              </button>
-            )}
-          </div>
+              <PanelRightOpen size={20} />
+            </button>
+          )}
         </div>
       ) : (
         <div style={{
-          padding: '24px 8px',
+          padding: '8px 8px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
+          height: '65px',
+          boxSizing: 'border-box',
         }}>
           <button
-            onClick={onOpen}
+            onClick={() => onOpen?.()}
             onMouseEnter={() => setIsLogoHovered(true)}
             onMouseLeave={() => setIsLogoHovered(false)}
             style={{
@@ -151,7 +166,7 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
       {/* Menu Section */}
       <div style={{
         flex: 1,
-        padding: isCollapsed ? '24px 8px' : '24px 16px',
+        padding: shouldShowCollapsed ? '24px 8px' : '24px',
         display: 'flex',
         flexDirection: 'column',
         gap: '4px',
@@ -160,15 +175,22 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
         {menuItems.map((item) => {
           const Icon = item.icon
           const isActive = activeView === item.id
-          
+
           return (
             <button
               key={item.id}
-              onClick={() => onViewChange(item.id)}
+              onClick={() => {
+                // Delegate view changes to parent so state + URL stay in sync
+                onViewChange(item.id)
+                // Close mobile sidebar when item is clicked
+                if (isMobile && onClose) {
+                  onClose()
+                }
+              }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: isCollapsed ? 'center' : 'flex-start',
+                justifyContent: shouldShowCollapsed ? 'center' : 'flex-start',
                 gap: '12px',
                 padding: '12px',
                 borderRadius: '8px',
@@ -180,7 +202,7 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
                 width: '100%',
-                textAlign: isCollapsed ? 'center' : 'left',
+                textAlign: shouldShowCollapsed ? 'center' : 'left',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = '#f5f5f5'
@@ -190,7 +212,7 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
               }}
             >
               <Icon size={20} />
-              {!isCollapsed && <span>{item.label}</span>}
+              {!shouldShowCollapsed && <span>{item.label}</span>}
             </button>
           )
         })}
@@ -202,7 +224,7 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
         <button
           onClick={() => setShowAccountModal(true)}
           style={{
-            padding: isCollapsed ? '16px 8px' : '16px',
+            padding: shouldShowCollapsed ? '16px 8px' : '16px',
             background: '#ffffff',
             border: 'none',
             borderTop: 'none',
@@ -211,7 +233,7 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
             transition: 'background 0.2s ease',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: isCollapsed ? 'center' : 'flex-start',
+            justifyContent: shouldShowCollapsed ? 'center' : 'flex-start',
             gap: '12px',
             flexShrink: 0,
           }}
@@ -237,7 +259,7 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
           }}>
             {user.email?.charAt(0).toUpperCase() || 'C'}
           </div>
-          {!isCollapsed && (
+          {!shouldShowCollapsed && (
             <div style={{
               flex: 1,
               minWidth: 0,

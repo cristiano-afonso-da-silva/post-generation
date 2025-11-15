@@ -1,28 +1,25 @@
 'use client'
 
 import { createPortal } from 'react-dom'
-import SubscriptionModal from './SubscriptionModal'
-import { useState, useEffect } from 'react'
 
 interface UpgradePromptProps {
   isOpen: boolean
   onClose: () => void
   currentPlan: string | null
+  onViewPlans?: () => void
 }
 
-export default function UpgradePrompt({ isOpen, onClose, currentPlan }: UpgradePromptProps) {
-  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
+export default function UpgradePrompt({ isOpen, onClose, currentPlan, onViewPlans }: UpgradePromptProps) {
+  if (!isOpen) return null
 
-  // Close UpgradePrompt when SubscriptionModal opens
-  useEffect(() => {
-    if (showSubscriptionModal) {
-      onClose()
+  const handleViewPlans = () => {
+    onClose() // Close the UpgradePrompt first
+    if (onViewPlans) {
+      onViewPlans() // Then open the SubscriptionModal in the parent
     }
-  }, [showSubscriptionModal, onClose])
+  }
 
-  if (!isOpen && !showSubscriptionModal) return null
-
-  const modalContent = isOpen && !showSubscriptionModal ? (
+  const modalContent = (
     <div
       style={{
         position: 'fixed',
@@ -62,9 +59,7 @@ export default function UpgradePrompt({ isOpen, onClose, currentPlan }: UpgradeP
 
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
             <button
-              onClick={() => {
-                setShowSubscriptionModal(true)
-              }}
+              onClick={handleViewPlans}
               className="button"
               style={{ padding: '18px 36px', fontSize: '18px' }}
             >
@@ -87,24 +82,11 @@ export default function UpgradePrompt({ isOpen, onClose, currentPlan }: UpgradeP
           </div>
         </div>
       </div>
-  ) : null
+  )
 
   // Use portal to render modal at document body level
   if (typeof window !== 'undefined') {
-    return (
-      <>
-        {modalContent && createPortal(modalContent, document.body)}
-        {showSubscriptionModal && (
-          <SubscriptionModal
-            isOpen={showSubscriptionModal}
-            onClose={() => {
-              setShowSubscriptionModal(false)
-            }}
-            currentPlan={currentPlan}
-          />
-        )}
-      </>
-    )
+    return createPortal(modalContent, document.body)
   }
   
   return null

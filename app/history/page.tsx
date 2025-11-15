@@ -16,7 +16,6 @@ export default function HistoryRedirect() {
       alignItems: 'center',
       justifyContent: 'center',
       height: '100vh',
-      background: '#fafafa',
     }}>
       <div className="spinner" style={{ width: '48px', height: '48px' }}></div>
     </div>

@@ -55,6 +55,8 @@ export function useGeneration(id: string | undefined, userId: string | undefined
       revalidateOnFocus: false,
       revalidateOnReconnect: true,
       dedupingInterval: 5000,
+      // When the key (id) changes, SWR will automatically treat it as a new request
+      // and clear the previous data, so we don't need keepPreviousData
     }
   )
 

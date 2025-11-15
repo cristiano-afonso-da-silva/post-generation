@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { getCarouselTemplate } from '../config/carouselTemplates'
 import { getColorTheme } from '../config/carouselThemes'
 import { useAuth } from '../context/AuthContext'
+import { useMobile } from '../hooks/useMobile'
 import JSZip from 'jszip'
 
 function ensureColorAlpha(color: string, alpha = 0.5): string {
@@ -112,6 +113,10 @@ interface Props {
   onCarouselsReorder?: (reorderedCarousels: Carousel[]) => void
 }
 
+export interface CarouselImageGeneratorHandle {
+  regenerateAndSave: (updatedUnderlineWords?: Record<number, { underline: string; highlight: string; imageUrl?: string | null; originalImageUrl?: string | null }>) => Promise<void>
+}
+
 // Initialize images from localStorage before rendering
 const getInitialImages = (carousels: Carousel[], ideaTitle: string, underlineWords: Record<number, any>, templateId: string, colorThemeId: string): string[] => {
   try {
@@ -187,7 +192,9 @@ const yieldToEventLoop = (): Promise<void> => {
   })
 }
 
-export default function CarouselImageGenerator({ 
+import { forwardRef, useImperativeHandle } from 'react'
+
+function CarouselImageGeneratorComponent({ 
   carousels, 
   ideaTitle,
   ideaIndex = null,
@@ -201,7 +208,9 @@ export default function CarouselImageGenerator({
   aiImageStyle = 'animated',
   onGenerationComplete,
   onCarouselsReorder
-}: Props) {
+}: Props, ref: React.Ref<CarouselImageGeneratorHandle>) {
+  const isMobile = useMobile()
+  
   // Debug: Log underlineWords on component mount/update
   useEffect(() => {
     console.log('\n📦 CarouselImageGenerator: Received underlineWords:')
@@ -242,10 +251,42 @@ export default function CarouselImageGenerator({
   const [orderedUnderlineWords, setOrderedUnderlineWords] = useState<Record<number, any>>(underlineWords)
   
   // Update local state when props change
+  // IMPORTANT: Preserve existing images to prevent them from disappearing on Reset
+  // BUT when regenerating from a text edit, we want to show the NEW images
   useEffect(() => {
     setOrderedCarousels(carousels)
-    setOrderedCarouselImages(getInitialImages(carousels, ideaTitle, underlineWords, templateId, colorThemeId))
     setOrderedUnderlineWords(underlineWords)
+    // Keep ref in sync with state (unless we're regenerating from edit, in which case ref is set separately)
+    if (!isRegeneratingFromEditRef.current) {
+      underlineWordsForGenerationRef.current = underlineWords
+    }
+    
+    // Only reload images from localStorage if we don't already have them
+    // OR if we're regenerating from a text edit (in which case we cleared them)
+    // This prevents images from disappearing when Reset is clicked
+    // But allows new images to be displayed when text is edited and saved
+    setOrderedCarouselImages(prev => {
+      // If we cleared images for regeneration, let new ones be loaded
+      if (isRegeneratingFromEditRef.current || prev.length === 0) {
+        if (prev.length === 0 && !isRegeneratingFromEditRef.current) {
+          console.log('🔄 Attempting to load images from cache...')
+        }
+        if (isRegeneratingFromEditRef.current) {
+          console.log('✨ Regenerating images with new text - showing updated images!')
+        }
+        return getInitialImages(carousels, ideaTitle, underlineWords, templateId, colorThemeId)
+      }
+      
+      // We already have images and NOT regenerating - keep them (for Reset button)
+      if (prev.length > 0 && prev.length === carousels.length) {
+        console.log('✅ Preserving existing images (count:', prev.length, ')')
+        return prev
+      }
+      
+      // No images, load from cache
+      console.log('🔄 Attempting to load images from cache...')
+      return getInitialImages(carousels, ideaTitle, underlineWords, templateId, colorThemeId)
+    })
   }, [carousels, ideaTitle, underlineWords, templateId, colorThemeId])
   
   // Sync orderedCarouselImages with carouselImages when they update
@@ -322,6 +363,70 @@ export default function CarouselImageGenerator({
   }, [onCarouselsReorder])
   
   const { user, refreshCredits } = useAuth()
+  
+  // Track when we're regenerating from a text edit so we can show new images
+  const isRegeneratingFromEditRef = useRef(false)
+  
+  // Ref to store underlineWords during regeneration (so generateAllCarousels can access latest values)
+  const underlineWordsForGenerationRef = useRef<Record<number, any>>(orderedUnderlineWords)
+  
+  // ✅ Expose regenerateAndSave method for parent component to call after text edits
+  useImperativeHandle(ref, () => ({
+    regenerateAndSave: async (updatedUnderlineWords?: Record<number, { underline: string; highlight: string; imageUrl?: string | null; originalImageUrl?: string | null }>) => {
+      console.log('📤 regenerateAndSave called - triggering full carousel regeneration with new text...')
+      
+      // If updated underlineWords are provided (from Gemini API), use them
+      // Otherwise use the current props (for backward compatibility)
+      const underlineWordsToUse = updatedUnderlineWords || orderedUnderlineWords
+      
+      if (updatedUnderlineWords) {
+        console.log('✨ Using newly extracted underline/highlight words from Gemini API')
+        console.log('   Updated underlineWords:', JSON.stringify(updatedUnderlineWords, null, 2))
+        // Update the state with new underlineWords
+        setOrderedUnderlineWords(underlineWordsToUse)
+        // Also update the ref so generateAllCarousels can access the latest values immediately
+        underlineWordsForGenerationRef.current = underlineWordsToUse
+      } else {
+        // Update ref to current state
+        underlineWordsForGenerationRef.current = orderedUnderlineWords
+      }
+      
+      // This will regenerate all canvases with the new text and save to database
+      try {
+        // Mark that we're regenerating from an edit so we show the new images
+        isRegeneratingFromEditRef.current = true
+        
+        // Clear cached images AND canvas refs so new ones are generated from scratch
+        setCarouselImages([])
+        setOrderedCarouselImages([])
+        
+        // Clear previous images ref to prevent old images from showing
+        previousImagesRef.current = []
+        
+        // Clear canvas refs to ensure fresh canvases are used (not reused with old content)
+        // This prevents the "two images layered on top of each other" bug
+        canvasRefs.current = new Array(orderedCarousels.length).fill(null)
+        
+        console.log('🧹 Cleared canvas refs - fresh canvases will be created')
+        
+        // Temporarily disable credit deduction for this regeneration (it's not a new generation)
+        const wasDeducted = hasDeductedCredit.current
+        hasDeductedCredit.current = true
+        
+        await generateAllCarousels()
+        
+        console.log('✅ Regeneration complete and images saved!')
+        
+        hasDeductedCredit.current = wasDeducted
+        isRegeneratingFromEditRef.current = false
+      } catch (error) {
+        console.error('❌ Error during regenerateAndSave:', error)
+        isRegeneratingFromEditRef.current = false
+        throw error
+      }
+    }
+  }), [orderedCarousels.length, orderedUnderlineWords])
+  
   // Initialize hasDeductedCredit from localStorage - check by ideaTitle, not content hash
   // Credits should be deducted once per ideaTitle, not once per content version
   const getInitialCreditDeductionStatus = (): boolean => {
@@ -404,15 +509,15 @@ export default function CarouselImageGenerator({
         generationIdToSend = storedGenerationId
       }
       
-      console.log('💾 Saving generation to database...', {
-        ideaTitle,
-        generationId: generationIdToSend || 'new',
-        carouselsCount: carousels.length,
-        imagesCount: imageDataUrls.length,
-        note: 'Backend will update existing entry if same ideaTitle exists'
-      })
+      console.log('💾 [SAVE] Saving generation to database...')
+      console.log('   📝 Idea:', ideaTitle)
+      console.log('   🖼️  Images:', imageDataUrls.length)
 
-      const response = await fetch('/api/generations/save', {
+      // Step 1: Create/get generation first (small payload, metadata only)
+      // This avoids Vercel's 4.5MB/6MB body size limits
+      console.log('📤 [STEP 1] Creating/getting generation (metadata only)...')
+      
+      const createResponse = await fetch('/api/generations/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -425,34 +530,162 @@ export default function CarouselImageGenerator({
           underlineWords: orderedUnderlineWords,
           templateId,
           colorThemeId,
-          images: imageDataUrls
+          // No images or imageUrls - will upload separately
         })
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error('❌ Failed to auto-save generation:', errorData.error)
-        throw new Error(errorData.error || 'Failed to save generation')
-      } else {
-        const result = await response.json()
-        const returnedGenerationId = result.generationId
-        
-        // Store generation_id, content hash, and ideaTitle in localStorage
-        localStorage.setItem('postGeneration_generationId', returnedGenerationId)
-        localStorage.setItem('postGeneration_contentHash', currentContentHash)
-        localStorage.setItem('postGeneration_ideaTitle', ideaTitle)
-        if (user?.id) {
-          localStorage.setItem('postGeneration_userId', user.id)
+      if (!createResponse.ok) {
+        let errorMessage = `Failed to create generation (${createResponse.status})`
+        try {
+          const errorData = await createResponse.json()
+          errorMessage = errorData.error || errorMessage
+        } catch (e) {
+          errorMessage = createResponse.statusText || errorMessage
         }
-        
-        if (result.isUpdate) {
-          console.log('✅ Generation updated in history (same ideaTitle):', returnedGenerationId)
-        } else {
-          console.log('✅ Generation auto-saved to history (new ideaTitle):', returnedGenerationId)
-        }
-        
-        return returnedGenerationId
+        console.error('❌ Failed to create generation:', errorMessage)
+        throw new Error(errorMessage)
       }
+
+      const createResult = await createResponse.json()
+      const generationId = createResult.generationId
+      
+      console.log('✅ Generation created/retrieved:', generationId)
+      console.log('📤 [STEP 2] Uploading images directly to Supabase Storage (bypasses Vercel)...')
+
+      // Step 2: Upload images directly to Supabase Storage from client
+      // This bypasses Vercel entirely, eliminating Fast Origin Transfer (incoming) costs
+      let imageUrls: string[]
+      let thumbnailUrls: string[]
+      
+      try {
+        const { checkImagesExist, deleteOldImages, uploadImagesToStorage } = await import('../lib/uploadImages')
+        
+        // If updating an existing generation, delete old images first
+        if (createResult.isUpdate) {
+          console.log('🗑️  Deleting old images for update...')
+          try {
+            await deleteOldImages(user.id, generationId)
+          } catch (deleteError) {
+            // Non-fatal - upsert will overwrite anyway
+            console.warn('⚠️ Failed to delete old images (non-fatal):', deleteError)
+          }
+          // After deleting, we always need to upload new images
+          console.log('📤 Uploading new images after deleting old ones...')
+          const uploadResult = await uploadImagesToStorage(user.id, generationId, imageDataUrls)
+          imageUrls = uploadResult.imageUrls
+          thumbnailUrls = uploadResult.thumbnailUrls
+          console.log('✅ Images uploaded successfully:', imageUrls.length)
+        } else {
+          // Check if images already exist (deduplication - prevents unnecessary uploads)
+          console.log('🔍 Checking if images already exist in storage...')
+          const existingImages = await checkImagesExist(user.id, generationId, imageDataUrls.length)
+          
+          if (existingImages.exists && existingImages.imageUrls) {
+            console.log('✅ Using existing images (skipping upload to save bandwidth)')
+            imageUrls = existingImages.imageUrls
+            thumbnailUrls = existingImages.thumbnailUrls || existingImages.imageUrls.slice(0, 2)
+          } else {
+            // Upload images directly to Supabase Storage (bypasses Vercel, eliminates Fast Origin Transfer)
+            console.log('📤 Uploading images directly to Supabase Storage (client-side)...')
+            const uploadResult = await uploadImagesToStorage(user.id, generationId, imageDataUrls)
+            imageUrls = uploadResult.imageUrls
+            thumbnailUrls = uploadResult.thumbnailUrls
+            console.log('✅ Images uploaded successfully:', imageUrls.length)
+          }
+        }
+      } catch (uploadError: any) {
+        console.error('❌ Failed to upload images:', uploadError)
+        // If client-side upload fails, fall back to per-image server-side upload
+        // This avoids sending a huge array of base64 images to /api/generations/save (which caused 413 errors)
+        console.warn('⚠️ Falling back to server-side upload (per-image)...')
+        try {
+          const uploadPromises = imageDataUrls.map(async (imageData, imageIndex) => {
+            const response = await fetch('/api/generations/upload-image', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId: user.id,
+                generationId,
+                imageIndex,
+                imageData,
+              }),
+            })
+
+            if (!response.ok) {
+              let errorMessage = `Failed to upload image ${imageIndex} via server (${response.status})`
+              try {
+                const errorData = await response.json()
+                errorMessage = errorData.error || errorMessage
+              } catch {
+                errorMessage = response.statusText || errorMessage
+              }
+              console.error('❌ Server-side image upload error:', errorMessage)
+              throw new Error(errorMessage)
+            }
+
+            const result = await response.json()
+            return result.imageUrl as string
+          })
+
+          imageUrls = await Promise.all(uploadPromises)
+          thumbnailUrls = imageUrls.slice(0, 2)
+          console.log('✅ Fallback server-side per-image upload completed')
+        } catch (fallbackError) {
+          console.error('❌ Fallback server-side upload failed:', fallbackError)
+          throw new Error('Failed to upload images (both client and server methods failed)')
+        }
+      }
+
+      // Step 3: Update generation with image URLs (small payload, just URLs)
+      console.log('📤 [STEP 3] Updating generation with image URLs...')
+      
+      const updateResponse = await fetch('/api/generations/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          generationId: generationId,
+          ideaTitle,
+          accountDescription: accountDescriptionRef.current,
+          slides: orderedCarousels,
+          caption: captionRef.current,
+          underlineWords: orderedUnderlineWords,
+          templateId,
+          colorThemeId,
+          imageUrls: imageUrls,
+          thumbnailUrls: thumbnailUrls,
+        })
+      })
+
+      if (!updateResponse.ok) {
+        let errorMessage = `Failed to update generation with images (${updateResponse.status})`
+        try {
+          const errorData = await updateResponse.json()
+          errorMessage = errorData.error || errorMessage
+        } catch (e) {
+          errorMessage = updateResponse.statusText || errorMessage
+        }
+        console.error('❌ Failed to update generation:', errorMessage)
+        throw new Error(errorMessage)
+      }
+
+      const updateResult = await updateResponse.json()
+      
+      // Store generation_id, content hash, and ideaTitle in localStorage
+      localStorage.setItem('postGeneration_generationId', generationId)
+      localStorage.setItem('postGeneration_contentHash', currentContentHash)
+      localStorage.setItem('postGeneration_ideaTitle', ideaTitle)
+      if (user?.id) {
+        localStorage.setItem('postGeneration_userId', user.id)
+      }
+      
+      if (updateResult.isUpdate) {
+        console.log('✅ Generation updated in history (same ideaTitle):', generationId)
+      } else {
+        console.log('✅ Generation auto-saved to history (new ideaTitle):', generationId)
+      }
+      
+      return generationId
     } catch (error: any) {
       console.error('❌ Error auto-saving generation:', error.message || error)
       return undefined
@@ -791,9 +1024,12 @@ export default function CarouselImageGenerator({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templateId, colorThemeId])
   
-  // Regenerate when carousel content changes (edits) - without deducting credits
+  // DISABLED: Auto-regeneration on content changes removed to preserve AI images
+  // When text is edited, only underline/highlight words should be updated (handled by the API)
+  // Images should remain unchanged
   useEffect(() => {
-    // Skip during initial mount; initial generation handles first render
+    // Just keep track of carousel content changes for reference
+    // But DO NOT regenerate images
     if (isInitialMount.current) {
       prevCarouselsContent.current = JSON.stringify(carousels)
       return
@@ -802,58 +1038,27 @@ export default function CarouselImageGenerator({
     const currentCarouselsContent = JSON.stringify(carousels)
     const prevContent = prevCarouselsContent.current
     
-    // Only regenerate if content changed but ideaTitle and length are the same (meaning it's an edit, not new note)
+    // Only update the tracking ref, do NOT regenerate
     if (currentCarouselsContent !== prevContent && carousels.length > 0) {
-      // Check if this is a content edit (same ideaTitle, same length) vs new note
-      const prevCarousels = JSON.parse(prevContent)
-      const isContentEdit = prevCarousels.length === carousels.length && prevCarousels.length > 0
-      
-      if (isContentEdit) {
-        console.log('📝 Carousel content edit detected → regenerating without deducting credits')
-        
-        // Preserve credit deduction state (don't deduct for edits)
-        const wasDeducted = hasDeductedCredit.current
-        hasDeductedCredit.current = true
-        
-        // Update hash for new content
-        try {
-          const fullContentHash = JSON.stringify({ 
-            ideaTitle, 
-            carousels, 
-            underlineWords, 
-            templateId, 
-            colorThemeId
-          })
-          localStorage.setItem('postGeneration_fullContentHash', fullContentHash)
-          // Store user ID to ensure localStorage is user-specific
-          if (user?.id) {
-            localStorage.setItem('postGeneration_userId', user.id)
-          }
-        } catch (error) {
-          console.error('Error updating localStorage hash:', error)
-        }
-        
-        // Debounce regeneration to avoid regenerating on every keystroke
-        const timeoutId = setTimeout(async () => {
-          try {
-            await generateAllCarousels()
-            // Only update prevCarouselsContent after successful regeneration
-            prevCarouselsContent.current = JSON.stringify(carousels)
-          } catch (error) {
-            console.error('❌ Regeneration failed:', error)
-          } finally {
-            hasDeductedCredit.current = wasDeducted
-          }
-        }, 500) // 500ms debounce
-        
-        return () => clearTimeout(timeoutId)
-      } else {
-        // Not a content edit (length changed or new note) - update immediately
-        prevCarouselsContent.current = currentCarouselsContent
-      }
-    } else {
-      // No content change - keep prevCarouselsContent in sync
+      console.log('📝 Carousel content changed - tracking updated (regeneration disabled to preserve images)')
       prevCarouselsContent.current = currentCarouselsContent
+      
+      // Update hash for new content (for caching purposes only)
+      try {
+        const fullContentHash = JSON.stringify({ 
+          ideaTitle, 
+          carousels, 
+          underlineWords, 
+          templateId, 
+          colorThemeId
+        })
+        localStorage.setItem('postGeneration_fullContentHash', fullContentHash)
+        if (user?.id) {
+          localStorage.setItem('postGeneration_userId', user.id)
+        }
+      } catch (error) {
+        console.error('Error updating localStorage hash:', error)
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carousels, ideaTitle, underlineWords, templateId, colorThemeId])
@@ -1444,8 +1649,8 @@ export default function CarouselImageGenerator({
       ctx.fillStyle = colorTheme.textColor
       ctx.textAlign = 'left'
 
-      // Get highlight word
-      const emphasisData = orderedUnderlineWords[index] || { underline: '', highlight: '' }
+      // Get highlight word - use ref first (for regeneration from edit), then fall back to state
+      const emphasisData = underlineWordsForGenerationRef.current[index] || orderedUnderlineWords[index] || { underline: '', highlight: '' }
       const highlightWord = emphasisData.highlight.toLowerCase().replace(/[.,!?;:–—\-'"`]/g, '').trim()
       
       // Find last occurrence of highlight word
@@ -1575,7 +1780,8 @@ export default function CarouselImageGenerator({
         }
       }
       
-      const emphasisData = orderedUnderlineWords[index] || { underline: '', highlight: '' }
+      // Use ref first (for regeneration from edit), then fall back to state
+      const emphasisData = underlineWordsForGenerationRef.current[index] || orderedUnderlineWords[index] || { underline: '', highlight: '' }
       const underlinePhrases = emphasisData.underline.split(',').map((p: string) => p.trim()).filter((p: string) => p)
       
       const spaceWidth = ctx.measureText(' ').width
@@ -1712,7 +1918,8 @@ export default function CarouselImageGenerator({
 
       ctx.textAlign = 'left'
       
-      const emphasisData = orderedUnderlineWords[index] || { underline: '', highlight: '', imageUrl: null, originalImageUrl: null }
+      // Use ref first (for regeneration from edit), then fall back to state
+      const emphasisData = underlineWordsForGenerationRef.current[index] || orderedUnderlineWords[index] || { underline: '', highlight: '', imageUrl: null, originalImageUrl: null }
       
       if (cleanCarousel.kind === 'MIDDLE') {
         console.log(`\n🖼️ Carousel ${index + 1} Image Check:`)
@@ -1723,7 +1930,27 @@ export default function CarouselImageGenerator({
         console.log('  originalImageUrl value:', emphasisData.originalImageUrl)
       }
       
-      const imageSourceUrl = emphasisData.imageUrl || emphasisData.originalImageUrl || null
+      let rawImageUrl = emphasisData.imageUrl || emphasisData.originalImageUrl || null
+      
+      // Route pollinations.ai images through proxy to avoid CORS issues
+      // The proxy fetches the image server-side and serves it with proper CORS headers
+      let imageSourceUrl: string | null = null
+      if (rawImageUrl) {
+        try {
+          const url = new URL(rawImageUrl)
+          if (url.hostname === 'image.pollinations.ai') {
+            // Use proxy for pollinations.ai images to avoid CORS issues
+            imageSourceUrl = `/api/image/proxy?url=${encodeURIComponent(rawImageUrl)}`
+            console.log(`      🔄 Routing pollinations.ai image through proxy`)
+          } else {
+            // Use direct URL for other sources (e.g., Pexels, which supports CORS)
+            imageSourceUrl = rawImageUrl
+          }
+        } catch (e) {
+          // If URL parsing fails, use the raw URL as-is
+          imageSourceUrl = rawImageUrl
+        }
+      }
       
       let imageHeight = 0
       let imageWidth = 0
@@ -2314,25 +2541,42 @@ export default function CarouselImageGenerator({
         marginTop: 0,
         height: '100%',
         maxHeight: '100%',
+        width: '100%',
+        maxWidth: '100%',
         display: 'flex',
         flexDirection: 'column',
-        paddingBottom: '16px',
+        padding: 0,
         overflow: 'hidden',
-        cursor: 'default'
+        cursor: 'default',
+        border: 'none',
+        borderRadius: 0,
+        minWidth: 0,
+        minHeight: 0
       }}
     >
       <div
         style={{
-          display: 'flex',
-        gap: '24px',
-          overflowX: 'auto',
-          overflowY: 'hidden',
-          paddingBottom: '16px',
-          marginBottom: '24px',
           flex: 1,
-          minHeight: 0
+          display: 'flex',
+          alignItems: 'center',
+          minHeight: 0,
+          minWidth: 0,
+          overflow: 'hidden'
         }}
       >
+        <div
+          style={{
+            display: 'flex',
+            gap: '24px',
+            overflowX: 'auto',
+            overflowY: 'hidden',
+            paddingBottom: '16px',
+            width: '100%',
+            minHeight: 0,
+            minWidth: 0,
+            flexShrink: 1
+          }}
+        >
         {orderedCarousels.map((carousel, index) => {
           const hasCurrentImage = !!orderedCarouselImages[index]
           const hasPreviousImage = !!previousImagesRef.current[index]
@@ -2348,8 +2592,10 @@ export default function CarouselImageGenerator({
                 borderRadius: '16px',
                 padding: '16px',
                 transition: 'all 0.3s ease',
-                minWidth: '320px',
-                flex: '0 0 320px'
+                minWidth: isMobile ? '280px' : '400px',
+                maxWidth: isMobile ? '280px' : '400px',
+                flex: isMobile ? '0 0 280px' : '0 0 400px',
+                flexShrink: 0
               }}>
               <div style={{ 
                 position: 'relative',
@@ -2422,19 +2668,22 @@ export default function CarouselImageGenerator({
               </div>
             </div>
           )})}
+        </div>
       </div>
       
       {/* Thumbnail strip at the bottom */}
       <div
         style={{
           display: 'flex',
-          gap: '12px',
-          padding: '16px 0 16px 0',
+          gap: isMobile ? '8px' : '12px',
+          padding: isMobile ? '12px 0' : '16px 0',
           overflowX: 'auto',
           overflowY: 'hidden',
           marginTop: 'auto',
           flexShrink: 0,
-          justifyContent: 'center'
+          justifyContent: 'center',
+          minWidth: 0,
+          width: '100%'
         }}
       >
         {orderedCarousels.map((carousel, index) => {
@@ -2491,9 +2740,9 @@ export default function CarouselImageGenerator({
               }}
               style={{
                 flexShrink: 0,
-                width: '64px',
-                height: '80px',
-                borderRadius: '12px',
+                width: isMobile ? '48px' : '64px',
+                height: isMobile ? '60px' : '80px',
+                borderRadius: isMobile ? '8px' : '12px',
                 overflow: 'hidden',
                 background: isDragOver ? '#fff9ed' : '#f5f5f5',
                 border: isDragOver ? '2px solid #ffbd59' : isDragging ? '2px dashed #ffbd59' : '1px solid #e5e5e5',
@@ -2536,7 +2785,7 @@ export default function CarouselImageGenerator({
                     justifyContent: 'center',
                     background: '#f5f5f5',
                     color: '#999999',
-                    fontSize: '24px',
+                    fontSize: isMobile ? '18px' : '24px',
                     fontWeight: '300'
                   }}
                 >
@@ -2562,4 +2811,5 @@ export default function CarouselImageGenerator({
   )
 }
 
-
+// Export with forwardRef to allow parent components to call regenerateAndSave
+export default forwardRef(CarouselImageGeneratorComponent)

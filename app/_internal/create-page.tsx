@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Palette, Type, ArrowUp, ChevronDown, FileText } from 'lucide-react'
+import { ArrowUp, ChevronDown } from 'lucide-react'
 import '../globals.css'
 import CarouselImageGenerator from '../components/CarouselImageGenerator'
 import { COLOR_THEMES } from '../config/carouselThemes'
 import { getTemplateOptions } from '../config/carouselTemplates'
 import { useAuth } from '../context/AuthContext'
 import { useGeneration } from '../hooks/useGenerations'
+import { useMobile } from '../hooks/useMobile'
 import UpgradePrompt from '../components/UpgradePrompt'
 import SubscriptionModal from '../components/SubscriptionModal'
 import TemplateSelectorModal from '../components/TemplateSelectorModal'
@@ -32,9 +33,11 @@ interface Note {
 
 interface CreatePageProps {
   generationId?: string
+  onHasUnsavedWorkChange?: (hasUnsavedWork: boolean) => void
 }
 
-export default function CreatePage({ generationId }: CreatePageProps = {}) {
+export default function CreatePage({ generationId, onHasUnsavedWorkChange }: CreatePageProps = {}) {
+  const isMobile = useMobile()
   const router = useRouter()
   const { user, loading: authLoading, credits, refreshCredits } = useAuth()
   const redirectingRef = useRef(false) // Prevent multiple redirects
@@ -56,6 +59,27 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
   const [loadingIdeas, setLoadingIdeas] = useState(false)
   const [loadingNote, setLoadingNote] = useState(false)
   const [currentStep, setCurrentStep] = useState<'generating' | 'analysing' | 'rendering' | null>(null)
+  const [renderingMessageIndex, setRenderingMessageIndex] = useState(0)
+  const [showRenderingMessages, setShowRenderingMessages] = useState(false)
+  
+  // Humorous rendering messages
+  const renderingMessages = [
+    'Post My Note is working 24/7 to work on your carousel',
+    'Post My Note is drinking 10 coffees to stay awake',
+    'Post My Note is doing backflips to make your carousel perfect',
+    'Post My Note is summoning all the design gods',
+    'Post My Note is training AI hamsters to run faster',
+    'Post My Note is teaching pixels how to dance',
+    'Post My Note is negotiating with colors to look their best',
+    'Post My Note is having a brainstorming session with emojis',
+    'Post My Note is making sure every pixel is in its happy place',
+    'Post My Note is double-checking that everything is Instagram-worthy',
+    'Post My Note is giving your carousel a pep talk',
+    'Post My Note is making sure the fonts are feeling confident',
+    'Post My Note is organizing a color coordination meeting',
+    'Post My Note is ensuring your carousel passes the vibe check',
+    'Post My Note is doing quality control with a magnifying glass',
+  ]
   
   // Configuration
   const [templateId, setTemplateId] = useState('template1')
@@ -79,6 +103,24 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
 
   const hasInitializedRef = useRef(false)
   const prevColorThemeIdRef = useRef(colorThemeId)
+
+  // Check for unsaved work
+  const hasUnsavedWork = Boolean(
+    accountDescription.trim() || 
+    ideas.length > 0 || 
+    selectedIdea || 
+    (note && !generationId) || 
+    loadingIdeas || 
+    loadingNote ||
+    currentStep !== null
+  )
+
+  // Notify parent about unsaved work status
+  useEffect(() => {
+    if (onHasUnsavedWorkChange) {
+      onHasUnsavedWorkChange(hasUnsavedWork)
+    }
+  }, [hasUnsavedWork, onHasUnsavedWorkChange])
 
   useEffect(() => {
     if (!user || authLoading || hasInitializedRef.current) return
@@ -108,6 +150,32 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
       prevColorThemeIdRef.current = colorThemeId
     }
   }, [colorThemeId])
+
+  // Rotate rendering messages every 10 seconds when in rendering phase (only for image modes)
+  useEffect(() => {
+    if (currentStep !== 'rendering' || !includeImages) {
+      setRenderingMessageIndex(0)
+      setShowRenderingMessages(false)
+      return
+    }
+
+    // Show "Rendering" for 5 seconds first, then switch to fun messages
+    const showMessagesTimeout = setTimeout(() => {
+      setShowRenderingMessages(true)
+      setRenderingMessageIndex(0)
+    }, 5000) // Wait 5 seconds before showing fun messages
+
+    // Then rotate every 10 seconds
+    const interval = setInterval(() => {
+      setRenderingMessageIndex((prevIndex) => (prevIndex + 1) % renderingMessages.length)
+    }, 10000) // Change every 10 seconds
+
+    return () => {
+      clearTimeout(showMessagesTimeout)
+      clearInterval(interval)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, includeImages])
 
   // Load generation data when generationId is provided
   useEffect(() => {
@@ -220,7 +288,7 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
     setLoadingNote(true)
     setError('')
     setNote(null)
-    setCurrentStep('generating')
+    setCurrentStep('analysing')
     
     // Clear localStorage
     try {
@@ -233,10 +301,10 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
     }
 
     // Step progression
-    setTimeout(() => setCurrentStep('analysing'), 1000)
+    setTimeout(() => setCurrentStep('generating'), 5000) // Analysing for 5 seconds
     // Rendering step includes both canvas rendering AND database save
     // It will stay active until onGenerationComplete is called after database save completes
-    setTimeout(() => setCurrentStep('rendering'), 2000)
+    setTimeout(() => setCurrentStep('rendering'), 10000) // Generating for 5 seconds, then Rendering
 
     try {
       const response = await fetch(`${API_URL}/api/social`, {
@@ -343,11 +411,14 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
         height: '100vh',
         background: '#fafafa',
         overflow: 'hidden',
+        overflowX: 'hidden',
+        overflowY: 'hidden',
       }}>
         {/* Top Content Area */}
         <div style={{
           flex: 1,
-          overflowY: 'auto',
+          overflowY: isMobile ? 'hidden' : 'auto',
+          overflowX: 'hidden',
           padding: '48px 24px 24px 24px',
           display: 'flex',
           flexDirection: 'column',
@@ -367,45 +438,30 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
               animation: 'slideUp 0.6s ease-out',
             }}>
               <h2 style={{
-                fontSize: '24px',
+                fontSize: isMobile ? '20px' : '28px',
                 fontWeight: '700',
-                marginBottom: '32px',
+                marginBottom: '16px',
                 color: '#000000',
                 textAlign: 'center',
+                width: '100%',
+                minWidth: 0,
               }}>
                 {selectedIdea}
               </h2>
+              <div style={{
+                fontSize: '14px',
+                fontWeight: '400',
+                marginBottom: '32px',
+                color: '#999999',
+                textAlign: 'center',
+                width: '100%',
+              }}>
+                {includeImages ? '~3min' : '~1min'}
+              </div>
               
               {/* Step Progress Indicators */}
               {!note && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                {/* Generating */}
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '16px',
-                  padding: '16px',
-                  borderRadius: '8px',
-                  background: currentStep === 'generating' ? '#fff9e6' : 'transparent',
-                }}>
-                  <div style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {currentStep === 'generating' ? (
-                      <span className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></span>
-                    ) : currentStep && ['analysing', 'rendering'].includes(currentStep) ? (
-                      <span style={{ color: '#ffbd59', fontSize: '20px' }}>✓</span>
-                    ) : (
-                      <span style={{ color: '#999999', fontSize: '20px' }}>○</span>
-                    )}
-                  </div>
-                  <span style={{ 
-                    fontSize: '16px', 
-                    fontWeight: currentStep === 'generating' ? '600' : '400',
-                    color: currentStep === 'generating' ? '#000000' : currentStep && ['analysing', 'rendering'].includes(currentStep) ? '#ffbd59' : '#999999'
-                  }}>
-                    Generating
-                  </span>
-                </div>
-
                 {/* Analysing */}
                 <div style={{ 
                   display: 'flex', 
@@ -413,10 +469,37 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                   gap: '16px',
                   padding: '16px',
                   borderRadius: '8px',
-                  background: currentStep === 'analysing' ? '#fff9e6' : 'transparent',
+                  background: 'transparent',
                 }}>
                   <div style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {currentStep === 'analysing' ? (
+                      <span className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></span>
+                    ) : currentStep && ['generating', 'rendering'].includes(currentStep) ? (
+                      <span style={{ color: '#ffbd59', fontSize: '20px' }}>✓</span>
+                    ) : (
+                      <span style={{ color: '#999999', fontSize: '20px' }}>○</span>
+                    )}
+                  </div>
+                  <span style={{ 
+                    fontSize: '16px', 
+                    fontWeight: currentStep === 'analysing' ? '600' : '400',
+                    color: currentStep === 'analysing' ? '#000000' : currentStep && ['generating', 'rendering'].includes(currentStep) ? '#ffbd59' : '#999999'
+                  }}>
+                    Analysing
+                  </span>
+                </div>
+
+                {/* Generating */}
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '16px',
+                  padding: '16px',
+                  borderRadius: '8px',
+                  background: 'transparent',
+                }}>
+                  <div style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {currentStep === 'generating' ? (
                       <span className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></span>
                     ) : currentStep === 'rendering' ? (
                       <span style={{ color: '#ffbd59', fontSize: '20px' }}>✓</span>
@@ -426,10 +509,10 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                   </div>
                   <span style={{ 
                     fontSize: '16px', 
-                    fontWeight: currentStep === 'analysing' ? '600' : '400',
-                    color: currentStep === 'analysing' ? '#000000' : currentStep === 'rendering' ? '#ffbd59' : '#999999'
+                    fontWeight: currentStep === 'generating' ? '600' : '400',
+                    color: currentStep === 'generating' ? '#000000' : currentStep === 'rendering' ? '#ffbd59' : '#999999'
                   }}>
-                    Analysing
+                    Generating
                   </span>
                 </div>
 
@@ -440,7 +523,7 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                   gap: '16px',
                   padding: '16px',
                   borderRadius: '8px',
-                  background: currentStep === 'rendering' ? '#fff9e6' : 'transparent',
+                  background: 'transparent',
                 }}>
                   <div style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {currentStep === 'rendering' ? (
@@ -454,7 +537,7 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                     fontWeight: currentStep === 'rendering' ? '600' : '400',
                     color: currentStep === 'rendering' ? '#000000' : '#999999'
                   }}>
-                    Rendering
+                    {currentStep === 'rendering' && includeImages && showRenderingMessages ? renderingMessages[renderingMessageIndex] : 'Rendering'}
                   </span>
                 </div>
               </div>
@@ -515,11 +598,14 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
       height: '100vh',
       background: '#fafafa',
       overflow: 'hidden',
+      overflowX: 'hidden',
+      overflowY: 'hidden',
     }}>
       {/* Top Content Area */}
       <div style={{
         flex: 1,
-        overflowY: 'auto',
+        overflowY: isMobile ? 'hidden' : 'auto',
+        overflowX: 'hidden',
         padding: '48px 24px 24px 24px',
         display: 'flex',
         flexDirection: 'column',
@@ -547,7 +633,7 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
               color: '#666666',
               marginBottom: '48px',
             }}>
-              Enter your business description or idea below to get started
+              Enter your idea below to get started
             </p>
             {/* Textarea Input with Action Bar */}
             <div style={{
@@ -562,12 +648,18 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
               value={accountDescription}
               onChange={(e) => setAccountDescription(e.target.value)}
               onKeyDown={(e) => {
+                // Submit on Enter (without Shift) - same as clicking the button
+                if (e.key === 'Enter' && !e.shiftKey && !loadingIdeas && !loadingNote && accountDescription.trim()) {
+                  e.preventDefault()
+                  generateIdeas()
+                }
+                // Also support Cmd/Ctrl+Enter for submission
                 if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !loadingIdeas && !loadingNote) {
                   e.preventDefault()
                   generateIdeas()
                 }
               }}
-              placeholder="Enter business description"
+              placeholder="Describe the post you want to create"
               disabled={loadingIdeas || loadingNote}
               style={{
                 width: '100%',
@@ -603,46 +695,6 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                   gap: '8px',
                   alignItems: 'center',
                 }}>
-                  {/* Template Selector Button */}
-                  <button
-                    onClick={() => setShowTemplateModal(true)}
-                    disabled={loadingIdeas || loadingNote}
-                    style={{
-                      height: '32px',
-                      padding: '0 12px',
-                      borderRadius: '6px',
-                      border: '1px solid #e5e5e5',
-                      background: '#ffffff',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      cursor: loadingIdeas || loadingNote ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s ease',
-                      opacity: loadingIdeas || loadingNote ? 0.5 : 1,
-                      whiteSpace: 'nowrap',
-                      width: 'fit-content'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!loadingIdeas && !loadingNote) {
-                        e.currentTarget.style.background = '#f5f5f5'
-                        e.currentTarget.style.borderColor = '#d0d0d0'
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!loadingIdeas && !loadingNote) {
-                        e.currentTarget.style.background = '#ffffff'
-                        e.currentTarget.style.borderColor = '#e5e5e5'
-                      }
-                    }}
-                    title="Select Template"
-                  >
-                    <Palette size={18} color="#666666" />
-                    <span style={{ fontSize: '14px', fontWeight: '500', color: '#000000', userSelect: 'none' }}>
-                      {templateOptions.find(t => t.id === templateId)?.name || 'Template'}
-                    </span>
-                    <ChevronDown size={16} color="#666666" />
-                  </button>
-
                   {/* Mode Selector Button */}
                   <div style={{ position: 'relative' }}>
                     <button
@@ -678,16 +730,13 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                       }}
                       title="Select Mode"
                     >
-                      <FileText size={18} color="#666666" />
                       <span style={{ fontSize: '14px', fontWeight: '500', color: '#000000', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         {!includeImages ? (
-                          <>Text <span style={{ color: '#999999', fontWeight: '600' }}>1 credit</span></>
+                          <>Text</>
                         ) : !useAIImages ? (
-                          <>Text + Image <span style={{ color: '#999999', fontWeight: '600' }}>2 credits</span></>
-                        ) : aiImageStyle === 'animated' ? (
-                          <>Text + AI Animated Image <span style={{ color: '#999999', fontWeight: '600' }}>2 credits</span></>
+                          <>Text + Image</>
                         ) : (
-                          <>Text + AI Surrealism Image <span style={{ color: '#999999', fontWeight: '600' }}>2 credits</span></>
+                          <>Text + AI Animated Image</>
                         )}
                       </span>
                       <ChevronDown size={16} color="#666666" />
@@ -861,45 +910,30 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
             animation: 'slideUp 0.6s ease-out',
           }}>
             <h2 style={{
-              fontSize: '24px',
+              fontSize: isMobile ? '20px' : '28px',
               fontWeight: '700',
-              marginBottom: '32px',
+              marginBottom: '16px',
               color: '#000000',
               textAlign: 'center',
+              width: '100%',
+              minWidth: 0,
             }}>
               {selectedIdea}
             </h2>
+            <div style={{
+              fontSize: '14px',
+              fontWeight: '400',
+              marginBottom: '32px',
+              color: '#999999',
+              textAlign: 'center',
+              width: '100%',
+            }}>
+              {includeImages ? '~2min' : '~1min'}
+            </div>
             
             {/* Step Progress Indicators - Only show during generation, hide when note is set for new generations */}
             {!note && !pendingGenerationRef.current && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              {/* Generating */}
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '16px',
-                padding: '16px',
-                borderRadius: '8px',
-                background: currentStep === 'generating' ? '#fff9e6' : 'transparent',
-              }}>
-                <div style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {currentStep === 'generating' ? (
-                    <span className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></span>
-                  ) : currentStep && ['analysing', 'rendering'].includes(currentStep) ? (
-                    <span style={{ color: '#ffbd59', fontSize: '20px' }}>✓</span>
-                  ) : (
-                    <span style={{ color: '#999999', fontSize: '20px' }}>○</span>
-                  )}
-                </div>
-                <span style={{ 
-                  fontSize: '16px', 
-                  fontWeight: currentStep === 'generating' ? '600' : '400',
-                  color: currentStep === 'generating' ? '#000000' : currentStep && ['analysing', 'rendering'].includes(currentStep) ? '#ffbd59' : '#999999'
-                }}>
-                  Generating
-                </span>
-              </div>
-
               {/* Analysing */}
               <div style={{ 
                 display: 'flex', 
@@ -907,10 +941,37 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                 gap: '16px',
                 padding: '16px',
                 borderRadius: '8px',
-                background: currentStep === 'analysing' ? '#fff9e6' : 'transparent',
+                background: 'transparent',
               }}>
                 <div style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {currentStep === 'analysing' ? (
+                    <span className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></span>
+                  ) : currentStep && ['generating', 'rendering'].includes(currentStep) ? (
+                    <span style={{ color: '#ffbd59', fontSize: '20px' }}>✓</span>
+                  ) : (
+                    <span style={{ color: '#999999', fontSize: '20px' }}>○</span>
+                  )}
+                </div>
+                <span style={{ 
+                  fontSize: '16px', 
+                  fontWeight: currentStep === 'analysing' ? '600' : '400',
+                  color: currentStep === 'analysing' ? '#000000' : currentStep && ['generating', 'rendering'].includes(currentStep) ? '#ffbd59' : '#999999'
+                }}>
+                  Analysing
+                </span>
+              </div>
+
+              {/* Generating */}
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '16px',
+                padding: '16px',
+                borderRadius: '8px',
+                background: 'transparent',
+              }}>
+                <div style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {currentStep === 'generating' ? (
                     <span className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></span>
                   ) : currentStep === 'rendering' ? (
                     <span style={{ color: '#ffbd59', fontSize: '20px' }}>✓</span>
@@ -920,10 +981,10 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                 </div>
                 <span style={{ 
                   fontSize: '16px', 
-                  fontWeight: currentStep === 'analysing' ? '600' : '400',
-                  color: currentStep === 'analysing' ? '#000000' : currentStep === 'rendering' ? '#ffbd59' : '#999999'
+                  fontWeight: currentStep === 'generating' ? '600' : '400',
+                  color: currentStep === 'generating' ? '#000000' : currentStep === 'rendering' ? '#ffbd59' : '#999999'
                 }}>
-                  Analysing
+                  Generating
                 </span>
               </div>
 
@@ -934,7 +995,7 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                 gap: '16px',
                 padding: '16px',
                 borderRadius: '8px',
-                background: currentStep === 'rendering' ? '#fff9e6' : 'transparent',
+                background: 'transparent',
               }}>
                 <div style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {currentStep === 'rendering' ? (
@@ -948,7 +1009,7 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
                   fontWeight: currentStep === 'rendering' ? '600' : '400',
                   color: currentStep === 'rendering' ? '#000000' : '#999999'
                 }}>
-                  Rendering
+                  {currentStep === 'rendering' && includeImages ? renderingMessages[renderingMessageIndex] : 'Rendering'}
                 </span>
               </div>
             </div>
@@ -1082,6 +1143,7 @@ export default function CreatePage({ generationId }: CreatePageProps = {}) {
           isOpen={showUpgradePrompt}
           onClose={() => setShowUpgradePrompt(false)}
           currentPlan={credits?.current_plan || null}
+          onViewPlans={() => setShowSubscriptionModal(true)}
         />
       )}
 

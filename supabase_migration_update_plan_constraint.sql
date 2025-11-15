@@ -25,3 +25,6 @@ CHECK (current_plan IN ('plan-10', 'plan-20', 'plan-50'));
 -- UPDATE public.user_credits SET current_plan = NULL WHERE current_plan = 'plan-100';
 
 
+
+
+

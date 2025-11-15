@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "app/api/generations/save/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "app/api/generations/upload-image/route.ts": {
+      "maxDuration": 30,
+      "memory": 512
+    }
+  }
+}
+

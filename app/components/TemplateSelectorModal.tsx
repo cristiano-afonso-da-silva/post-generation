@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { X } from 'lucide-react'
 import { getTemplateOptions } from '../config/carouselTemplates'
+import { useMobile } from '../hooks/useMobile'
 
 interface TemplateSelectorModalProps {
   isOpen: boolean
@@ -18,6 +19,7 @@ export default function TemplateSelectorModal({
   selectedTemplateId,
   onSelectTemplate
 }: TemplateSelectorModalProps) {
+  const isMobile = useMobile()
   const [selectedPreviewIndex, setSelectedPreviewIndex] = useState(0)
   const [localSelectedId, setLocalSelectedId] = useState(selectedTemplateId)
   const templates = getTemplateOptions()
@@ -97,7 +99,7 @@ export default function TemplateSelectorModal({
         >
           <h2
             style={{
-              fontSize: '24px',
+              fontSize: isMobile ? '18px' : '24px',
               fontWeight: '600',
               color: '#000000',
               margin: 0
@@ -160,7 +162,7 @@ export default function TemplateSelectorModal({
                   key={template.id}
                   onClick={() => handleTemplateClick(template.id)}
                   style={{
-                    border: isSelected ? '2px solid #ffbd59' : '1px solid #e5e5e5',
+                    border: isSelected ? '1px solid #ffbd59' : '1px solid #e5e5e5',
                     borderRadius: '8px',
                     padding: '0',
                     cursor: 'pointer',
@@ -183,7 +185,7 @@ export default function TemplateSelectorModal({
                   <div
                     style={{
                       padding: '12px 16px',
-                      background: isSelected ? '#f5f5f5' : '#fafafa',
+                      background: isSelected ? '#fafafa' : '#ffffff',
                       borderBottom: '1px solid #e5e5e5',
                       fontSize: '13px',
                       fontWeight: '500',
