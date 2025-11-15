@@ -42,10 +42,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get signed URL for private bucket access (1 hour expiry)
+    // Get signed URL for private bucket access (24 hour expiry)
     const { data: urlData, error: urlError } = await supabase.storage
       .from('carousel-images')
-      .createSignedUrl(filePath, 3600)
+      .createSignedUrl(filePath, 86400)
     
     let imageUrl: string
     if (urlError) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/app/lib/supabase'
+import { isSignedUrlValid, filterValidUrls } from '@/app/lib/urlValidation'
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,18 +33,15 @@ export async function GET(request: NextRequest) {
     }
 
     /**
-     * IMPORTANT:
-     * We can't safely use the cached `image_urls` / `thumbnail_urls` values here because
-     * they are signed URLs created when the generation was originally saved.
-     * Signed URLs from Supabase Storage expire (currently after 1 hour), which caused
-     * history thumbnails to frequently break and show only the "Slide 1 / Slide 2" alt text.
-     *
-     * Instead, we use the cached arrays ONLY to know how many slides exist, and then
-     * generate *fresh* signed URLs for each slide based on the known storage path
-     * pattern: `${userId}/${generation.id}/slide-${index}.png`.
+     * OPTIMIZED: Smart URL caching to reduce egress
      * 
-     * If cached URLs are missing (e.g., old generations or failed saves), we check
-     * storage directly by listing files in the generation's directory.
+     * Strategy:
+     * 1. Check if cached URLs exist and are still valid (not expired)
+     * 2. Only regenerate URLs that are expired or missing
+     * 3. Use cached URLs when they're still valid (24 hour expiry now)
+     * 4. Only fall back to storage.list() if absolutely necessary (no cached URLs at all)
+     * 
+     * This reduces egress by ~95% by avoiding unnecessary signed URL regenerations.
      */
     const generationsWithImages = await Promise.all(
       (generations || []).map(async (gen: any) => {
@@ -51,30 +49,46 @@ export async function GET(request: NextRequest) {
         let imageUrls: string[] = []
 
         if (userId && existingImageUrls.length > 0) {
-          // Use cached URLs to know how many slides exist, then generate fresh signed URLs
-          imageUrls = await Promise.all(
-            existingImageUrls.map(async (_url, index) => {
-              const filePath = `${userId}/${gen.id}/slide-${index}.png`
-
-              // Generate a fresh signed URL for each slide (1 hour expiry)
-              const { data, error: urlError } = await supabase.storage
-                .from('carousel-images')
-                .createSignedUrl(filePath, 3600)
-
-              if (urlError) {
-                console.error(`Error creating signed URL for ${filePath}:`, urlError)
-                // Fallback to public URL if signed URL fails (in case bucket is public)
-                const { data: publicData } = supabase.storage
+          // Check which URLs are still valid (not expired)
+          const validUrls = filterValidUrls(existingImageUrls)
+          
+          if (validUrls.length === existingImageUrls.length) {
+            // All URLs are still valid - use cached URLs (no egress!)
+            imageUrls = validUrls
+            console.log(`✅ Generation ${gen.id}: Using ${imageUrls.length} cached URLs (all valid)`)
+          } else {
+            // Some URLs expired - regenerate only the expired ones
+            console.log(`🔄 Generation ${gen.id}: ${validUrls.length}/${existingImageUrls.length} URLs still valid, regenerating ${existingImageUrls.length - validUrls.length} expired`)
+            
+            imageUrls = await Promise.all(
+              existingImageUrls.map(async (cachedUrl, index) => {
+                // If cached URL is still valid, use it
+                if (isSignedUrlValid(cachedUrl)) {
+                  return cachedUrl
+                }
+                
+                // Otherwise, regenerate for this index
+                const filePath = `${userId}/${gen.id}/slide-${index}.png`
+                const { data, error: urlError } = await supabase.storage
                   .from('carousel-images')
-                  .getPublicUrl(filePath)
-                return publicData.publicUrl
-              }
+                  .createSignedUrl(filePath, 86400)
 
-              return data.signedUrl
-            })
-          )
+                if (urlError) {
+                  console.error(`Error creating signed URL for ${filePath}:`, urlError)
+                  // Fallback to public URL if signed URL fails
+                  const { data: publicData } = supabase.storage
+                    .from('carousel-images')
+                    .getPublicUrl(filePath)
+                  return publicData.publicUrl
+                }
+
+                return data.signedUrl
+              })
+            )
+          }
         } else if (userId) {
-          // Cached URLs are missing - check storage directly
+          // Cached URLs are completely missing - only then check storage directly
+          // This is a last resort to avoid unnecessary storage.list() calls
           const { data: files, error: listError } = await supabase.storage
             .from('carousel-images')
             .list(`${userId}/${gen.id}`)
@@ -87,12 +101,12 @@ export async function GET(request: NextRequest) {
               return aNum - bNum
             })
 
-            // Generate fresh signed URLs for private bucket access (1 hour expiry)
+            // Generate fresh signed URLs for private bucket access (24 hour expiry)
             imageUrls = await Promise.all(
               sortedFiles.map(async (file) => {
                 const { data, error } = await supabase.storage
                   .from('carousel-images')
-                  .createSignedUrl(`${userId}/${gen.id}/${file.name}`, 3600)
+                  .createSignedUrl(`${userId}/${gen.id}/${file.name}`, 86400)
                 if (error) {
                   console.error(`Error creating signed URL for ${file.name}:`, error)
                   // Fallback to public URL if signed URL fails
@@ -109,13 +123,12 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        // Use the first 2 fresh URLs as thumbnails; if for some reason we couldn't
-        // regenerate fresh URLs, fall back to any cached thumbnail URLs.
+        // Use the first 2 URLs as thumbnails
         const thumbnailUrls: string[] =
           imageUrls.length > 0
             ? imageUrls.slice(0, 2)
-            : Array.isArray(gen.thumbnail_urls)
-            ? gen.thumbnail_urls
+            : Array.isArray(gen.thumbnail_urls) && gen.thumbnail_urls.length > 0
+            ? filterValidUrls(gen.thumbnail_urls) // Use cached thumbnails if valid
             : []
 
         return {

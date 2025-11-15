@@ -84,10 +84,10 @@ export async function uploadImagesToStorage(
         throw uploadError
       }
 
-      // Get signed URL for private bucket access (1 hour expiry)
+      // Get signed URL for private bucket access (24 hour expiry)
       const { data: urlData, error: urlError } = await supabase.storage
         .from('carousel-images')
-        .createSignedUrl(filePath, 3600)
+        .createSignedUrl(filePath, 86400)
       
       if (urlError) {
         console.error(`Error creating signed URL for slide ${i}:`, urlError)
@@ -157,7 +157,7 @@ export async function checkImagesExist(
         const filePath = `${userId}/${generationId}/${file.name}`
         const { data: urlData, error: urlError } = await supabase.storage
           .from('carousel-images')
-          .createSignedUrl(filePath, 3600)
+          .createSignedUrl(filePath, 86400)
         
         if (urlError) {
           console.error(`Error creating signed URL for ${file.name}:`, urlError)

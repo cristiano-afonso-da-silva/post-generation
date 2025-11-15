@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const ALLOWED_HOSTS = new Set(['image.pollinations.ai'])
 
-// Use revalidate for caching - images are cached for 1 hour (3600 seconds)
-// This reduces Fast Origin Transfer by serving cached images instead of re-fetching
-export const revalidate = 3600
+// Use revalidate for caching - images are cached for 24 hours (86400 seconds)
+// This reduces egress by serving cached images instead of re-fetching from remote
+export const revalidate = 86400
 
 export async function GET(request: NextRequest) {
   const urlParam = request.nextUrl.searchParams.get('url')
@@ -35,11 +35,11 @@ export async function GET(request: NextRequest) {
 
   try {
     console.log('📡 Fetching remote image:', remoteUrl.toString())
-    // Use 'force-cache' to leverage Next.js caching and reduce Fast Origin Transfer
-    // Images are cached for the revalidate period (1 hour)
+    // Use 'force-cache' to leverage Next.js caching and reduce egress
+    // Images are cached for the revalidate period (24 hours)
     const response = await fetch(remoteUrl.toString(), {
       cache: 'force-cache',
-      next: { revalidate: 3600 }
+      next: { revalidate: 86400 }
     })
     
     console.log('📡 Remote response status:', response.status)
@@ -52,8 +52,18 @@ export async function GET(request: NextRequest) {
 
     const headers = new Headers(response.headers)
     headers.set('Access-Control-Allow-Origin', '*')
-    // Cache for 1 hour on client and CDN to reduce repeated requests
-    headers.set('Cache-Control', 'public, s-maxage=3600, max-age=3600, stale-while-revalidate=86400')
+    // Cache for 24 hours on client and CDN to reduce repeated requests and egress
+    // s-maxage: CDN cache duration (24 hours)
+    // max-age: Browser cache duration (24 hours)
+    // stale-while-revalidate: Serve stale content while revalidating (7 days)
+    headers.set('Cache-Control', 'public, s-maxage=86400, max-age=86400, stale-while-revalidate=604800')
+    
+    // Preserve ETag if present for better cache validation
+    const etag = response.headers.get('etag')
+    if (etag) {
+      headers.set('ETag', etag)
+    }
+    
     headers.delete('set-cookie')
     
     console.log('✅ Proxying image successfully (cached)')

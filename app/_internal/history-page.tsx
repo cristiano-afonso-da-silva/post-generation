@@ -283,20 +283,9 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
     }
   }, [user, authLoading, router])
 
-  // Refetch data whenever the history page is accessed or generationId changes
-  useEffect(() => {
-    if (user && !authLoading) {
-      // Refetch the generations list every time the history page is accessed
-      if (mutateGenerations) {
-        mutateGenerations()
-      }
-      
-      // If viewing a specific generation, refetch that generation too
-      if (generationId && mutateGeneration) {
-        mutateGeneration()
-      }
-    }
-  }, [user, authLoading, generationId, mutateGenerations, mutateGeneration])
+  // Note: Removed automatic refetch on mount - SWR handles caching and deduplication automatically
+  // Data will be fetched automatically when the component mounts via useSWR hooks
+  // Only refetch when explicitly needed (user actions, not page mounts)
 
   // Clear note state when generationId changes (before new generation loads)
   useEffect(() => {
