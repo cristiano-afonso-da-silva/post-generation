@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
 
     /**
      * IMPORTANT:
-     * We can’t safely use the cached `image_urls` / `thumbnail_urls` values here because
+     * We can't safely use the cached `image_urls` / `thumbnail_urls` values here because
      * they are signed URLs created when the generation was originally saved.
      * Signed URLs from Supabase Storage expire (currently after 1 hour), which caused
      * history thumbnails to frequently break and show only the "Slide 1 / Slide 2" alt text.
@@ -41,6 +41,9 @@ export async function GET(request: NextRequest) {
      * Instead, we use the cached arrays ONLY to know how many slides exist, and then
      * generate *fresh* signed URLs for each slide based on the known storage path
      * pattern: `${userId}/${generation.id}/slide-${index}.png`.
+     * 
+     * If cached URLs are missing (e.g., old generations or failed saves), we check
+     * storage directly by listing files in the generation's directory.
      */
     const generationsWithImages = await Promise.all(
       (generations || []).map(async (gen: any) => {
@@ -48,6 +51,7 @@ export async function GET(request: NextRequest) {
         let imageUrls: string[] = []
 
         if (userId && existingImageUrls.length > 0) {
+          // Use cached URLs to know how many slides exist, then generate fresh signed URLs
           imageUrls = await Promise.all(
             existingImageUrls.map(async (_url, index) => {
               const filePath = `${userId}/${gen.id}/slide-${index}.png`
@@ -69,6 +73,40 @@ export async function GET(request: NextRequest) {
               return data.signedUrl
             })
           )
+        } else if (userId) {
+          // Cached URLs are missing - check storage directly
+          const { data: files, error: listError } = await supabase.storage
+            .from('carousel-images')
+            .list(`${userId}/${gen.id}`)
+
+          if (!listError && files && files.length > 0) {
+            // Sort files by name to ensure correct order (slide-0.png, slide-1.png, etc.)
+            const sortedFiles = files.sort((a, b) => {
+              const aNum = parseInt(a.name.match(/\d+/)?.[0] || '0')
+              const bNum = parseInt(b.name.match(/\d+/)?.[0] || '0')
+              return aNum - bNum
+            })
+
+            // Generate fresh signed URLs for private bucket access (1 hour expiry)
+            imageUrls = await Promise.all(
+              sortedFiles.map(async (file) => {
+                const { data, error } = await supabase.storage
+                  .from('carousel-images')
+                  .createSignedUrl(`${userId}/${gen.id}/${file.name}`, 3600)
+                if (error) {
+                  console.error(`Error creating signed URL for ${file.name}:`, error)
+                  // Fallback to public URL if signed URL fails
+                  const { data: publicData } = supabase.storage
+                    .from('carousel-images')
+                    .getPublicUrl(`${userId}/${gen.id}/${file.name}`)
+                  return publicData.publicUrl
+                }
+                return data.signedUrl
+              })
+            )
+
+            console.log(`✅ Generation ${gen.id}: Found ${imageUrls.length} files in storage (cache was missing)`)
+          }
         }
 
         // Use the first 2 fresh URLs as thumbnails; if for some reason we couldn't
