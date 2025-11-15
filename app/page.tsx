@@ -403,7 +403,7 @@ export default function LandingPage() {
           </p>
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
             <Link
-              href={user ? "/dashboard" : "/signup"}
+              href={user ? "/dashboard" : "/desktop-only"}
               className="cta-button"
               style={{
                 display: 'inline-flex',
@@ -2144,7 +2144,7 @@ export default function LandingPage() {
             Your ideas deserve to move <span style={{ fontFamily: 'var(--font-playfair-display), serif', fontStyle: 'italic' }}>faster</span>
           </h2>
           <Link
-            href={user ? "/dashboard" : "/signup"}
+            href={user ? "/dashboard" : "/desktop-only"}
             className="cta-button"
             style={{
               display: 'inline-flex',
