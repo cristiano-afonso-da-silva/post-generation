@@ -130,7 +130,6 @@ export async function checkImagesExist(
   generationId: string,
   expectedCount: number
 ): Promise<{ exists: boolean; imageUrls?: string[]; thumbnailUrls?: string[] }> {
-  const supabase = createClientComponentClient()
   
   const { data: existingFiles, error } = await supabase.storage
     .from('carousel-images')
@@ -191,7 +190,6 @@ export async function deleteOldImages(
   userId: string,
   generationId: string
 ): Promise<void> {
-  const supabase = createClientComponentClient()
   
   const { data: oldFiles } = await supabase.storage
     .from('carousel-images')
