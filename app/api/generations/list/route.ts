@@ -124,9 +124,8 @@ export async function GET(request: NextRequest) {
             console.log(`❌ Generation ${gen.id}: No files in storage`)
           }
         }
-        }
 
-        // Use the first 2 URLs as thumbnails
+        // Use the first 2 URLs as thumbnails when no fresh images exist
         const thumbnailUrls: string[] =
           imageUrls.length > 0
             ? imageUrls.slice(0, 2)
