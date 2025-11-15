@@ -715,7 +715,7 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
             gap: '12px'
           }}
         >
-          {/* Mobile hamburger menu button */}
+          {/* Mobile hamburger menu button - now inside header */}
           {isMobile && onOpenSidebar && (
             <button
               onClick={onOpenSidebar}
@@ -728,20 +728,10 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
                 alignItems: 'center',
                 justifyContent: 'center',
                 borderRadius: '8px',
-                transition: 'background 0.2s ease',
                 flexShrink: 0,
-                position: 'fixed',
-                top: '16px',
-                left: '16px',
-                zIndex: 1001,
                 width: '40px',
-                height: '40px'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#f5f5f5'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgb(245, 245, 245)'
+                height: '40px',
+                WebkitTapHighlightColor: 'transparent'
               }}
             >
               <Menu size={20} color="#000000" />
@@ -758,7 +748,7 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
-              paddingLeft: isMobile ? '56px' : 0
+              paddingLeft: 0
             }}
           >
             {generation?.idea_title || note?.ideaTitle || 'Carousel'}
@@ -782,11 +772,23 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
               marginLeft: '12px'
             }}
             onMouseEnter={(e) => {
-              if (!isDownloadDisabled) {
+              // Only apply hover on devices that support hover (not touch devices)
+              if (!isDownloadDisabled && !isMobile && window.matchMedia('(hover: hover)').matches) {
                 e.currentTarget.style.background = '#f5f5f5'
               }
             }}
             onMouseLeave={(e) => {
+              if (!isDownloadDisabled && !isMobile && window.matchMedia('(hover: hover)').matches) {
+                e.currentTarget.style.background = 'transparent'
+              }
+            }}
+            onTouchStart={(e) => {
+              // Prevent hover state on touch devices
+              if (!isDownloadDisabled) {
+                e.currentTarget.style.background = 'transparent'
+              }
+            }}
+            onTouchEnd={(e) => {
               if (!isDownloadDisabled) {
                 e.currentTarget.style.background = 'transparent'
               }
@@ -1434,6 +1436,12 @@ function HistoryPageContent({ onLoadGeneration, onOpenSidebar }: HistoryPageProp
           }
           100% {
             background-position: -200% 0;
+          }
+        }
+        /* Prevent hover states on touch devices */
+        @media (hover: none) {
+          button {
+            -webkit-tap-highlight-color: transparent;
           }
         }
       `}</style>

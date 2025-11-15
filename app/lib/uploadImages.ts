@@ -2,7 +2,7 @@
  * Upload images directly to Supabase Storage from the client
  * This bypasses API route body size limits by uploading directly
  */
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { supabase } from './supabase'
 
 export interface UploadImagesResult {
   imageUrls: string[]
@@ -37,33 +37,21 @@ export async function uploadImagesToStorage(
   generationId: string,
   imageDataUrls: string[]
 ): Promise<UploadImagesResult> {
-  const supabase = createClientComponentClient()
-  
   // Verify user is authenticated and matches the userId
-  // Try getSession first (faster, uses cookies), then getUser as fallback
-  let user: any = null
-  let authError: any = null
-  
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-  
-  if (session && session.user) {
-    user = session.user
-  } else {
-    // If session check fails, try getUser as fallback
-    const { data: { user: fetchedUser }, error: getUserError } = await supabase.auth.getUser()
-    user = fetchedUser
-    authError = getUserError || sessionError
-  }
-  
+  // Uses the same Supabase client as the rest of the app (AuthContext), so sessions work in production
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
   if (authError || !user) {
-    const errorMsg = authError?.message || sessionError?.message || 'Auth session missing!'
-    throw new Error(`Authentication required: ${errorMsg}`)
+    throw new Error(`Authentication required: ${authError?.message || 'Not authenticated'}`)
   }
-  
+
   if (user.id !== userId) {
     throw new Error(`User ID mismatch: authenticated as ${user.id}, but trying to upload for ${userId}`)
   }
-  
+
   console.log(`⚡ Starting direct upload of ${imageDataUrls.length} images to Supabase Storage...`)
   console.log(`   👤 Authenticated as: ${user.id}`)
   console.log(`   📁 Path prefix: ${userId}/${generationId}`)
