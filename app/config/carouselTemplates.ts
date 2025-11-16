@@ -65,7 +65,8 @@ export interface CarouselTemplate {
   background?:
     | {
         type: 'image'
-        src: string
+        src?: string
+        prompt?: string  // DALL-E prompt for generating background image
       }
     | {
         type: 'color'
@@ -169,6 +170,15 @@ export interface CarouselTemplate {
     hook?: { contentMaxWidth?: number; gapTitleToContent?: number }
     body?: { contentMaxWidth?: number }
     outro?: { contentMaxWidth?: number }
+  }
+  
+  // Safe area configuration (fixed margins to prevent content cutoff)
+  safeArea?: {
+    enabled: boolean
+    top: number
+    bottom: number
+    left: number
+    right: number
   }
 }
 
