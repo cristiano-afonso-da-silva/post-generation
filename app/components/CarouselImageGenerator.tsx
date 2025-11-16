@@ -1309,19 +1309,27 @@ function CarouselImageGeneratorComponent({
     // Draw template background or fallback to white
     const backgroundConfig = template.background
     if (backgroundConfig?.type === 'image') {
-      try {
-        const bgLoadStart = performance.now()
-        console.log(`      🖼️ Loading background image: ${backgroundConfig.src}`)
-        const bgImage = await loadImage(backgroundConfig.src)
-        console.log(`      ⏱️ Background image load took: ${(performance.now() - bgLoadStart).toFixed(2)}ms`)
-        const scale = Math.max(width / bgImage.width, height / bgImage.height)
-        const scaledWidth = bgImage.width * scale
-        const scaledHeight = bgImage.height * scale
-        const offsetX = (width - scaledWidth) / 2
-        const offsetY = (height - scaledHeight) / 2
-        ctx.drawImage(bgImage, offsetX, offsetY, scaledWidth, scaledHeight)
-      } catch (error) {
-        console.error(`Unable to load template background ${backgroundConfig.src}:`, error)
+      // Only load image if src is provided (prompt-based backgrounds need to be generated separately)
+      if (backgroundConfig.src) {
+        try {
+          const bgLoadStart = performance.now()
+          console.log(`      🖼️ Loading background image: ${backgroundConfig.src}`)
+          const bgImage = await loadImage(backgroundConfig.src)
+          console.log(`      ⏱️ Background image load took: ${(performance.now() - bgLoadStart).toFixed(2)}ms`)
+          const scale = Math.max(width / bgImage.width, height / bgImage.height)
+          const scaledWidth = bgImage.width * scale
+          const scaledHeight = bgImage.height * scale
+          const offsetX = (width - scaledWidth) / 2
+          const offsetY = (height - scaledHeight) / 2
+          ctx.drawImage(bgImage, offsetX, offsetY, scaledWidth, scaledHeight)
+        } catch (error) {
+          console.error(`Unable to load template background ${backgroundConfig.src}:`, error)
+          ctx.fillStyle = '#FFFFFF'
+          ctx.fillRect(0, 0, width, height)
+        }
+      } else {
+        // Image background with prompt but no src - fallback to white (will be generated later)
+        console.log(`      ⚠️ Background image prompt provided but no src: ${backgroundConfig.prompt || 'N/A'}`)
         ctx.fillStyle = '#FFFFFF'
         ctx.fillRect(0, 0, width, height)
       }
