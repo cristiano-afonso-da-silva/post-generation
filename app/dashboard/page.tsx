@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useMobile } from '../hooks/useMobile'
 import { Menu } from 'lucide-react'
+import { initializeTemplateCache } from '../config/carouselTemplates'
 
 // Lazy load the heavy components
 import dynamic from 'next/dynamic'
@@ -13,11 +14,12 @@ import dynamic from 'next/dynamic'
 const CreateNewPage = dynamic(() => import('../_internal/create-page'), { ssr: false })
 const HistoryPage = dynamic(() => import('../_internal/history-page'), { ssr: false })
 const PostPage = dynamic(() => import('../_internal/post-page'), { ssr: false })
+const GenerateTemplatePage = dynamic(() => import('../_internal/generate-template-page'), { ssr: false })
 
 function DashboardView() {
   const searchParams = useSearchParams()
-  const view = (searchParams.get('view') as 'create' | 'history' | 'post') || 'create'
-  const [activeView, setActiveView] = useState<'create' | 'history' | 'post'>(view)
+  const view = (searchParams.get('view') as 'create' | 'history' | 'post' | 'generate-template') || 'create'
+  const [activeView, setActiveView] = useState<'create' | 'history' | 'post' | 'generate-template'>(view)
   const [selectedGenerationId, setSelectedGenerationId] = useState<string | null>(null)
   const { user, loading } = useAuth()
   const router = useRouter()
@@ -42,6 +44,15 @@ function DashboardView() {
     }
   }, [user, loading, router])
 
+  // Initialize custom templates cache when user is loaded
+  useEffect(() => {
+    if (user?.id) {
+      initializeTemplateCache(user.id).catch(error => {
+        console.error('Failed to initialize template cache:', error)
+      })
+    }
+  }, [user?.id])
+
   useEffect(() => {
     setActiveView(view)
     const id = searchParams.get('id')
@@ -50,7 +61,7 @@ function DashboardView() {
     }
   }, [view, searchParams])
 
-  const handleViewChange = (newView: 'create' | 'history' | 'post') => {
+  const handleViewChange = (newView: 'create' | 'history' | 'post' | 'generate-template') => {
     // Check if navigating away from create with unsaved work
     if (
       activeView === 'create' &&
@@ -229,6 +240,11 @@ function DashboardView() {
         {activeView === 'post' && (
           <div style={{ height: '100%', overflow: 'auto' }}>
             <PostPage />
+          </div>
+        )}
+        {activeView === 'generate-template' && (
+          <div style={{ height: '100%', overflow: 'auto' }}>
+            <GenerateTemplatePage />
           </div>
         )}
       </div>

@@ -3,13 +3,13 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
-import { SquarePen, History, PanelRightOpen, Menu, Send } from 'lucide-react'
+import { SquarePen, History, PanelRightOpen, Menu, Send, Sparkles } from 'lucide-react'
 import Image from 'next/image'
 import AccountModal from './AccountModal'
 
 interface SidebarProps {
-  activeView: 'create' | 'history' | 'post'
-  onViewChange: (view: 'create' | 'history' | 'post') => void
+  activeView: 'create' | 'history' | 'post' | 'generate-template'
+  onViewChange: (view: 'create' | 'history' | 'post' | 'generate-template') => void
   isCollapsed?: boolean
   isMobile?: boolean
   isMobileOpen?: boolean
@@ -27,6 +27,7 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
     { id: 'create' as const, label: 'Create', icon: SquarePen },
     { id: 'history' as const, label: 'History', icon: History },
     { id: 'post' as const, label: 'Post', icon: Send },
+    { id: 'generate-template' as const, label: 'Generate Template', icon: Sparkles },
   ]
 
   // On mobile, always show full width sidebar (never collapsed)

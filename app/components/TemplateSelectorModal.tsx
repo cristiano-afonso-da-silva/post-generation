@@ -2,15 +2,22 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { X } from 'lucide-react'
-import { getTemplateOptions } from '../config/carouselTemplates'
+import { X, Sparkles } from 'lucide-react'
+import { getTemplateOptions, fetchCustomTemplates } from '../config/carouselTemplates'
 import { useMobile } from '../hooks/useMobile'
+import { useAuth } from '../context/AuthContext'
 
 interface TemplateSelectorModalProps {
   isOpen: boolean
   onClose: () => void
   selectedTemplateId: string
   onSelectTemplate: (templateId: string) => void
+}
+
+interface TemplateOption {
+  id: string
+  name: string
+  isCustom?: boolean
 }
 
 export default function TemplateSelectorModal({
@@ -20,9 +27,11 @@ export default function TemplateSelectorModal({
   onSelectTemplate
 }: TemplateSelectorModalProps) {
   const isMobile = useMobile()
+  const { user } = useAuth()
   const [selectedPreviewIndex, setSelectedPreviewIndex] = useState(0)
   const [localSelectedId, setLocalSelectedId] = useState(selectedTemplateId)
-  const templates = getTemplateOptions()
+  const [templates, setTemplates] = useState<TemplateOption[]>(getTemplateOptions())
+  const [isLoadingCustom, setIsLoadingCustom] = useState(false)
 
   // Reset preview index and sync local selection when modal opens
   useEffect(() => {
@@ -31,6 +40,32 @@ export default function TemplateSelectorModal({
       setLocalSelectedId(selectedTemplateId)
     }
   }, [isOpen, selectedTemplateId])
+
+  // Fetch custom templates when modal opens
+  useEffect(() => {
+    if (isOpen && user?.id) {
+      const loadCustomTemplates = async () => {
+        setIsLoadingCustom(true)
+        try {
+          const customTemplates = await fetchCustomTemplates(user.id)
+          const customOptions = customTemplates.map(t => ({
+            id: t.id,
+            name: t.name,
+            isCustom: true
+          }))
+          setTemplates([...getTemplateOptions(), ...customOptions])
+        } catch (error) {
+          console.error('Error loading custom templates:', error)
+        } finally {
+          setIsLoadingCustom(false)
+        }
+      }
+      loadCustomTemplates()
+    } else if (isOpen) {
+      // If no user, just show default templates
+      setTemplates(getTemplateOptions())
+    }
+  }, [isOpen, user?.id])
 
   if (!isOpen) return null
 
@@ -150,8 +185,10 @@ export default function TemplateSelectorModal({
           >
             {templates.map((template) => {
               const isSelected = template.id === localSelectedId
+              const isCustom = template.isCustom || false
               
               // Get all preview images (t1-t5.png)
+              // Custom templates won't have preview images, so we'll show a placeholder
               const previewImages = []
               for (let i = 1; i <= 5; i++) {
                 previewImages.push(`/templates/${template.id}/t${i}.png`)
@@ -189,76 +226,114 @@ export default function TemplateSelectorModal({
                       borderBottom: '1px solid #e5e5e5',
                       fontSize: '13px',
                       fontWeight: '500',
-                      color: '#000000'
+                      color: '#000000',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
                     }}
                   >
+                    {isCustom && <Sparkles size={14} color="#ffbd59" />}
                     {template.name}
                   </div>
 
                   {/* 5 preview images in a horizontal row - no gaps, fills container */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      gap: 0,
-                      padding: 0,
-                      background: '#fafafa',
-                      borderRadius: '0 0 8px 8px',
-                      overflow: 'hidden',
-                      position: 'relative',
-                      width: '100%',
-                      paddingBottom: '25%' // 20:5 aspect ratio (5/20 = 0.25)
-                    }}
-                  >
-                    {previewImages.map((imagePath, index) => (
-                      <div
-                        key={index}
-                        style={{
-                          position: 'absolute',
-                          left: `${(index / 5) * 100}%`,
-                          width: '20%', // Each image takes 1/5 of width
-                          height: '100%',
-                          background: '#ffffff',
-                          borderRadius: 0,
-                          overflow: 'hidden',
-                          border: 'none'
-                        }}
-                      >
-                        <Image
-                          src={imagePath}
-                          alt={`${template.name} slide ${index + 1}`}
-                          fill
-                          style={{
-                            objectFit: 'cover',
-                            width: '100%',
-                            height: '100%'
-                          }}
-                          sizes="(max-width: 768px) 20vw, 15vw"
-                          onError={(e) => {
-                            // Show slide number if image doesn't exist
-                            e.currentTarget.style.display = 'none'
-                            const parent = e.currentTarget.parentElement
-                            if (parent) {
-                              parent.style.background = '#f5f5f5'
-                              parent.innerHTML = `
-                                <div style="
-                                  position: absolute;
-                                  top: 50%;
-                                  left: 50%;
-                                  transform: translate(-50%, -50%);
-                                  color: #999;
-                                  font-size: 12px;
-                                  text-align: center;
-                                  font-weight: 500;
-                                ">
-                                  ${index + 1}
-                                </div>
-                              `
-                            }
-                          }}
-                        />
+                  {isCustom ? (
+                    // Show placeholder for custom templates
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '48px',
+                        background: 'linear-gradient(135deg, #fafafa 0%, #f0f0f0 100%)',
+                        borderRadius: '0 0 8px 8px',
+                        minHeight: '120px'
+                      }}
+                    >
+                      <div style={{
+                        textAlign: 'center',
+                        color: '#999999'
+                      }}>
+                        <Sparkles size={32} color="#ffbd59" style={{ marginBottom: '8px' }} />
+                        <div style={{
+                          fontSize: '12px',
+                          fontWeight: '500'
+                        }}>
+                          Custom Template
+                        </div>
+                        <div style={{
+                          fontSize: '11px',
+                          marginTop: '4px'
+                        }}>
+                          AI Generated
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: 0,
+                        padding: 0,
+                        background: '#fafafa',
+                        borderRadius: '0 0 8px 8px',
+                        overflow: 'hidden',
+                        position: 'relative',
+                        width: '100%',
+                        paddingBottom: '25%' // 20:5 aspect ratio (5/20 = 0.25)
+                      }}
+                    >
+                      {previewImages.map((imagePath, index) => (
+                        <div
+                          key={index}
+                          style={{
+                            position: 'absolute',
+                            left: `${(index / 5) * 100}%`,
+                            width: '20%', // Each image takes 1/5 of width
+                            height: '100%',
+                            background: '#ffffff',
+                            borderRadius: 0,
+                            overflow: 'hidden',
+                            border: 'none'
+                          }}
+                        >
+                          <Image
+                            src={imagePath}
+                            alt={`${template.name} slide ${index + 1}`}
+                            fill
+                            style={{
+                              objectFit: 'cover',
+                              width: '100%',
+                              height: '100%'
+                            }}
+                            sizes="(max-width: 768px) 20vw, 15vw"
+                            onError={(e) => {
+                              // Show slide number if image doesn't exist
+                              e.currentTarget.style.display = 'none'
+                              const parent = e.currentTarget.parentElement
+                              if (parent) {
+                                parent.style.background = '#f5f5f5'
+                                parent.innerHTML = `
+                                  <div style="
+                                    position: absolute;
+                                    top: 50%;
+                                    left: 50%;
+                                    transform: translate(-50%, -50%);
+                                    color: #999;
+                                    font-size: 12px;
+                                    text-align: center;
+                                    font-weight: 500;
+                                  ">
+                                    ${index + 1}
+                                  </div>
+                                `
+                              }
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )
             })}

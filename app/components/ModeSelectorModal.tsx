@@ -35,20 +35,13 @@ const MODE_OPTIONS: ModeOption[] = [
     includeImages: false,
     useAIImages: false
   },
-  // {
-  //   id: 'text-image',
-  //   label: 'Text + Image',
-  //   credits: 2,
-  //   includeImages: true,
-  //   useAIImages: false
-  // },
   {
-    id: 'text-ai-animated',
-    label: 'Text + AI Animated Image',
+    id: 'text-image',
+    label: 'Text + Image',
     credits: 2,
     includeImages: true,
-    useAIImages: true,
-    aiImageStyle: 'animated'
+    useAIImages: true,  // Use AI images, style determined by template
+    aiImageStyle: 'animated'  // Default, but template imagePrompt overrides this
   }
 ]
 
@@ -65,9 +58,7 @@ export default function ModeSelectorDropdown({
   const getCurrentModeId = () => {
     return !currentMode.includeImages
       ? 'text'
-      : !currentMode.useAIImages
-      ? 'text-image'
-      : 'text-ai-animated'
+      : 'text-image'
   }
 
   // Close dropdown when clicking outside

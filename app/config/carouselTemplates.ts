@@ -117,6 +117,58 @@ export interface CarouselTemplate {
     showTopic: boolean
     showSubtitle: boolean
     showCTA: boolean
+    useImage?: boolean  // Whether hook slide should display an image (above title/content)
+  }
+  textColor?: string  // Template-specific text color (overrides color theme text color)
+  imagePrompt?: string  // Template-specific image generation prompt (use {input} as placeholder for content)
+  hookImagePrompt?: string  // Template-specific image prompt for hook slide (use {input} as placeholder for hook content)
+  
+  // Layout & spacing controls
+  layout?: {
+    canvasWidth?: number      // default 1080
+    canvasHeight?: number     // default 1350
+    contentMaxWidth?: number  // e.g. 820 – max text column width
+    verticalAlign?: 'top' | 'center' | 'bottom'
+    hookPadding?: { top: number; right: number; bottom: number; left: number }
+    titlePadding?: { top: number; right: number; bottom: number; left: number }
+    contentPadding?: { top: number; right: number; bottom: number; left: number }
+    gapTitleToContent?: number // vertical space between title + paragraph
+  }
+  
+  // Image placement controls
+  imageLayout?: {
+    position?: 'top' | 'bottom' | 'center'      // relative to text block
+    maxHeightRatio?: number                     // e.g. 0.35 of canvas height
+    marginBottom?: number                    // space between image and text
+    marginTop?: number                         // for bottom images
+  }
+  
+  // Footer configuration
+  footer?: {
+    enabled: boolean
+    height?: number              // e.g. 80 (required if enabled is true)
+    lineColor?: string           // separator line color
+    lineThickness?: number       // e.g. 2
+    paddingX?: number            // left/right padding inside footer
+    leftText?: string            // e.g. '@postmynote' (can be overridden by user input)
+    rightText?: string           // e.g. 'postmynote.app' (can be overridden by user input)
+    fontRole?: 'content' | 'title' | 'hook' // reuse an existing font role
+    fontSize?: number            // Optional: override font size for footer text (smaller than fontRole default)
+  }
+  
+  // Per-role colors (optional)
+  roleColors?: {
+    hook?: string
+    title?: string
+    content?: string
+    cta?: string
+  }
+  
+  // Per-slide-type overrides (optional)
+  perSlideType?: {
+    hook?: { contentMaxWidth?: number; gapTitleToContent?: number }
+    body?: { contentMaxWidth?: number }
+    outro?: { contentMaxWidth?: number }
   }
 }
 
@@ -174,6 +226,21 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
         content: 'left',
         cta: 'left'
       }
+    },
+    textColor: '#000000',  // Black text for light background
+    imagePrompt: 'modern clean photography of {input}, professional lighting, vibrant colors, high quality, 16:9 aspect ratio',  // Classic photo style
+    layout: {
+      contentMaxWidth: 900,
+      verticalAlign: 'center',
+      gapTitleToContent: 40
+    },
+    imageLayout: {
+      position: 'top',
+      maxHeightRatio: 0.4,
+      marginBottom: 40
+    },
+    footer: {
+      enabled: false
     }
   },
   {
@@ -225,6 +292,21 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
         content: 'center',
         cta: 'center'
       }
+    },
+    textColor: '#000000',  // Black text for light background
+    imagePrompt: 'elegant artistic photography of {input}, soft natural lighting, warm tones, sophisticated composition, fine art style, 16:9 aspect ratio',  // Elegant artistic style
+    layout: {
+      contentMaxWidth: 850,
+      verticalAlign: 'center',
+      gapTitleToContent: 50
+    },
+    imageLayout: {
+      position: 'top',
+      maxHeightRatio: 0.35,
+      marginBottom: 50
+    },
+    footer: {
+      enabled: false
     }
   },
   {
@@ -334,18 +416,204 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
       showTopic: true,
       showSubtitle: true,
       showCTA: true
+    },
+    textColor: '#000000',  // Black text for light background
+    imagePrompt: 'contemporary minimalist photography of {input}, clean lines, bright natural lighting, modern aesthetic, geometric composition, 16:9 aspect ratio',  // Modern minimalist style
+    layout: {
+      contentMaxWidth: 820,
+      verticalAlign: 'center',
+      gapTitleToContent: 30
+    },
+    imageLayout: {
+      position: 'top',
+      maxHeightRatio: 0.3,
+      marginBottom: 30
+    },
+    footer: {
+      enabled: false
+    }
+  },
+  // NEW: Template 4 – Dark Retention-style
+  {
+    id: 'template4',
+    name: 'Template 4 (Dark Story)',
+    fonts: {
+      // Smaller hook title for Template 4
+      hook: {
+        family: 'OpenSauce',
+        file: '/templates/template3/fonts/open-sauce.one-medium.ttf',
+        weight: '500',
+        style: 'normal',
+        cssFont: '500 70px OpenSauce, sans-serif',
+        lineHeight: 84,
+        size: 70
+      },
+      // Used for slide titles (e.g. "You're Speaking In Jargon.")
+      title: {
+        family: 'OpenSauce',
+        file: '/templates/template3/fonts/open-sauce.one-medium.ttf',
+        weight: '500',
+        style: 'normal',
+        cssFont: '500 88px OpenSauce, sans-serif',
+        lineHeight: 104,
+        size: 88
+      },
+      // Used for the explanation paragraph under the title
+      content: {
+        family: 'OpenSauce',
+        file: '/templates/template3/fonts/open-sauce.one-medium.ttf',
+        weight: '500',
+        style: 'normal',
+        cssFont: '500 50px OpenSauce, sans-serif',
+        lineHeight: 70,
+        size: 50
+      }
+    },
+    background: {
+      type: 'color',
+      value: '#000000' // pure black background
+    },
+    styles: {
+      letterSpacing: {
+        hook: -1,
+        title: -0.5,
+        content: 0,
+        cta: 0
+      },
+      textAlign: {
+        hook: 'center',
+        title: 'center',
+        content: 'center',
+        cta: 'center'
+      }
+    },
+    hookLayout: {
+      showTopic: false,
+      showSubtitle: false,
+      showCTA: false,
+      useImage: true  // Hook slide should display an image above title/content
+    },
+    textColor: '#FFFFFF',  // White text for black background
+    imagePrompt: 'a white line drawing {input}, with #000000 black background',  // Template-specific image style for middle slides
+    hookImagePrompt: 'a white line drawing illustration of {input}, vintage woodcut style, black background #000000, high contrast, detailed',  // Template-specific image style for hook slide
+    layout: {
+      contentMaxWidth: 820,  // Narrow centered column like Retentioned
+      verticalAlign: 'top',  // Start from top, not center
+      gapTitleToContent: 30,  // Space between title and content
+      contentPadding: { top: 0, right: 48, bottom: 0, left: 48 },
+      hookPadding: { top: 60, right: 48, bottom: 0, left: 48 },  // Top padding for hook slide
+      titlePadding: { top: 0, right: 48, bottom: 0, left: 48 }
+    },
+    imageLayout: {
+      position: 'top',  // Image above title/content
+      maxHeightRatio: 0.42,  // 42% of canvas height for larger images
+      marginBottom: 60  // Space between image and title
+    },
+    footer: {
+      enabled: true,
+      height: 80,
+      lineColor: '#FFFFFF',
+      lineThickness: 2,
+      paddingX: 48,
+      leftText: '@postmynote',  // Default, can be overridden by user input
+      rightText: 'postmynote.app',  // Default, can be overridden by user input
+      fontRole: 'content',
+      fontSize: 28  // Smaller footer text (content font is 50px, footer will be 28px)
     }
   }
   // Add more templates here in the future
 ]
 
-// Helper function to get template by ID
+// Helper function to get template by ID (supports custom templates)
+export async function getCarouselTemplateAsync(id: string, userId?: string): Promise<CarouselTemplate> {
+  // First check if it's a default template
+  const defaultTemplate = CAROUSEL_TEMPLATES.find(t => t.id === id)
+  if (defaultTemplate) {
+    return defaultTemplate
+  }
+
+  // If not found and ID starts with 'custom_', try fetching custom templates
+  if (id.startsWith('custom_') && userId) {
+    const customTemplates = await fetchCustomTemplates(userId)
+    const customTemplate = customTemplates.find(t => t.id === id)
+    if (customTemplate) {
+      return customTemplate
+    }
+  }
+
+  // Fallback to first default template
+  return CAROUSEL_TEMPLATES[0]
+}
+
+// Synchronous version that checks cache for custom templates
 export function getCarouselTemplate(id: string): CarouselTemplate {
-  return CAROUSEL_TEMPLATES.find(t => t.id === id) || CAROUSEL_TEMPLATES[0]
+  // First check default templates
+  const defaultTemplate = CAROUSEL_TEMPLATES.find(t => t.id === id)
+  if (defaultTemplate) {
+    return defaultTemplate
+  }
+  
+  // Check cached custom templates
+  const customTemplate = customTemplatesCache.find(t => t.id === id)
+  if (customTemplate) {
+    return customTemplate
+  }
+  
+  // Fallback to first default template
+  return CAROUSEL_TEMPLATES[0]
 }
 
 // Helper function to get all template IDs and names for dropdown
 export function getTemplateOptions(): { id: string; name: string }[] {
   return CAROUSEL_TEMPLATES.map(t => ({ id: t.id, name: t.name }))
+}
+
+// Cache for custom templates
+let customTemplatesCache: CarouselTemplate[] = []
+let cacheInitialized = false
+
+// Helper function to fetch custom templates for a user
+export async function fetchCustomTemplates(userId: string): Promise<CarouselTemplate[]> {
+  try {
+    if (!userId) {
+      console.error('Failed to fetch custom templates: userId is required')
+      return []
+    }
+    
+    const response = await fetch(`/api/templates/list?userId=${encodeURIComponent(userId)}`)
+    if (!response.ok) {
+      console.error('Failed to fetch custom templates:', response.status, response.statusText)
+      return []
+    }
+    const data = await response.json()
+    const templates = data.templates || []
+    
+    // Update cache
+    customTemplatesCache = templates
+    cacheInitialized = true
+    
+    return templates
+  } catch (error) {
+    console.error('Error fetching custom templates:', error)
+    return []
+  }
+}
+
+// Helper to get cached custom templates
+export function getCachedCustomTemplates(): CarouselTemplate[] {
+  return customTemplatesCache
+}
+
+// Helper to initialize cache (call this on app load)
+export async function initializeTemplateCache(userId: string): Promise<void> {
+  if (!cacheInitialized && userId) {
+    await fetchCustomTemplates(userId)
+  }
+}
+
+// Helper function to get all templates including custom ones
+export async function getAllTemplates(userId: string): Promise<CarouselTemplate[]> {
+  const customTemplates = await fetchCustomTemplates(userId)
+  return [...CAROUSEL_TEMPLATES, ...customTemplates]
 }
 

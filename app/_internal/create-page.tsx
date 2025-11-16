@@ -6,7 +6,7 @@ import { ArrowUp, ChevronDown } from 'lucide-react'
 import '../globals.css'
 import CarouselImageGenerator from '../components/CarouselImageGenerator'
 import { COLOR_THEMES } from '../config/carouselThemes'
-import { getTemplateOptions } from '../config/carouselTemplates'
+import { getTemplateOptions, getCarouselTemplate } from '../config/carouselTemplates'
 import { useAuth } from '../context/AuthContext'
 import { useGeneration } from '../hooks/useGenerations'
 import { useMobile } from '../hooks/useMobile'
@@ -51,6 +51,8 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
   
   // Core state
   const [accountDescription, setAccountDescription] = useState('')
+  const [accountName, setAccountName] = useState('')  // For footer (e.g., '@postmynote')
+  const [website, setWebsite] = useState('')  // For footer (e.g., 'postmynote.app')
   const [ideas, setIdeas] = useState<string[]>([])
   const [selectedIdea, setSelectedIdea] = useState<string | null>(null)
   const [note, setNote] = useState<Note | null>(null) // Only used for loading existing generations
@@ -103,6 +105,7 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
 
   const hasInitializedRef = useRef(false)
   const prevColorThemeIdRef = useRef(colorThemeId)
+  const prevTemplateIdRef = useRef(templateId)
 
   // Check for unsaved work
   const hasUnsavedWork = Boolean(
@@ -126,6 +129,28 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
     if (!user || authLoading || hasInitializedRef.current) return
     hasInitializedRef.current = true
     setColorThemeId('purple-black')
+    
+    // Load template from localStorage if available
+    try {
+      const savedTemplateId = localStorage.getItem('postGeneration_templateId')
+      if (savedTemplateId) {
+        setTemplateId(savedTemplateId)
+        prevTemplateIdRef.current = savedTemplateId
+      }
+      
+      // Load account name and website from localStorage
+      const savedAccountName = localStorage.getItem('postGeneration_accountName')
+      if (savedAccountName) {
+        setAccountName(savedAccountName)
+      }
+      
+      const savedWebsite = localStorage.getItem('postGeneration_website')
+      if (savedWebsite) {
+        setWebsite(savedWebsite)
+      }
+    } catch (error) {
+      console.error('Error loading from localStorage:', error)
+    }
   }, [user, authLoading])
 
   // Auto-focus textarea when page loads
@@ -150,6 +175,19 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
       prevColorThemeIdRef.current = colorThemeId
     }
   }, [colorThemeId])
+
+  // Clear canvas images cache when template changes to force regeneration
+  useEffect(() => {
+    if (prevTemplateIdRef.current !== templateId) {
+      try {
+        localStorage.removeItem('postGeneration_canvasImages')
+        console.log('📐 Template changed, clearing canvas cache')
+      } catch (error) {
+        console.error('Error clearing canvas cache:', error)
+      }
+      prevTemplateIdRef.current = templateId
+    }
+  }, [templateId])
 
   // Rotate rendering messages every 10 seconds when in rendering phase (only for image modes)
   useEffect(() => {
@@ -316,7 +354,8 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
           accountDescription: accountDescription.trim(),
           includeImages: includeImages,
           useAIImages: useAIImages,
-          aiImageStyle: aiImageStyle
+          aiImageStyle: aiImageStyle,
+          templateId: templateId
         })
       })
 
@@ -558,6 +597,8 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
             ideaIndex={selectedIdea ? ideas.findIndex(idea => idea === selectedIdea) + 1 : null}
             caption={pendingNote.caption || ''}
             accountDescription={accountDescription}
+            accountName={accountName}
+            website={website}
             includeImages={includeImages}
             useAIImages={useAIImages}
             aiImageStyle={aiImageStyle}
@@ -631,10 +672,102 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
             <p style={{
               fontSize: '16px',
               color: '#666666',
-              marginBottom: '48px',
+              marginBottom: '32px',
             }}>
               Enter your idea below to get started
             </p>
+            
+            {/* Account Name and Website Inputs */}
+            <div style={{
+              width: '100%',
+              display: 'flex',
+              gap: '12px',
+              marginBottom: '24px',
+            }}>
+              <div style={{ flex: 1 }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  color: '#666666',
+                  marginBottom: '6px',
+                }}>
+                  Account Name (for footer)
+                </label>
+                <input
+                  type="text"
+                  value={accountName}
+                  onChange={(e) => {
+                    setAccountName(e.target.value)
+                    try {
+                      localStorage.setItem('postGeneration_accountName', e.target.value)
+                    } catch (error) {
+                      console.error('Error saving account name:', error)
+                    }
+                  }}
+                  placeholder="@yourhandle"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    fontSize: '14px',
+                    color: '#333333',
+                    background: '#ffffff',
+                    border: '1px solid #e5e5e5',
+                    borderRadius: '8px',
+                    outline: 'none',
+                    fontFamily: 'inherit',
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = '#cccccc'
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = '#e5e5e5'
+                  }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  color: '#666666',
+                  marginBottom: '6px',
+                }}>
+                  Website (for footer)
+                </label>
+                <input
+                  type="text"
+                  value={website}
+                  onChange={(e) => {
+                    setWebsite(e.target.value)
+                    try {
+                      localStorage.setItem('postGeneration_website', e.target.value)
+                    } catch (error) {
+                      console.error('Error saving website:', error)
+                    }
+                  }}
+                  placeholder="yourwebsite.com"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    fontSize: '14px',
+                    color: '#333333',
+                    background: '#ffffff',
+                    border: '1px solid #e5e5e5',
+                    borderRadius: '8px',
+                    outline: 'none',
+                    fontFamily: 'inherit',
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = '#cccccc'
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = '#e5e5e5'
+                  }}
+                />
+              </div>
+            </div>
+            
             {/* Textarea Input with Action Bar */}
             <div style={{
               width: '100%',
@@ -695,6 +828,45 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
                   gap: '8px',
                   alignItems: 'center',
                 }}>
+                  {/* Template Selector Button */}
+                  <button
+                    onClick={() => setShowTemplateModal(true)}
+                    disabled={loadingIdeas || loadingNote}
+                    style={{
+                      height: '32px',
+                      padding: '0 12px',
+                      borderRadius: '6px',
+                      border: '1px solid #e5e5e5',
+                      background: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      cursor: loadingIdeas || loadingNote ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s ease',
+                      opacity: loadingIdeas || loadingNote ? 0.5 : 1,
+                      whiteSpace: 'nowrap',
+                      width: 'fit-content'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!loadingIdeas && !loadingNote) {
+                        e.currentTarget.style.background = '#f5f5f5'
+                        e.currentTarget.style.borderColor = '#d0d0d0'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!loadingIdeas && !loadingNote) {
+                        e.currentTarget.style.background = '#ffffff'
+                        e.currentTarget.style.borderColor = '#e5e5e5'
+                      }
+                    }}
+                    title="Select Template"
+                  >
+                    <span style={{ fontSize: '14px', fontWeight: '500', color: '#000000' }}>
+                      {getCarouselTemplate(templateId).name}
+                    </span>
+                    <ChevronDown size={16} color="#666666" />
+                  </button>
+                  
                   {/* Mode Selector Button */}
                   <div style={{ position: 'relative' }}>
                     <button
@@ -733,10 +905,8 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
                       <span style={{ fontSize: '14px', fontWeight: '500', color: '#000000', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         {!includeImages ? (
                           <>Text</>
-                        ) : !useAIImages ? (
-                          <>Text + Image</>
                         ) : (
-                          <>Text + AI Animated Image</>
+                          <>Text + Image</>
                         )}
                       </span>
                       <ChevronDown size={16} color="#666666" />
@@ -1162,7 +1332,14 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
           isOpen={showTemplateModal}
           onClose={() => setShowTemplateModal(false)}
           selectedTemplateId={templateId}
-          onSelectTemplate={(id) => setTemplateId(id)}
+          onSelectTemplate={(id) => {
+            setTemplateId(id)
+            try {
+              localStorage.setItem('postGeneration_templateId', id)
+            } catch (error) {
+              console.error('Error saving template to localStorage:', error)
+            }
+          }}
         />
       )}
 

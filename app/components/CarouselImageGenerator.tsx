@@ -105,6 +105,8 @@ interface Props {
   templateId?: string
   colorThemeId?: string
   accountDescription?: string
+  accountName?: string  // For footer (e.g., '@postmynote')
+  website?: string  // For footer (e.g., 'postmynote.app')
   caption?: string
   includeImages?: boolean
   useAIImages?: boolean
@@ -202,6 +204,8 @@ function CarouselImageGeneratorComponent({
   templateId = 'template1',
   colorThemeId = 'purple-black',
   accountDescription = '',
+  accountName = '',
+  website = '',
   caption = '',
   includeImages = false,
   useAIImages = false,
@@ -1296,9 +1300,9 @@ function CarouselImageGeneratorComponent({
       console.log(`      ⏱️ Font loading took: ${(performance.now() - fontLoadStart).toFixed(2)}ms`)
     }
 
-    // Instagram note dimensions (4:5 ratio)
-    const width = 1080
-    const height = 1350
+    // Canvas dimensions - use template layout or defaults
+    const width = template.layout?.canvasWidth || 1080
+    const height = template.layout?.canvasHeight || 1350
     canvas.width = width
     canvas.height = height
 
@@ -1352,13 +1356,23 @@ function CarouselImageGeneratorComponent({
       }
     }
 
-    // Safe area (avoiding Instagram UI elements)
+    // Safe area (avoiding Instagram UI elements and footer)
     const originalSafeMarginTop = 150
     const originalSafeMarginBottom = 150
     const safeMarginSides = 100
     
+    // Account for footer height if enabled
+    const footerHeight = template.footer?.enabled && template.footer.height ? template.footer.height : 0
+    
     let safeMarginTop = originalSafeMarginTop
-    let safeMarginBottom = originalSafeMarginBottom
+    let safeMarginBottom = originalSafeMarginBottom + footerHeight  // Add footer height to bottom margin
+    
+    // For template 4, use larger safe area margins to ensure footer stays within bounds
+    if (template.id === 'template4') {
+      safeMarginTop = 120  // Larger top margin
+      // Large bottom margin: 250px buffer + footer height to ensure footer is well within safe area
+      safeMarginBottom = 250 + footerHeight
+    }
     
     // For template 3 MIDDLE slides, EXCLUDE topic and page number from safe area completely
     if (template.id === 'template3' && cleanCarousel.kind === 'MIDDLE') {
@@ -1370,13 +1384,28 @@ function CarouselImageGeneratorComponent({
       // Content must NOT go below Y=1090 (50px above page number)
       // So safe margin from bottom needs to be: 1350 - 1090 = 260
       // But we need MORE space, so increase to 300px total
-      safeMarginBottom = originalSafeMarginBottom + 150 // 150 + 150 = 300px total safe margin at bottom
+      safeMarginBottom = originalSafeMarginBottom + 150 + footerHeight // 150 + 150 = 300px total safe margin at bottom + footer
     }
     
-    const safeWidth = width - (safeMarginSides * 2)
+    // Use layout.contentMaxWidth if provided, otherwise calculate from safe margins
+    const safeWidth = template.layout?.contentMaxWidth || (width - (safeMarginSides * 2))
     const safeHeight = height - safeMarginTop - safeMarginBottom
 
     const getLineStartX = (align: CanvasTextAlign, lineWidth: number): number => {
+      // If contentMaxWidth is set, center the content column
+      const contentMaxWidth = template.layout?.contentMaxWidth
+      if (contentMaxWidth && lineWidth <= contentMaxWidth) {
+        if (align === 'center') {
+          return (width / 2) - (lineWidth / 2)
+        }
+        if (align === 'right') {
+          return (width / 2) + (contentMaxWidth / 2) - lineWidth
+        }
+        // left align within centered column
+        return (width / 2) - (contentMaxWidth / 2)
+      }
+      
+      // Fallback to original behavior
       if (align === 'center') {
         return (width / 2) - (lineWidth / 2)
       }
@@ -1390,6 +1419,11 @@ function CarouselImageGeneratorComponent({
     const centerY = safeMarginTop + (safeHeight / 2)
 
     const highlightFillStyle = ensureColorAlpha(colorTheme.highlightColor, 0.5)
+    
+    // Helper to get text color for a specific role (roleColors > textColor > colorTheme.textColor)
+    const getTextColor = (role: 'hook' | 'title' | 'content' | 'cta'): string => {
+      return template.roleColors?.[role] || template.textColor || colorTheme.textColor
+    }
 
     if (cleanCarousel.kind === 'HOOK') {
       // Check if this template uses the new hook layout (template 3)
@@ -1402,7 +1436,170 @@ function CarouselImageGeneratorComponent({
 
         const hookLetterSpacing = getLetterSpacingFor('hook')
         
-        // 1. Render TOPIC at the very top middle (all caps) - using topic from JSON
+        // Load hook image if template uses images for hook slides
+        let hookImageHeight = 0
+        let hookImageWidth = 0
+        let loadedHookImage: HTMLImageElement | null = null
+        let hookImageY = 0
+        
+        if (template.hookLayout?.useImage) {
+          const emphasisData = underlineWordsForGenerationRef.current[index] || orderedUnderlineWords[index] || { underline: '', highlight: '', imageUrl: null, originalImageUrl: null }
+          let rawImageUrl = emphasisData.imageUrl || emphasisData.originalImageUrl || null
+          
+          let imageSourceUrl: string | null = null
+          if (rawImageUrl) {
+            try {
+              const url = new URL(rawImageUrl)
+              if (url.hostname === 'image.pollinations.ai') {
+                imageSourceUrl = `/api/image/proxy?url=${encodeURIComponent(rawImageUrl)}`
+                console.log(`      🔄 Routing hook pollinations.ai image through proxy`)
+              } else {
+                imageSourceUrl = rawImageUrl
+              }
+            } catch (e) {
+              imageSourceUrl = rawImageUrl
+            }
+          }
+          
+          if (imageSourceUrl) {
+            try {
+              const imageLoadStart = performance.now()
+              console.log(`      🖼️ Loading hook image from: ${imageSourceUrl.substring(0, 50)}...`)
+              loadedHookImage = await loadImage(imageSourceUrl)
+              const imageLoadDuration = performance.now() - imageLoadStart
+              console.log(`      ⏱️ Hook image load took: ${imageLoadDuration.toFixed(2)}ms`)
+              
+              // Use imageLayout.maxHeightRatio if provided, otherwise use 60% of safe width
+              if (template.imageLayout?.maxHeightRatio) {
+                const maxHeight = Math.round(height * template.imageLayout.maxHeightRatio)
+                hookImageHeight = maxHeight
+                hookImageWidth = Math.round(hookImageHeight * 16 / 9)  // Maintain 16:9 aspect ratio
+                // Ensure image doesn't exceed safeWidth
+                if (hookImageWidth > safeWidth) {
+                  hookImageWidth = safeWidth
+                  hookImageHeight = Math.round(hookImageWidth * 9 / 16)
+                }
+              } else {
+                // Fallback: use 60% of safe width
+                hookImageWidth = Math.round(safeWidth * 0.6)
+                hookImageHeight = Math.round(hookImageWidth * 9 / 16)
+              }
+              console.log(`      ✅ Hook image loaded! Dimensions: ${loadedHookImage.width}x${loadedHookImage.height}, Display: ${hookImageWidth}x${hookImageHeight}`)
+            } catch (error) {
+              console.error(`❌ Hook slide: Failed to load image:`, error)
+            }
+          }
+        }
+        
+        // Calculate initial positions and heights for safety area check
+        let topicHeight = 0
+        let topicY = 0
+        let currentY = originalSafeMarginTop
+        
+        // 1. Calculate TOPIC height
+        if (template.hookLayout.showTopic && topicText && template.fonts.hookTopic) {
+          ctx.font = template.fonts.hookTopic.cssFont
+          topicHeight = template.fonts.hookTopic.size + 40 // text + gap
+          topicY = currentY + template.fonts.hookTopic.size
+          currentY = topicY + 40
+        }
+        
+        // Calculate image space
+        const imageSpace = (loadedHookImage && hookImageHeight > 0) ? hookImageHeight + 40 : 0
+        
+        // 2. Calculate HOOK TITLE with dynamic sizing
+        let hookFontSize = template.fonts.hook.size
+        let hookWrappedLines: string[] = []
+        let hookTotalHeight = 0
+        
+        const wrapHookTitle = (fontSize: number) => {
+          ctx.font = template.fonts.hook.cssFont.replace(/(\d+\.?\d*)px/, `${fontSize}px`)
+          const words = titleText.split(' ')
+          const lines: string[] = []
+          let currentLine = ''
+          
+          for (const word of words) {
+            const testLine = currentLine ? `${currentLine} ${word}` : word
+            const lineWidth = measureTextWithLetterSpacing(ctx, testLine, hookLetterSpacing)
+            
+            if (lineWidth > safeWidth && currentLine) {
+              lines.push(currentLine)
+              currentLine = word
+            } else {
+              currentLine = testLine
+            }
+          }
+          if (currentLine) lines.push(currentLine)
+          
+          return {
+            lines,
+            height: lines.length * template.fonts.hook.lineHeight
+          }
+        }
+        
+        if (titleText) {
+          let hookLayout = wrapHookTitle(hookFontSize)
+          hookWrappedLines = hookLayout.lines
+          hookTotalHeight = hookLayout.height
+          
+          // Calculate CTA and subtitle heights
+          let ctaHeight = 0
+          let subtitleHeight = 0
+          
+          if (template.hookLayout.showCTA && ctaText && template.fonts.hookCTA && template.styles?.ctaBox) {
+            ctx.font = template.fonts.hookCTA.cssFont
+            ctaHeight = template.fonts.hookCTA.size + (template.styles.ctaBox.paddingY || 0) * 2 + 60 // box + gap
+          }
+          
+          if (template.hookLayout.showSubtitle && subtitleText && template.fonts.hookSubtitle) {
+            ctx.font = template.fonts.hookSubtitle.cssFont
+            const subtitleWords = subtitleText.split(' ')
+            const subtitleLines: string[] = []
+            let currentLine = ''
+            for (const word of subtitleWords) {
+              const testLine = currentLine ? `${currentLine} ${word}` : word
+              const lineWidth = measureTextWithLetterSpacing(ctx, testLine, getLetterSpacingFor('hookSubtitle'))
+              if (lineWidth > safeWidth && currentLine) {
+                subtitleLines.push(currentLine)
+                currentLine = word
+              } else {
+                currentLine = testLine
+              }
+            }
+            if (currentLine) subtitleLines.push(currentLine)
+            subtitleHeight = subtitleLines.length * template.fonts.hookSubtitle.lineHeight + 150 // bottom margin
+          }
+          
+          // Calculate total height
+          const totalContentHeight = topicHeight + imageSpace + hookTotalHeight + ctaHeight + subtitleHeight
+          const effectiveSafeHeight = safeHeight
+          
+          // Dynamic sizing to fit within safe area
+          if (totalContentHeight > effectiveSafeHeight) {
+            console.log(`⚠️  Template 3 Hook: Content too tall (${totalContentHeight}px > ${effectiveSafeHeight}px), scaling down...`)
+            
+            // Scale hook title font
+            const scaleFactor = Math.max(0.3, Math.min(0.95, effectiveSafeHeight / totalContentHeight))
+            hookFontSize = Math.floor(template.fonts.hook.size * scaleFactor)
+            
+            hookLayout = wrapHookTitle(hookFontSize)
+            hookWrappedLines = hookLayout.lines
+            hookTotalHeight = hookLayout.height
+            
+            // Recalculate total
+            const newTotalHeight = topicHeight + imageSpace + hookTotalHeight + ctaHeight + subtitleHeight
+            
+            // If still too tall, reduce image
+            if (newTotalHeight > effectiveSafeHeight && loadedHookImage && hookImageHeight > 0) {
+              const excessHeight = newTotalHeight - effectiveSafeHeight
+              const imageReductionFactor = Math.max(0.3, 1 - (excessHeight / (hookImageHeight + 40)))
+              hookImageHeight = Math.floor(hookImageHeight * imageReductionFactor)
+              hookImageWidth = Math.floor(hookImageWidth * imageReductionFactor)
+            }
+          }
+        }
+        
+        // 1. Render TOPIC at the very top middle (all caps)
         if (template.hookLayout.showTopic && topicText && template.fonts.hookTopic) {
           ctx.font = template.fonts.hookTopic.cssFont
           ctx.fillStyle = colorTheme.primaryColor
@@ -1411,39 +1608,27 @@ function CarouselImageGeneratorComponent({
           const topicValue = topicText.toUpperCase()
           const topicWidth = measureTextWithLetterSpacing(ctx, topicValue, topicLetterSpacing)
           const topicX = (width - topicWidth) / 2
-          // Use ORIGINAL safe margin for consistent positioning across all slides
-          const topicY = originalSafeMarginTop + template.fonts.hookTopic.size
           drawTextWithLetterSpacing(ctx, topicValue, topicX, topicY, topicLetterSpacing)
         }
 
-        // 2. Calculate and render HOOK TITLE (entirely vertically and horizontally middle)
-        let hookWrappedLines: string[] = []
-        if (titleText) {
-          ctx.font = template.fonts.hook.cssFont
-          const words = titleText.split(' ')
-          let currentLine = ''
+        // 1.5. Render HOOK IMAGE above title (if enabled)
+        if (loadedHookImage && hookImageWidth > 0 && hookImageHeight > 0) {
+          hookImageY = currentY
+          currentY = hookImageY + hookImageHeight + 40
+        }
 
-          for (const word of words) {
-            const testLine = currentLine ? `${currentLine} ${word}` : word
-            const lineWidth = measureTextWithLetterSpacing(ctx, testLine, hookLetterSpacing)
-
-            if (lineWidth > safeWidth && currentLine) {
-              hookWrappedLines.push(currentLine)
-              currentLine = word
-            } else {
-              currentLine = testLine
-            }
+        // 2. Render HOOK TITLE (below image, centered)
+        if (titleText && hookWrappedLines.length > 0) {
+          // Start Y position - below image (or centered if no image)
+          let hookY: number
+          if (loadedHookImage && hookImageHeight > 0) {
+            hookY = currentY + hookFontSize
+          } else {
+            hookY = safeMarginTop + (safeHeight / 2) - (hookTotalHeight / 2) + hookFontSize
           }
-          if (currentLine) hookWrappedLines.push(currentLine)
-
-          // Calculate total hook height
-          const hookTotalHeight = hookWrappedLines.length * template.fonts.hook.lineHeight
           
-          // Start Y position to center the hook title vertically
-          let hookY = safeMarginTop + (safeHeight / 2) - (hookTotalHeight / 2) + template.fonts.hook.size
-
-          ctx.font = template.fonts.hook.cssFont
-          ctx.fillStyle = colorTheme.textColor
+          ctx.font = template.fonts.hook.cssFont.replace(/(\d+\.?\d*)px/, `${hookFontSize}px`)
+          ctx.fillStyle = template.textColor || colorTheme.textColor
           ctx.textAlign = 'left'
 
           hookWrappedLines.forEach(line => {
@@ -1452,6 +1637,34 @@ function CarouselImageGeneratorComponent({
             drawTextWithLetterSpacing(ctx, line, lineX, hookY, hookLetterSpacing)
             hookY += template.fonts.hook.lineHeight
           })
+        }
+        
+        // 1.5.5. Actually draw the hook image (after calculating title position)
+        if (loadedHookImage && hookImageWidth > 0 && hookImageHeight > 0) {
+          try {
+            const imageX = (width - hookImageWidth) / 2 // Center horizontally
+            const sourceAspect = loadedHookImage.width / loadedHookImage.height
+            const targetAspect = 16 / 9
+            
+            let sx = 0, sy = 0, sWidth = loadedHookImage.width, sHeight = loadedHookImage.height
+            
+            if (sourceAspect > targetAspect) {
+              sWidth = loadedHookImage.height * targetAspect
+              sx = (loadedHookImage.width - sWidth) / 2
+            } else {
+              sHeight = loadedHookImage.width / targetAspect
+              sy = (loadedHookImage.height - sHeight) / 2
+            }
+            
+            ctx.drawImage(
+              loadedHookImage,
+              sx, sy, sWidth, sHeight,
+              imageX, hookImageY, hookImageWidth, hookImageHeight
+            )
+            console.log(`✅ Hook image successfully drawn at (${imageX}, ${hookImageY}), Size: ${hookImageWidth}x${hookImageHeight}`)
+          } catch (error) {
+            console.error(`❌ Failed to render hook image:`, error)
+          }
         }
 
         // 3. Calculate CTA box dimensions
@@ -1470,7 +1683,7 @@ function CarouselImageGeneratorComponent({
         if (template.hookLayout.showCTA && ctaText && template.fonts.hookCTA && template.styles?.ctaBox) {
           const boxConfig = template.styles.ctaBox
           ctx.font = template.fonts.hookCTA.cssFont
-          ctx.fillStyle = boxConfig.useThemeColor ? colorTheme.primaryColor : colorTheme.textColor
+          ctx.fillStyle = boxConfig.useThemeColor ? colorTheme.primaryColor : (template.textColor || colorTheme.textColor)
           ctx.textAlign = 'left'
           const ctaLetterSpacing = getLetterSpacingFor('hookCTA')
 
@@ -1531,7 +1744,7 @@ function CarouselImageGeneratorComponent({
         // 5. Render SUBTITLE at the very bottom middle
         if (template.hookLayout.showSubtitle && subtitleText && template.fonts.hookSubtitle) {
           ctx.font = template.fonts.hookSubtitle.cssFont
-          ctx.fillStyle = colorTheme.textColor
+          ctx.fillStyle = template.textColor || colorTheme.textColor
           ctx.textAlign = 'left'
           const subtitleLetterSpacing = getLetterSpacingFor('hookSubtitle')
 
@@ -1565,10 +1778,65 @@ function CarouselImageGeneratorComponent({
         }
 
       } else {
-        // ORIGINAL HOOK LAYOUT (templates 1 & 2): Simple centered hook with highlight
+        // ORIGINAL HOOK LAYOUT (templates 1, 2, 4): Simple centered hook with highlight
       const hookText = ideaTitle?.trim() || cleanCarousel.title || cleanCarousel.content
         const hookLetterSpacing = getLetterSpacingFor('hook')
         const hookAlign = getTextAlignFor('hook')
+      
+        // Load hook image if template uses images for hook slides
+        let hookImageHeight = 0
+        let hookImageWidth = 0
+        let loadedHookImage: HTMLImageElement | null = null
+        let hookImageY = 0
+        
+        if (template.hookLayout?.useImage) {
+          const emphasisData = underlineWordsForGenerationRef.current[index] || orderedUnderlineWords[index] || { underline: '', highlight: '', imageUrl: null, originalImageUrl: null }
+          let rawImageUrl = emphasisData.imageUrl || emphasisData.originalImageUrl || null
+          
+          let imageSourceUrl: string | null = null
+          if (rawImageUrl) {
+            try {
+              const url = new URL(rawImageUrl)
+              if (url.hostname === 'image.pollinations.ai') {
+                imageSourceUrl = `/api/image/proxy?url=${encodeURIComponent(rawImageUrl)}`
+                console.log(`      🔄 Routing hook pollinations.ai image through proxy`)
+              } else {
+                imageSourceUrl = rawImageUrl
+              }
+            } catch (e) {
+              imageSourceUrl = rawImageUrl
+            }
+          }
+          
+          if (imageSourceUrl) {
+            try {
+              const imageLoadStart = performance.now()
+              console.log(`      🖼️ Loading hook image from: ${imageSourceUrl.substring(0, 50)}...`)
+              loadedHookImage = await loadImage(imageSourceUrl)
+              const imageLoadDuration = performance.now() - imageLoadStart
+              console.log(`      ⏱️ Hook image load took: ${imageLoadDuration.toFixed(2)}ms`)
+              
+              // Use imageLayout.maxHeightRatio if provided, otherwise use 60% of safe width
+              if (template.imageLayout?.maxHeightRatio) {
+                const maxHeight = Math.round(height * template.imageLayout.maxHeightRatio)
+                hookImageHeight = maxHeight
+                hookImageWidth = Math.round(hookImageHeight * 16 / 9)  // Maintain 16:9 aspect ratio
+                // Ensure image doesn't exceed safeWidth
+                if (hookImageWidth > safeWidth) {
+                  hookImageWidth = safeWidth
+                  hookImageHeight = Math.round(hookImageWidth * 9 / 16)
+                }
+              } else {
+                // Fallback: use 60% of safe width
+                hookImageWidth = Math.round(safeWidth * 0.6)
+                hookImageHeight = Math.round(hookImageWidth * 9 / 16)
+              }
+              console.log(`      ✅ Hook image loaded! Dimensions: ${loadedHookImage.width}x${loadedHookImage.height}, Display: ${hookImageWidth}x${hookImageHeight}`)
+            } catch (error) {
+              console.error(`❌ Hook slide: Failed to load image:`, error)
+            }
+          }
+        }
       
         const hookBaseFontSize = template.fonts.hook.size
         const hookLineHeightRatio = template.fonts.hook.lineHeight / Math.max(1, hookBaseFontSize)
@@ -1619,24 +1887,83 @@ function CarouselImageGeneratorComponent({
 
       let hookFontSize = hookBaseFontSize
       let hookLayout = wrapHookText(hookFontSize)
+      
+      // Calculate total height including image if present
+      const getTotalHookHeight = (layout: typeof hookLayout) => {
+        const imageSpace = loadedHookImage && hookImageHeight > 0 
+          ? hookImageHeight + 40 // image + gap
+          : 0
+        return imageSpace + layout.totalHeight
+      }
+      
+      let totalHookHeight = getTotalHookHeight(hookLayout)
+      const effectiveHookSafeHeight = safeHeight
 
-      for (let i = 0; i < 8; i++) {
-        if (hookLayout.maxWidth <= safeWidth && hookLayout.totalHeight <= safeHeight) {
+      // Dynamic sizing loop - account for image + text
+      for (let i = 0; i < 12; i++) {
+        const fitsWidth = hookLayout.maxWidth <= safeWidth
+        const fitsHeight = totalHookHeight <= effectiveHookSafeHeight
+        
+        if (fitsWidth && fitsHeight) {
           break
         }
 
-        const widthScale = safeWidth / hookLayout.maxWidth
-        const heightScale = safeHeight / hookLayout.totalHeight
-        const scale = Math.max(0.5, Math.min(0.95, Math.min(widthScale, heightScale)))
+        // Calculate scale based on what's overflowing
+        let scale = 1.0
+        
+        if (!fitsWidth) {
+          const widthScale = safeWidth / hookLayout.maxWidth
+          scale = Math.min(scale, widthScale)
+        }
+        
+        if (!fitsHeight) {
+          const heightScale = effectiveHookSafeHeight / totalHookHeight
+          scale = Math.min(scale, heightScale)
+        }
+        
+        // Apply minimum scale limit (down to 25% for hook slides)
+        scale = Math.max(0.25, Math.min(0.95, scale))
 
-        const nextSize = Math.max(hookBaseFontSize * 0.5, Math.floor(hookFontSize * scale))
+        const nextSize = Math.max(hookBaseFontSize * 0.25, Math.floor(hookFontSize * scale))
         if (Math.abs(nextSize - hookFontSize) < 1) {
-          hookFontSize = Math.max(hookBaseFontSize * 0.5, hookFontSize - 2)
+          hookFontSize = Math.max(hookBaseFontSize * 0.25, hookFontSize - 2)
         } else {
           hookFontSize = nextSize
         }
 
         hookLayout = wrapHookText(hookFontSize)
+        totalHookHeight = getTotalHookHeight(hookLayout)
+        
+        // If we have an image and still too tall, reduce image size
+        if (totalHookHeight > effectiveHookSafeHeight && loadedHookImage && hookImageHeight > 0) {
+          const excessHeight = totalHookHeight - effectiveHookSafeHeight
+          const imageContribution = hookImageHeight + 40
+          
+          if (excessHeight > 0 && imageContribution > 0) {
+            const imageReductionFactor = Math.max(0.3, 1 - (excessHeight / imageContribution))
+            hookImageHeight = Math.floor(hookImageHeight * imageReductionFactor)
+            hookImageWidth = Math.floor(hookImageWidth * imageReductionFactor)
+            totalHookHeight = getTotalHookHeight(hookLayout)
+          }
+        }
+      }
+      
+      // Final safety check - ensure no overflow
+      totalHookHeight = getTotalHookHeight(hookLayout)
+      if (totalHookHeight > effectiveHookSafeHeight) {
+        const finalScale = effectiveHookSafeHeight / totalHookHeight
+        hookFontSize = Math.max(hookBaseFontSize * 0.2, Math.floor(hookFontSize * finalScale))
+        hookLayout = wrapHookText(hookFontSize)
+        
+        // Reduce image one more time if needed
+        if (loadedHookImage && hookImageHeight > 0) {
+          totalHookHeight = getTotalHookHeight(hookLayout)
+          if (totalHookHeight > effectiveHookSafeHeight) {
+            const excessHeight = totalHookHeight - effectiveHookSafeHeight
+            hookImageHeight = Math.max(0, Math.floor(hookImageHeight - excessHeight))
+            hookImageWidth = Math.floor(hookImageWidth * (hookImageHeight / (hookImageHeight + excessHeight)))
+          }
+        }
       }
 
       const hookLineHeight = hookLayout.lineHeight
@@ -1646,7 +1973,7 @@ function CarouselImageGeneratorComponent({
       const highlightHeight = hookFontSize * highlightHeightRatio
 
       ctx.font = buildHookFont(hookFontSize)
-      ctx.fillStyle = colorTheme.textColor
+      ctx.fillStyle = template.textColor || colorTheme.textColor
       ctx.textAlign = 'left'
 
       // Get highlight word - use ref first (for regeneration from edit), then fall back to state
@@ -1672,9 +1999,57 @@ function CarouselImageGeneratorComponent({
         }
       }
       
-      // Start Y position - center the entire text block
-      let y = centerY - (hookTotalHeight / 2) + (hookLines.length > 0 ? hookFontSize : 0)
+      // Calculate image position and adjust text position
+      let y: number
+      const hookPadding = template.layout?.hookPadding
+      const hookTopPadding = hookPadding?.top || 60
+      const imageMarginBottom = template.imageLayout?.marginBottom || 60
+      
+      if (loadedHookImage && hookImageHeight > 0) {
+        // Position image at top with padding
+        hookImageY = safeMarginTop + hookTopPadding
+        const imageBottomY = hookImageY + hookImageHeight + imageMarginBottom
+        // Position text below image
+        y = imageBottomY + hookFontSize
+      } else {
+        // Use verticalAlign to determine positioning
+        if (template.layout?.verticalAlign === 'top') {
+          y = safeMarginTop + hookTopPadding + hookFontSize
+        } else {
+          // Center the entire text block vertically
+          y = centerY - (hookTotalHeight / 2) + (hookLines.length > 0 ? hookFontSize : 0)
+        }
+      }
+      
       const spaceWidth = ctx.measureText(' ').width
+      
+      // Draw hook image first (if exists)
+      if (loadedHookImage && hookImageWidth > 0 && hookImageHeight > 0) {
+        try {
+          const imageX = (width - hookImageWidth) / 2 // Center horizontally
+          const sourceAspect = loadedHookImage.width / loadedHookImage.height
+          const targetAspect = 16 / 9
+          
+          let sx = 0, sy = 0, sWidth = loadedHookImage.width, sHeight = loadedHookImage.height
+          
+          if (sourceAspect > targetAspect) {
+            sWidth = loadedHookImage.height * targetAspect
+            sx = (loadedHookImage.width - sWidth) / 2
+          } else {
+            sHeight = loadedHookImage.width / targetAspect
+            sy = (loadedHookImage.height - sHeight) / 2
+          }
+          
+          ctx.drawImage(
+            loadedHookImage,
+            sx, sy, sWidth, sHeight,
+            imageX, hookImageY, hookImageWidth, hookImageHeight
+          )
+          console.log(`✅ Hook image successfully drawn at (${imageX}, ${hookImageY}), Size: ${hookImageWidth}x${hookImageHeight}`)
+        } catch (error) {
+          console.error(`❌ Failed to render hook image:`, error)
+        }
+      }
       
       // Draw each line
       hookLines.forEach((line, lineIndex) => {
@@ -1712,7 +2087,7 @@ function CarouselImageGeneratorComponent({
         // Second pass: Draw text
         let currentX = startX
         lineWords.forEach((word, wordIndex) => {
-          ctx.fillStyle = colorTheme.textColor
+          ctx.fillStyle = template.textColor || colorTheme.textColor
           const drawnWidth = drawTextWithLetterSpacing(ctx, word, currentX, y, hookLetterSpacing)
           currentX += drawnWidth
           if (wordIndex < lineWords.length - 1) {
@@ -1746,7 +2121,7 @@ function CarouselImageGeneratorComponent({
       const ctaAlign = getTextAlignFor('cta')
 
       ctx.font = template.fonts.content.cssFont
-      ctx.fillStyle = colorTheme.textColor
+      ctx.fillStyle = template.textColor || colorTheme.textColor
       ctx.textAlign = 'left'
       
       const sentences = cleanCarousel.content.split(/([.!?])\s+/).filter(s => s.trim())
@@ -1876,7 +2251,7 @@ function CarouselImageGeneratorComponent({
         const subtitleText = carousels[0]?.subtitle || '' // Get subtitle from HOOK slide
         if (subtitleText) {
           ctx.font = template.fonts.hookSubtitle.cssFont
-          ctx.fillStyle = colorTheme.textColor
+          ctx.fillStyle = template.textColor || colorTheme.textColor
           ctx.textAlign = 'left'
           const subtitleLetterSpacing = getLetterSpacingFor('hookSubtitle')
 
@@ -1963,11 +2338,24 @@ function CarouselImageGeneratorComponent({
           loadedImage = await loadImage(imageSourceUrl)
           const imageLoadDuration = performance.now() - imageLoadStart
           console.log(`      ⏱️ Content image load took: ${imageLoadDuration.toFixed(2)}ms`)
-          // Make photo container 30% smaller for template 3
-          const sizeMultiplier = template.id === 'template3' ? 0.7 : 1.0
-          imageWidth = Math.round(safeWidth * sizeMultiplier)
-          imageHeight = Math.round(imageWidth * 9 / 16)
-          console.log(`      ✅ Image loaded! Dimensions: ${loadedImage.width}x${loadedImage.height}`)
+          
+          // Use imageLayout.maxHeightRatio if provided, otherwise use template-specific defaults
+          if (template.imageLayout?.maxHeightRatio) {
+            const maxHeight = Math.round(height * template.imageLayout.maxHeightRatio)
+            imageHeight = maxHeight
+            imageWidth = Math.round(imageHeight * 16 / 9)  // Maintain 16:9 aspect ratio
+            // Ensure image doesn't exceed safeWidth
+            if (imageWidth > safeWidth) {
+              imageWidth = safeWidth
+              imageHeight = Math.round(imageWidth * 9 / 16)
+            }
+          } else {
+            // Fallback to template-specific sizing
+            const sizeMultiplier = template.id === 'template3' ? 0.7 : 1.0
+            imageWidth = Math.round(safeWidth * sizeMultiplier)
+            imageHeight = Math.round(imageWidth * 9 / 16)
+          }
+          console.log(`      ✅ Image loaded! Dimensions: ${loadedImage.width}x${loadedImage.height}, Display: ${imageWidth}x${imageHeight}`)
         } catch (error) {
           console.error(`❌ Carousel ${index + 1}: Failed to pre-load image:`, error)
           console.error(`   Image URL was:`, imageSourceUrl)
@@ -1977,11 +2365,11 @@ function CarouselImageGeneratorComponent({
         console.warn(`   This might mean images weren't fetched from Pexels or includeImages was false`)
       }
       
-      // Dynamic spacing with minimums - template 3 needs much tighter spacing
+      // Dynamic spacing - use layout values if provided
       const minTitleContentGap = template.id === 'template3' ? 20 : 20
       const minImageGap = template.id === 'template3' ? 20 : 20
-      const maxTitleContentGap = template.id === 'template3' ? 40 : 70
-      const maxImageGap = template.id === 'template3' ? 30 : 40
+      const maxTitleContentGap = template.layout?.gapTitleToContent || (template.id === 'template3' ? 40 : 70)
+      const maxImageGap = template.imageLayout?.marginBottom || (template.id === 'template3' ? 30 : 40)
       
       const buildTitleFont = (size: number) => template.fonts.title.cssFont.replace(/(\d+\.?\d*)px/, `${size}px`)
       const buildContentFont = (size: number) => template.fonts.content.cssFont.replace(/(\d+\.?\d*)px/, `${size}px`)
@@ -1990,8 +2378,8 @@ function CarouselImageGeneratorComponent({
       let titleLineHeight = template.fonts.title.lineHeight
       let contentFontSize = template.fonts.content.size
       let contentLineHeight = template.fonts.content.lineHeight
-      let titleContentGap = Math.max(maxTitleContentGap, minTitleContentGap)
-      let imageGap = imageHeight > 0 ? Math.max(maxImageGap, minImageGap) : 0
+      let titleContentGap = template.layout?.gapTitleToContent || Math.max(maxTitleContentGap, minTitleContentGap)
+      let imageGap = imageHeight > 0 ? (template.imageLayout?.marginBottom || Math.max(maxImageGap, minImageGap)) : 0
       
       let titleLines: string[] = []
       let contentLines: string[] = []
@@ -2044,7 +2432,8 @@ function CarouselImageGeneratorComponent({
         const contentH = wrappedContent.length > 0
           ? contentSize + (wrappedContent.length - 1) * contentLH + (contentSize * 0.2)
           : 0
-        const total = titleH + titleContentGap + contentH + imageGap + imageHeight
+        // Image first, then title, then content
+        const total = imageHeight + (imageHeight > 0 ? imageGap : 0) + titleH + titleContentGap + contentH
         
         return {
           titleLines: wrappedTitle,
@@ -2057,18 +2446,18 @@ function CarouselImageGeneratorComponent({
       
       let layout = calculateLayout(titleFontSize, contentFontSize)
       
-      // For template 3 MIDDLE slides, calculate actual available space between topic and page number
+      // Calculate effective safe height for ALL templates
       let effectiveSafeHeight = safeHeight
+      
+      // For template 3 MIDDLE slides, account for topic and page number
       if (template.id === 'template3' && cleanCarousel.kind === 'MIDDLE') {
-        // Topic bottom: originalSafeMarginTop + topicFontSize + 100px spacing
         const topicBottomY = originalSafeMarginTop + (template.fonts.hookTopic ? template.fonts.hookTopic.size + 100 : 0)
-        // Page number box: at Y=1140 (height 1350 - 150 - 60)
-        // Content MUST end by Y=1050 to have 90px buffer above page number
-        const pageNumberTopY = height - originalSafeMarginBottom - 60 - 90 // 90px spacing above box
+        const pageNumberTopY = height - originalSafeMarginBottom - 60 - 90
         effectiveSafeHeight = pageNumberTopY - topicBottomY
-        console.log(`   Template 3 MIDDLE: Available height=${effectiveSafeHeight}px (topic ends at ${topicBottomY}, page number starts at ${pageNumberTopY})`)
+        console.log(`   Template 3 MIDDLE: Available height=${effectiveSafeHeight}px`)
       }
       
+      // Apply safety area check and dynamic sizing for ALL templates
       if (layout.totalHeight > effectiveSafeHeight) {
         console.log(`⚠️  Content too long (${layout.totalHeight}px > ${effectiveSafeHeight}px), scaling down...`)
         
@@ -2079,15 +2468,14 @@ function CarouselImageGeneratorComponent({
         layout = calculateLayout(titleFontSize, contentFontSize)
         
         if (layout.totalHeight > effectiveSafeHeight) {
-          // Step 2: For template 3, aggressively reduce image size first
-          if (template.id === 'template3' && imageHeight > 0) {
-            // Calculate how much we need to reduce
+          // Step 2: Reduce image size if present (for ALL templates)
+          if (imageHeight > 0) {
             const excessHeight = layout.totalHeight - effectiveSafeHeight
             const imageContribution = imageHeight + imageGap
             
-            // Reduce image by proportion of excess, but at least 50%
-            const reductionNeeded = Math.min(0.5, excessHeight / imageContribution)
-            const imageReductionFactor = Math.max(0.4, 1 - reductionNeeded) // Keep at least 40% of image
+            // Reduce image by proportion of excess, but keep at least 30% of original
+            const reductionNeeded = Math.min(0.7, excessHeight / imageContribution)
+            const imageReductionFactor = Math.max(0.3, 1 - reductionNeeded)
             
             imageHeight = Math.floor(imageHeight * imageReductionFactor)
             imageWidth = Math.floor(imageWidth * imageReductionFactor)
@@ -2096,10 +2484,10 @@ function CarouselImageGeneratorComponent({
             layout = calculateLayout(titleFontSize, contentFontSize)
           }
           
-          // Step 3: Scale fonts dynamically if still too large
+          // Step 3: Scale fonts dynamically if still too large (for ALL templates)
           if (layout.totalHeight > effectiveSafeHeight) {
             scaleFactor = effectiveSafeHeight / layout.totalHeight
-            scaleFactor = Math.max(0.35, Math.min(0.95, scaleFactor)) // Allow very aggressive scaling down to 35%
+            scaleFactor = Math.max(0.3, Math.min(0.95, scaleFactor)) // Allow down to 30% for all templates
             
             titleFontSize = Math.floor(template.fonts.title.size * scaleFactor)
             contentFontSize = Math.floor(template.fonts.content.size * scaleFactor)
@@ -2108,9 +2496,9 @@ function CarouselImageGeneratorComponent({
             
             layout = calculateLayout(titleFontSize, contentFontSize)
             
-            // Step 4: If STILL too large for template 3, reduce image more
-            if (layout.totalHeight > effectiveSafeHeight && template.id === 'template3' && imageHeight > 0) {
-              const secondReductionFactor = 0.5 // Cut image in half again
+            // Step 4: If STILL too large, reduce image more aggressively
+            if (layout.totalHeight > effectiveSafeHeight && imageHeight > 0) {
+              const secondReductionFactor = 0.5
               imageHeight = Math.floor(imageHeight * secondReductionFactor)
               imageWidth = Math.floor(imageWidth * secondReductionFactor)
               console.log(`   Further reducing image size: ${imageWidth}x${imageHeight}`)
@@ -2119,10 +2507,23 @@ function CarouselImageGeneratorComponent({
             }
           }
           
+          // Final check - if still too large, force fit by scaling more aggressively
           if (layout.totalHeight > effectiveSafeHeight) {
-            console.warn(`⚠️  WARNING: Content still exceeds safe height even at minimum scale!`)
-            console.warn(`   Total: ${Math.round(layout.totalHeight)}px, Safe: ${effectiveSafeHeight}px`)
-            console.warn(`   Consider reducing content length`)
+            const finalScaleFactor = effectiveSafeHeight / layout.totalHeight
+            scaleFactor = Math.max(0.25, Math.min(scaleFactor, finalScaleFactor)) // Allow down to 25% minimum
+            
+            titleFontSize = Math.floor(template.fonts.title.size * scaleFactor)
+            contentFontSize = Math.floor(template.fonts.content.size * scaleFactor)
+            
+            console.log(`   Final aggressive scaling: title ${titleFontSize}px, content ${contentFontSize}px (${Math.round(scaleFactor * 100)}%)`)
+            
+            layout = calculateLayout(titleFontSize, contentFontSize)
+            
+            if (layout.totalHeight > effectiveSafeHeight) {
+              console.warn(`⚠️  WARNING: Content still exceeds safe height even at minimum scale!`)
+              console.warn(`   Total: ${Math.round(layout.totalHeight)}px, Safe: ${effectiveSafeHeight}px`)
+              console.warn(`   Consider reducing content length`)
+            }
           }
         }
       }
@@ -2154,8 +2555,9 @@ function CarouselImageGeneratorComponent({
 
       const firstLineFontSize = titleLines.length > 0 ? titleFontSize : contentFontSize
       
-      // For template 3 MIDDLE slides, center the title+content+image vertically (between topic and page number)
+      // For template 3 MIDDLE slides, center the image+title+content vertically (between topic and page number)
       let y: number
+      let imageY: number | null = null
       
       if (template.id === 'template3' && cleanCarousel.kind === 'MIDDLE') {
         // Calculate available vertical space (between topic and page number)
@@ -2164,25 +2566,107 @@ function CarouselImageGeneratorComponent({
         const pageNumberTopY = height - originalSafeMarginBottom - 60 - 90
         const availableHeight = pageNumberTopY - topicBottomY
         
-        // Calculate total content height (title + content + image)
+        // Calculate total content height (image first, then title, then content)
         const titleH = titleLines.length > 0 
           ? titleFontSize + (titleLines.length - 1) * titleLineHeight + (titleFontSize * 0.2)
           : 0
         const contentH = contentLines.length > 0
           ? contentFontSize + (contentLines.length - 1) * contentLineHeight + (contentFontSize * 0.2)
           : 0
-        const totalContentHeight = titleH + titleContentGap + contentH + imageGap + imageHeight
+        const totalContentHeight = imageHeight + (imageHeight > 0 ? imageGap : 0) + titleH + titleContentGap + contentH
         
         // Center everything vertically within available space
-        y = topicBottomY + (availableHeight - totalContentHeight) / 2 + titleFontSize
+        const startY = topicBottomY + (availableHeight - totalContentHeight) / 2
         
-        console.log(`   Centering: topicBottom=${topicBottomY}, pageNumberTop=${pageNumberTopY}, contentHeight=${Math.round(totalContentHeight)}, startY=${Math.round(y)}, endY=${Math.round(y + totalContentHeight - titleFontSize)}`)
+        // Image at the top
+        if (imageHeight > 0) {
+          imageY = startY
+          y = startY + imageHeight + imageGap + titleFontSize
+        } else {
+          y = startY + titleFontSize
+        }
+        
+        console.log(`   Centering: topicBottom=${topicBottomY}, pageNumberTop=${pageNumberTopY}, contentHeight=${Math.round(totalContentHeight)}, imageY=${imageY}, startY=${Math.round(y)}`)
       } else {
-        y = centerY - (totalHeight / 2) + firstLineFontSize
+        // For other templates, use verticalAlign or center everything
+        const titlePadding = template.layout?.titlePadding
+        const topPadding = titlePadding?.top || 0
+        
+        if (template.layout?.verticalAlign === 'top') {
+          // Start from top with padding
+          const startY = safeMarginTop + topPadding
+          if (imageHeight > 0) {
+            imageY = startY
+            y = startY + imageHeight + imageGap + titleFontSize
+          } else {
+            y = startY + titleFontSize
+          }
+        } else {
+          // Center everything
+          const startY = centerY - (totalHeight / 2)
+          if (imageHeight > 0) {
+            imageY = startY
+            y = startY + imageHeight + imageGap + titleFontSize
+          } else {
+            y = startY + titleFontSize
+          }
+        }
+      }
+      
+      // Render image FIRST (if exists)
+      if (loadedImage && imageWidth > 0 && imageHeight > 0 && imageY !== null) {
+        try {
+          console.log(`\n🖼️  Rendering image FIRST for carousel ${index + 1}`)
+          console.log(`   Image dimensions: ${loadedImage.width}x${loadedImage.height}`)
+          console.log(`   Target size: ${imageWidth}x${imageHeight}`)
+          console.log(`   Y position: ${imageY}`)
+          
+          // Center the image horizontally for all templates
+          const imageX = (width - imageWidth) / 2
+          
+          const sourceAspect = loadedImage.width / loadedImage.height
+          const targetAspect = 16 / 9
+          
+          let sx = 0, sy = 0, sWidth = loadedImage.width, sHeight = loadedImage.height
+          
+          if (sourceAspect > targetAspect) {
+            sWidth = loadedImage.height * targetAspect
+            sx = (loadedImage.width - sWidth) / 2
+          } else {
+            sHeight = loadedImage.width / targetAspect
+            sy = (loadedImage.height - sHeight) / 2
+          }
+          
+          const borderRadius = 56
+          ctx.save()
+          ctx.beginPath()
+          ctx.moveTo(imageX + borderRadius, imageY)
+          ctx.lineTo(imageX + imageWidth - borderRadius, imageY)
+          ctx.quadraticCurveTo(imageX + imageWidth, imageY, imageX + imageWidth, imageY + borderRadius)
+          ctx.lineTo(imageX + imageWidth, imageY + imageHeight - borderRadius)
+          ctx.quadraticCurveTo(imageX + imageWidth, imageY + imageHeight, imageX + imageWidth - borderRadius, imageY + imageHeight)
+          ctx.lineTo(imageX + borderRadius, imageY + imageHeight)
+          ctx.quadraticCurveTo(imageX, imageY + imageHeight, imageX, imageY + imageHeight - borderRadius)
+          ctx.lineTo(imageX, imageY + borderRadius)
+          ctx.quadraticCurveTo(imageX, imageY, imageX + borderRadius, imageY)
+          ctx.closePath()
+          ctx.clip()
+          
+          ctx.drawImage(
+            loadedImage,
+            sx, sy, sWidth, sHeight,
+            imageX, imageY, imageWidth, imageHeight
+          )
+          ctx.restore()
+          
+          console.log(`✅ Image successfully drawn at (${imageX}, ${imageY}), Size: ${imageWidth}x${imageHeight}`)
+        } catch (error) {
+          console.error(`❌ Failed to render image for carousel ${index + 1}:`, error)
+        }
       }
         
       ctx.font = buildTitleFont(titleFontSize)
-        ctx.fillStyle = colorTheme.textColor
+        ctx.fillStyle = template.textColor || colorTheme.textColor
 
         titleLines.forEach(line => {
         const lineWidth = measureTextWithLetterSpacing(ctx, line, titleLetterSpacing)
@@ -2194,7 +2678,7 @@ function CarouselImageGeneratorComponent({
         y += titleContentGap
         
       ctx.font = buildContentFont(contentFontSize)
-        ctx.fillStyle = colorTheme.textColor
+        ctx.fillStyle = template.textColor || colorTheme.textColor
       const spaceWidth = ctx.measureText(' ').width
         
         const underlinePhrases = emphasisData.underline.split(',').map((p: string) => p.trim()).filter((p: string) => p)
@@ -2273,7 +2757,7 @@ function CarouselImageGeneratorComponent({
 
         let currentX = startX
           words.forEach((word, wordIndex) => {
-            ctx.fillStyle = colorTheme.textColor
+            ctx.fillStyle = template.textColor || colorTheme.textColor
           const startPos = currentX
           const drawnWidth = drawTextWithLetterSpacing(ctx, word, currentX, y, contentLetterSpacing)
           const endPos = startPos + drawnWidth
@@ -2318,66 +2802,6 @@ function CarouselImageGeneratorComponent({
           
           y += contentLineHeight
         })
-        
-        if (loadedImage && imageWidth > 0 && imageHeight > 0) {
-          try {
-            console.log(`\n🖼️  Rendering pre-loaded image for carousel ${index + 1}`)
-            console.log(`   Image dimensions: ${loadedImage.width}x${loadedImage.height}`)
-            console.log(`   Target size: ${imageWidth}x${imageHeight}`)
-            console.log(`   Y position: ${y}`)
-            
-            y += imageGap
-            
-            // Center the image horizontally for template 3
-            const imageX = template.id === 'template3' ? (width - imageWidth) / 2 : safeMarginSides
-            
-            const sourceAspect = loadedImage.width / loadedImage.height
-            const targetAspect = 16 / 9
-            
-            let sx = 0, sy = 0, sWidth = loadedImage.width, sHeight = loadedImage.height
-            
-            if (sourceAspect > targetAspect) {
-              sWidth = loadedImage.height * targetAspect
-            sx = (loadedImage.width - sWidth) / 2
-            } else {
-              sHeight = loadedImage.width / targetAspect
-            sy = (loadedImage.height - sHeight) / 2
-            }
-            
-            const borderRadius = 56
-            ctx.save()
-            ctx.beginPath()
-            ctx.moveTo(imageX + borderRadius, y)
-            ctx.lineTo(imageX + imageWidth - borderRadius, y)
-            ctx.quadraticCurveTo(imageX + imageWidth, y, imageX + imageWidth, y + borderRadius)
-            ctx.lineTo(imageX + imageWidth, y + imageHeight - borderRadius)
-            ctx.quadraticCurveTo(imageX + imageWidth, y + imageHeight, imageX + imageWidth - borderRadius, y + imageHeight)
-            ctx.lineTo(imageX + borderRadius, y + imageHeight)
-            ctx.quadraticCurveTo(imageX, y + imageHeight, imageX, y + imageHeight - borderRadius)
-            ctx.lineTo(imageX, y + borderRadius)
-            ctx.quadraticCurveTo(imageX, y, imageX + borderRadius, y)
-            ctx.closePath()
-            ctx.clip()
-            
-            ctx.drawImage(
-              loadedImage,
-            sx, sy, sWidth, sHeight,
-            imageX, y, imageWidth, imageHeight
-            )
-            ctx.restore()
-            
-            console.log(`✅ Image successfully drawn on canvas for carousel ${index + 1}!`)
-            console.log(`   Final position: (${imageX}, ${y}), Size: ${imageWidth}x${imageHeight}`)
-          } catch (error) {
-            console.error(`❌ Failed to render image for carousel ${index + 1}:`, error)
-            console.error(`   Error details:`, error)
-          }
-        } else if (cleanCarousel.kind === 'MIDDLE') {
-          console.warn(`⚠️ Carousel ${index + 1}: Image not drawn - loadedImage=${!!loadedImage}, imageWidth=${imageWidth}, imageHeight=${imageHeight}`)
-          if (!loadedImage && imageSourceUrl) {
-            console.warn(`   Image URL exists but failed to load:`, imageSourceUrl)
-          }
-        }
     }
 
     // Render page number for MIDDLE slides in template 3 (same position as subtitle on hook slide)
@@ -2447,6 +2871,59 @@ function CarouselImageGeneratorComponent({
       ctx.moveTo(arrowEndX, arrowY)
       ctx.lineTo(arrowEndX - arrowConfig.height / 2, arrowY + arrowConfig.height / 2)
       ctx.stroke()
+    }
+    
+    // Render footer if enabled
+    if (template.footer?.enabled && template.footer.height) {
+      const footerHeight = template.footer.height
+      // Position footer - ensure it stays within safe area boundaries
+      // For template 4, safeMarginBottom is 250 + footerHeight, so footer should be well within bounds
+      // Calculate max Y position based on safe area
+      const maxFooterY = height - safeMarginBottom + footerHeight
+      // Position footer at bottom, but ensure it doesn't exceed safe area
+      const footerY = template.id === 'template4' 
+        ? Math.min(height - footerHeight, maxFooterY)  // For template 4, ensure within safe area
+        : height - footerHeight  // For other templates, position at bottom
+      
+      // Draw separator line
+      if (template.footer.lineThickness && template.footer.lineColor) {
+        ctx.strokeStyle = template.footer.lineColor
+        ctx.lineWidth = template.footer.lineThickness
+        ctx.beginPath()
+        const paddingX = template.footer.paddingX || 48
+        ctx.moveTo(paddingX, footerY)
+        ctx.lineTo(width - paddingX, footerY)
+        ctx.stroke()
+      }
+      
+      // Draw footer text (left and right)
+      const footerFontRole = template.footer.fontRole || 'content'
+      const footerFont = template.fonts[footerFontRole]
+      if (footerFont) {
+        // Use fontSize override if provided, otherwise use fontRole's default size
+        const footerFontSize = template.footer.fontSize || footerFont.size
+        const footerCssFont = footerFont.cssFont.replace(/(\d+\.?\d*)px/, `${footerFontSize}px`)
+        
+        ctx.font = footerCssFont
+        ctx.fillStyle = template.textColor || colorTheme.textColor
+        ctx.textAlign = 'left'
+        
+        const paddingX = template.footer.paddingX || 48
+        const footerTextY = footerY + (footerHeight / 2) + (footerFontSize / 2)
+        
+        // Left text (account name) - use user input or template default
+        const leftText = accountName || template.footer.leftText || ''
+        if (leftText) {
+          ctx.fillText(leftText, paddingX, footerTextY)
+        }
+        
+        // Right text (website) - use user input or template default
+        const rightText = website || template.footer.rightText || ''
+        if (rightText) {
+          ctx.textAlign = 'right'
+          ctx.fillText(rightText, width - paddingX, footerTextY)
+        }
+      }
     }
     
     const carouselImageEndTime = performance.now()

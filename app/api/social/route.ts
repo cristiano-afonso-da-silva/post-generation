@@ -8,6 +8,7 @@ import {
   type AIImageStyle
 } from '../../config/prompts';
 import { GEMINI_MODEL } from '../../config/aiConfig';
+import { getCarouselTemplate } from '../../config/carouselTemplates';
 // ════════════════════════════════════════════════════════════════════════════
 // API Configuration
 // ════════════════════════════════════════════════════════════════════════════
@@ -819,21 +820,27 @@ async function extractUnderlineWordsWithGemini(carousels: any[]): Promise<Record
       
       console.log(`🔍 Parsed response for carousel ${i + 1}:`, JSON.stringify(parsed, null, 2));
       
-      // Ensure imageSearch exists for MIDDLE carousels
+      // Ensure imageSearch exists for MIDDLE and HOOK carousels
       let imageSearchKeywords = parsed.imageSearch || '';
       
-      // If Gemini didn't provide imageSearch for MIDDLE carousel, generate basic keywords from content
-      if (carousel.kind === 'MIDDLE' && !imageSearchKeywords) {
-        console.warn(`⚠️  Gemini did not provide imageSearch for MIDDLE carousel ${i + 1}, generating fallback...`);
-        // Extract first few meaningful words from content as fallback
-        const words = carousel.content.toLowerCase()
-          .replace(/[.,!?;:'"]/g, '')
-          .split(' ')
-          .filter((w: string) => w.length > 3 && !['that', 'this', 'with', 'from', 'have', 'been', 'they', 'their'].includes(w))
-          .slice(0, 4)
-          .join(' ');
-        imageSearchKeywords = words || 'lifestyle product';
-        console.log(`   Generated fallback keywords: "${imageSearchKeywords}"`);
+      // If Gemini didn't provide imageSearch, generate basic keywords from content/title
+      if (!imageSearchKeywords) {
+        const sourceText = carousel.kind === 'HOOK' 
+          ? (carousel.title || carousel.content || '')
+          : carousel.content;
+        
+        if (sourceText) {
+          console.warn(`⚠️  Gemini did not provide imageSearch for ${carousel.kind} carousel ${i + 1}, generating fallback...`);
+          // Extract first few meaningful words from content/title as fallback
+          const words = sourceText.toLowerCase()
+            .replace(/[.,!?;:'"]/g, '')
+            .split(' ')
+            .filter((w: string) => w.length > 3 && !['that', 'this', 'with', 'from', 'have', 'been', 'they', 'their', 'your', 'youre'].includes(w))
+            .slice(0, 4)
+            .join(' ');
+          imageSearchKeywords = words || (carousel.kind === 'HOOK' ? 'illustration concept' : 'lifestyle product');
+          console.log(`   Generated fallback keywords: "${imageSearchKeywords}"`);
+        }
       }
       
       results[i] = {
@@ -855,7 +862,7 @@ async function extractUnderlineWordsWithGemini(carousels: any[]): Promise<Record
   return results;
 }
 
-async function extractUnderlineWords(carousels: any[], includeImages: boolean = true, useAIImages: boolean = false, aiImageStyle: AIImageStyle = 'animated') {
+async function extractUnderlineWords(carousels: any[], includeImages: boolean = true, useAIImages: boolean = false, aiImageStyle: AIImageStyle = 'animated', templateId?: string) {
   const imageSource = useAIImages ? 'Pollinations.AI (AI-generated)' : 'Pexels (stock photos)';
   console.log(`\n🎨 Extracting emphasis words and ${includeImages ? `🖼️ images from ${imageSource} (enabled)` : '📝 NO images (disabled)'}`);
   
@@ -866,13 +873,24 @@ async function extractUnderlineWords(carousels: any[], includeImages: boolean = 
   const usedPexelsIds = new Set<number>();
   const usedPollinationsIds = new Set<string>();
   
+  // Get template to check hook image settings
+  const template = templateId ? getCarouselTemplate(templateId) : null;
+  const hookUsesImage = template?.hookLayout?.useImage || false;
+
   for (let i = 0; i < carousels.length; i++) {
     const carousel = carousels[i];
     const imageSearchKeywords = results[i]?.imageSearch || '';
     
     // For MIDDLE carousels, fetch image if enabled and we have search keywords
-    if (includeImages && carousel.kind === 'MIDDLE' && imageSearchKeywords && imageSearchKeywords.trim()) {
-      console.log(`\n🖼️  MIDDLE CAROUSEL ${i + 1}: Attempting to fetch image...`);
+    // For HOOK carousels, fetch image if template has useImage enabled and we have search keywords
+    const shouldFetchImage = includeImages && 
+      imageSearchKeywords && 
+      imageSearchKeywords.trim() &&
+      ((carousel.kind === 'MIDDLE') || (carousel.kind === 'HOOK' && hookUsesImage));
+    
+    if (shouldFetchImage) {
+      const carouselType = carousel.kind === 'HOOK' ? 'HOOK' : 'MIDDLE';
+      console.log(`\n🖼️  ${carouselType} CAROUSEL ${i + 1}: Attempting to fetch image...`);
       console.log(`   Keywords: "${imageSearchKeywords}"`);
       console.log(`   includeImages flag: ${includeImages}`);
       console.log(`   useAIImages flag: ${useAIImages}`);
@@ -884,8 +902,29 @@ async function extractUnderlineWords(carousels: any[], includeImages: boolean = 
           // Use Pollinations.AI to generate an image based on the description
           console.log(`   Using Pollinations.AI for AI-generated image`);
           
-          // Create a more detailed prompt based on the selected AI style
-          const aiPrompt = buildAIImagePrompt(imageSearchKeywords, aiImageStyle);
+          // Get template if templateId is provided
+          let aiPrompt: string;
+          if (templateId && template) {
+            // For HOOK slides, use hookImagePrompt if available, otherwise fall back to imagePrompt
+            if (carousel.kind === 'HOOK' && template.hookImagePrompt) {
+              aiPrompt = template.hookImagePrompt.replace('{input}', imageSearchKeywords);
+              console.log(`   Using template hookImagePrompt: "${template.hookImagePrompt}"`);
+              console.log(`   Replaced {input} with: "${imageSearchKeywords}"`);
+            } else if (template.imagePrompt) {
+              // Use template's imagePrompt, replacing {input} with imageSearchKeywords
+              aiPrompt = template.imagePrompt.replace('{input}', imageSearchKeywords);
+              console.log(`   Using template imagePrompt: "${template.imagePrompt}"`);
+              console.log(`   Replaced {input} with: "${imageSearchKeywords}"`);
+            } else {
+              // Fallback to default buildAIImagePrompt if template has no imagePrompt
+              aiPrompt = buildAIImagePrompt(imageSearchKeywords, aiImageStyle);
+              console.log(`   Template has no imagePrompt, using default style: ${aiImageStyle}`);
+            }
+          } else {
+            // No templateId provided, use default buildAIImagePrompt
+            aiPrompt = buildAIImagePrompt(imageSearchKeywords, aiImageStyle);
+            console.log(`   No templateId provided, using default style: ${aiImageStyle}`);
+          }
           
           const imageResult = await generatePollinationsImage(aiPrompt, usedPollinationsIds);
           
@@ -898,11 +937,11 @@ async function extractUnderlineWords(carousels: any[], includeImages: boolean = 
             usedPollinationsIds.add(imageResult.id);
           }
           if (imageResult?.url) {
-            console.log(`✅ SUCCESS: AI-generated image added to carousel ${i + 1}`);
+            console.log(`✅ SUCCESS: AI-generated image added to ${carouselType} carousel ${i + 1}`);
             console.log(`   Image URL: ${imageResult.url}`);
             console.log(`   ℹ️  Will be routed through proxy to avoid CORS issues`);
           } else {
-            console.error(`❌ FAILED: No image URL returned from Pollinations.AI for carousel ${i + 1}`);
+            console.error(`❌ FAILED: No image URL returned from Pollinations.AI for ${carouselType} carousel ${i + 1}`);
             console.error(`   This could mean: API error or network issue`);
             results[i].imageUrl = null;
             results[i].originalImageUrl = null;
@@ -918,10 +957,10 @@ async function extractUnderlineWords(carousels: any[], includeImages: boolean = 
             usedPexelsIds.add(imageResult.id);
           }
           if (imageResult?.url) {
-            console.log(`✅ SUCCESS: Stock image added to carousel ${i + 1}`);
+            console.log(`✅ SUCCESS: Stock image added to ${carouselType} carousel ${i + 1}`);
             console.log(`   Image URL: ${imageResult.url}`);
           } else {
-            console.error(`❌ FAILED: No image URL returned from Pexels for carousel ${i + 1}`);
+            console.error(`❌ FAILED: No image URL returned from Pexels for ${carouselType} carousel ${i + 1}`);
             console.error(`   Pexels API returned:`, imageResult);
             console.error(`   This could mean: API key issue, rate limit, or no matching images`);
             results[i].imageUrl = null;
@@ -929,7 +968,7 @@ async function extractUnderlineWords(carousels: any[], includeImages: boolean = 
           }
         }
       } catch (imageError: any) {
-        console.error(`❌ EXCEPTION during image fetch for carousel ${i + 1}:`);
+        console.error(`❌ EXCEPTION during image fetch for ${carouselType} carousel ${i + 1}:`);
         console.error(`   Error:`, imageError);
         console.error(`   Error message:`, imageError?.message);
         console.error(`   Stack:`, imageError?.stack);
@@ -938,7 +977,7 @@ async function extractUnderlineWords(carousels: any[], includeImages: boolean = 
       }
     } else {
       // Log why image fetch was skipped
-      if (carousel.kind === 'MIDDLE') {
+      if (carousel.kind === 'MIDDLE' || (carousel.kind === 'HOOK' && hookUsesImage)) {
         if (!includeImages) {
           console.log(`\n📝 MIDDLE CAROUSEL ${i + 1}: Images disabled by user (includeImages=${includeImages}) - skipping image fetch`);
         } else if (!imageSearchKeywords || !imageSearchKeywords.trim()) {
@@ -1067,7 +1106,7 @@ async function generateNoteWithGemini(ideaTitle: string, accountDescription: str
   }
 }
 
-async function generateNote(ideaTitle: string, accountDescription: string, includeImages: boolean = true, useAIImages: boolean = false, aiImageStyle: AIImageStyle = 'animated') {
+async function generateNote(ideaTitle: string, accountDescription: string, includeImages: boolean = true, useAIImages: boolean = false, aiImageStyle: AIImageStyle = 'animated', templateId?: string) {
   const startTime = Date.now();
   
   try {
@@ -1092,8 +1131,8 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
       };
     }
     
-    console.log(`🖼️ generateNote: Calling extractUnderlineWords with includeImages =`, includeImages, 'useAIImages =', useAIImages, 'aiImageStyle =', aiImageStyle);
-    const underlineWords = await extractUnderlineWords(data.slides, includeImages, useAIImages, aiImageStyle);
+    console.log(`🖼️ generateNote: Calling extractUnderlineWords with includeImages =`, includeImages, 'useAIImages =', useAIImages, 'aiImageStyle =', aiImageStyle, 'templateId =', templateId);
+    const underlineWords = await extractUnderlineWords(data.slides, includeImages, useAIImages, aiImageStyle, templateId);
     
     // Calculate stats before formatting
     const hookWords = data.slides[0]?.title ? wordCount(data.slides[0].title) : 0;
@@ -1159,7 +1198,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { action, accountDescription, ideaTitle, includeImages, useAIImages, aiImageStyle } = body;
+    const { action, accountDescription, ideaTitle, includeImages, useAIImages, aiImageStyle, templateId } = body;
     
     if (!action) {
       return NextResponse.json(
@@ -1196,7 +1235,7 @@ export async function POST(request: NextRequest) {
       console.log('🎨 Backend: Received useAIImages =', useAIImages, '→ Using shouldUseAIImages =', shouldUseAIImages);
       console.log('🎭 Backend: Using AI image style =', resolvedAIStyle);
       
-      const result = await generateNote(ideaTitle.trim(), accountDescription?.trim() || '', shouldIncludeImages, shouldUseAIImages, resolvedAIStyle);
+      const result = await generateNote(ideaTitle.trim(), accountDescription?.trim() || '', shouldIncludeImages, shouldUseAIImages, resolvedAIStyle, templateId);
       return NextResponse.json(result);
     }
 
