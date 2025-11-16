@@ -12,14 +12,13 @@ import { initializeTemplateCache } from '../config/carouselTemplates'
 import dynamic from 'next/dynamic'
 
 const CreateNewPage = dynamic(() => import('../_internal/create-page'), { ssr: false })
-const HistoryPage = dynamic(() => import('../_internal/history-page'), { ssr: false })
 const PostPage = dynamic(() => import('../_internal/post-page'), { ssr: false })
 const GenerateTemplatePage = dynamic(() => import('../_internal/generate-template-page'), { ssr: false })
 
 function DashboardView() {
   const searchParams = useSearchParams()
-  const view = (searchParams.get('view') as 'create' | 'history' | 'post' | 'generate-template') || 'create'
-  const [activeView, setActiveView] = useState<'create' | 'history' | 'post' | 'generate-template'>(view)
+  const view = (searchParams.get('view') as 'create' | 'post' | 'generate-template') || 'create'
+  const [activeView, setActiveView] = useState<'create' | 'post' | 'generate-template'>(view)
   const [selectedGenerationId, setSelectedGenerationId] = useState<string | null>(null)
   const { user, loading } = useAuth()
   const router = useRouter()
@@ -61,7 +60,7 @@ function DashboardView() {
     }
   }, [view, searchParams])
 
-  const handleViewChange = (newView: 'create' | 'history' | 'post' | 'generate-template') => {
+  const handleViewChange = (newView: 'create' | 'post' | 'generate-template') => {
     // Check if navigating away from create with unsaved work
     if (
       activeView === 'create' &&
@@ -81,7 +80,7 @@ function DashboardView() {
 
   const handleLoadGeneration = (generationId: string) => {
     setSelectedGenerationId(generationId)
-    router.push(`/dashboard?view=history&id=${generationId}`, { scroll: false })
+    router.push(`/dashboard?view=post&id=${generationId}`, { scroll: false })
   }
 
   const handleSidebarClose = () => {
@@ -228,14 +227,6 @@ function DashboardView() {
             generationId={searchParams.get('id') || undefined}
             onHasUnsavedWorkChange={setHasUnsavedWork}
           />
-        )}
-        {activeView === 'history' && (
-          <div style={{ height: '100%', overflow: isMobile ? 'hidden' : 'auto', overflowX: 'hidden', overflowY: isMobile ? 'hidden' : 'auto' }}>
-            <HistoryPage 
-              onLoadGeneration={handleLoadGeneration}
-              onOpenSidebar={isMobile ? handleSidebarOpen : undefined}
-            />
-          </div>
         )}
         {activeView === 'post' && (
           <div style={{ height: '100%', overflow: 'auto' }}>

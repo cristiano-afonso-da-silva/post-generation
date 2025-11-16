@@ -68,12 +68,14 @@ export async function uploadImagesToStorage(
       console.log(`📤 Uploading ${filePath}...`)
       
       // Upload to Supabase Storage
+      // OPTIMIZED: Increased cacheControl to 7 days (604800 seconds) since images are immutable
+      // This enables better CDN caching and reduces egress costs
       const { error: uploadError } = await supabase.storage
         .from('carousel-images')
         .upload(filePath, blob, {
           contentType: 'image/png',
           upsert: true,
-          cacheControl: '3600'
+          cacheControl: '604800' // 7 days - images are immutable once created
         })
 
       if (uploadError) {

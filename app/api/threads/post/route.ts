@@ -57,9 +57,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Generation not found' }, { status: 404 });
     }
 
+    // OPTIMIZED: Only select fields we actually use
     const { data: connection, error: connError } = await supabaseAdmin
       .from('threads_connections')
-      .select('*')
+      .select('id, user_id, threads_user_id, threads_username, access_token, token_expires_at')
       .eq('user_id', userId)
       .single();
 

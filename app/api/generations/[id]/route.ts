@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/app/lib/supabase'
 import { isSignedUrlValid, filterValidUrls, areAllUrlsValid } from '@/app/lib/urlValidation'
 
+// OPTIMIZED: Add caching headers to reduce redundant Supabase calls
+// Cache for 60 seconds since individual generations change less frequently
+export const revalidate = 60
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -14,9 +18,10 @@ export async function GET(
       return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
     }
 
+    // OPTIMIZED: Only select fields we actually use to reduce egress
     const { data: generation, error } = await supabase
       .from('generations')
-      .select('*')
+      .select('id, user_id, project_name, idea_title, account_description, slides, caption, underline_words, font_combination_id, color_theme_id, image_urls, thumbnail_urls, created_at, updated_at, threads_post_id, threads_posted_at, threads_post_status')
       .eq('id', params.id)
       .eq('user_id', userId)
       .single()
@@ -114,14 +119,23 @@ export async function GET(
       }
     }
 
-    // Explicitly include caption to ensure it's returned
-    return NextResponse.json({ 
+    // Explicitly include caption and threads status to ensure they're returned
+    // OPTIMIZED: Add cache headers to reduce redundant Supabase calls
+    const response = NextResponse.json({ 
       generation: {
         ...generation,
         caption: generation.caption || null, // Explicitly include caption
+        threads_post_id: generation.threads_post_id || null,
+        threads_posted_at: generation.threads_posted_at || null,
+        threads_post_status: generation.threads_post_status || null,
         imageUrls
       }
     })
+    
+    // Cache for 60 seconds - user-specific but reduces redundant Supabase calls
+    response.headers.set('Cache-Control', 'private, s-maxage=60, stale-while-revalidate=120')
+    
+    return response
 
   } catch (error: any) {
     console.error('Error fetching generation:', error)

@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/app/lib/supabase'
 import { isSignedUrlValid, filterValidUrls } from '@/app/lib/urlValidation'
 
+// OPTIMIZED: Add caching headers to reduce redundant Supabase calls
+// Cache for 30 seconds - balances freshness with reduced egress
+export const revalidate = 30
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = createServerClient()
@@ -13,10 +17,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
     }
 
-    // Get total count
+    // Get total count - use head: true to avoid fetching data, only count
     const { count } = await supabase
       .from('generations')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
 
     // Fetch generations - only fetch fields we actually need for the history view
@@ -153,10 +157,17 @@ export async function GET(request: NextRequest) {
       })
     )
 
-    return NextResponse.json({ 
+    // OPTIMIZED: Add cache headers to reduce redundant requests
+    // User-specific data, so cache for short duration only
+    const response = NextResponse.json({ 
       generations: generationsWithImages,
       totalCount: count || 0
     })
+    
+    // Cache for 30 seconds - user-specific but reduces redundant Supabase calls
+    response.headers.set('Cache-Control', 'private, s-maxage=30, stale-while-revalidate=60')
+    
+    return response
 
   } catch (error: any) {
     console.error('Error fetching generations:', error)
