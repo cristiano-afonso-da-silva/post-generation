@@ -160,7 +160,7 @@ export default function GenerateTemplatePage() {
           color: '#000000',
           marginBottom: '12px',
         }}>
-          Generate Template
+          Generate Template (Beta)
         </h1>
         <p style={{
           fontSize: '16px',

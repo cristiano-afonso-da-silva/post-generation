@@ -297,8 +297,14 @@ function PostPageContent() {
     }
     
     if (errorParam) {
+      // Don't show connection errors if user is already disconnected
+      if (errorParam === 'threads_auth_failed') {
+        // Clear the param from URL without showing error
+        router.replace('/dashboard?view=post', { scroll: false })
+        return
+      }
+      
       const errorMessages: Record<string, string> = {
-        threads_auth_failed: 'Failed to connect to Threads. Please try again.',
         no_code: 'Authorization failed. Please try again.',
         token_exchange_failed: 'Failed to authenticate with Threads. Please try again.',
         db_error: 'Failed to save connection. Please try again.',
