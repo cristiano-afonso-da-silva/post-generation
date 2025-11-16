@@ -3,13 +3,13 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
-import { SquarePen, History, PanelRightOpen, Menu, Send, Sparkles } from 'lucide-react'
+import { SquarePen, ChevronLeft, Menu, Send, Sparkles } from 'lucide-react'
 import Image from 'next/image'
 import AccountModal from './AccountModal'
 
 interface SidebarProps {
-  activeView: 'create' | 'history' | 'post' | 'generate-template'
-  onViewChange: (view: 'create' | 'history' | 'post' | 'generate-template') => void
+  activeView: 'create' | 'post' | 'generate-template'
+  onViewChange: (view: 'create' | 'post' | 'generate-template') => void
   isCollapsed?: boolean
   isMobile?: boolean
   isMobileOpen?: boolean
@@ -25,7 +25,6 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
 
   const menuItems = [
     { id: 'create' as const, label: 'Create', icon: SquarePen },
-    { id: 'history' as const, label: 'History', icon: History },
     { id: 'post' as const, label: 'Post', icon: Send },
     { id: 'generate-template' as const, label: 'Generate Template', icon: Sparkles },
   ]
@@ -114,7 +113,7 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
                 e.currentTarget.style.background = 'transparent'
               }}
             >
-              <PanelRightOpen size={20} />
+              <ChevronLeft size={20} />
             </button>
           )}
         </div>

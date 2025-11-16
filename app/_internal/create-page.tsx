@@ -613,7 +613,7 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
                 // Navigate IMMEDIATELY - don't update any React state
                 // State updates cause re-renders which show blank page
                 // Navigation happens synchronously, so no state updates needed
-                window.location.href = `/dashboard?view=history&id=${generationId}`
+                window.location.href = `/dashboard?view=post&id=${generationId}`
               } else {
                 console.error('❌ Cannot navigate: No generationId provided from database save')
                 console.error('   Database save may have failed or not completed')

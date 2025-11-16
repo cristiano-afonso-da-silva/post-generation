@@ -27,11 +27,13 @@ export async function POST(request: NextRequest) {
     const filePath = `${userId}/${generationId}/slide-${imageIndex}.png`
     
     // Upload to Supabase Storage
+    // OPTIMIZED: Increased cacheControl to 7 days (604800 seconds) since images are immutable
     const { error: uploadError } = await supabase.storage
       .from('carousel-images')
       .upload(filePath, buffer, {
         contentType: 'image/png',
-        upsert: true
+        upsert: true,
+        cacheControl: '604800' // 7 days - images are immutable once created
       })
 
     if (uploadError) {

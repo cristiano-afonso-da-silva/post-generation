@@ -3091,21 +3091,12 @@ function CarouselImageGeneratorComponent({
                       left: 0,
                       width: '100%',
                       height: '100%',
-                      background: 'rgba(229, 229, 229, 0.9)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '12px',
-                      color: '#4a4a4a',
-                      fontSize: '13px',
-                      fontWeight: 500,
+                      background: 'linear-gradient(90deg, #e5e5e5 25%, #f0f0f0 50%, #e5e5e5 75%)',
+                      backgroundSize: '200% 100%',
+                      animation: 'skeleton-loading 1.5s ease-in-out infinite',
                       zIndex: 2
                     }}
-                  >
-                    <span className="spinner" style={{ width: '32px', height: '32px', borderWidth: '3px' }} />
-                    <span>Preparing slide...</span>
-                  </div>
+                  />
                 )}
 
                 {/* Always render an offscreen canvas so we can regenerate at any time */}

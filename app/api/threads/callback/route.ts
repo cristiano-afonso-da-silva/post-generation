@@ -135,7 +135,8 @@ export async function GET(request: NextRequest) {
     }
     
     const threadsUserId = userIdData.id;
-    console.log('✅ Got Threads user ID:', threadsUserId);
+    const threadsUsername = userIdData.username;
+    console.log('✅ Got Threads user ID and username:', { threadsUserId, threadsUsername });
 
     // 3. Exchange for long-lived token (60 days)
     console.log('🔄 Exchanging for long-lived token...');
@@ -182,17 +183,19 @@ export async function GET(request: NextRequest) {
     const expiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
 
     // Store connection in database using userId from state (bypasses RLS with service role)
-    const { error: dbError } = await supabaseAdmin
+    const { data: upsertedData, error: dbError } = await supabaseAdmin
       .from('threads_connections')
       .upsert({
         user_id: userId,
         threads_user_id: threadsUserId,
+        threads_username: threadsUsername,
         access_token: accessToken,
         token_expires_at: expiresAt,
         updated_at: new Date().toISOString()
       }, {
         onConflict: 'user_id'
-      });
+      })
+      .select('id, user_id, threads_user_id, threads_username, token_expires_at, created_at');
 
     if (dbError) {
       console.error('❌ Database error storing Threads connection:', dbError);
@@ -202,8 +205,30 @@ export async function GET(request: NextRequest) {
     console.log('✅ Threads connection stored successfully', {
       userId,
       threadsUserId,
-      expiresAt
+      expiresAt,
+      upsertedData
     });
+
+    // Verify the connection was actually saved by querying it back
+    // OPTIMIZED: Only select fields we need for verification
+    const { data: verifyConnection, error: verifyError } = await supabaseAdmin
+      .from('threads_connections')
+      .select('user_id, threads_user_id')
+      .eq('user_id', userId)
+      .single();
+
+    if (verifyError || !verifyConnection) {
+      console.error('⚠️ WARNING: Connection stored but could not be verified!', {
+        verifyError,
+        userId
+      });
+    } else {
+      console.log('✅ Connection verified in database', {
+        userId,
+        verifiedThreadsUserId: verifyConnection.threads_user_id
+      });
+    }
+
     return NextResponse.redirect(new URL('/dashboard?view=post&success=threads_connected', request.url));
   } catch (error: any) {
     console.error('❌ Callback error:', {

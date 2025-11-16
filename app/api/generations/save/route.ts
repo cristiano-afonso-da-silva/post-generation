@@ -30,10 +30,10 @@ export async function POST(request: NextRequest) {
 
     // First, check if a generation with the same ideaTitle already exists for this user
     // This ensures that updates to the same idea replace the existing entry instead of creating duplicates
-    // Use a single query to find the most recent generation with this ideaTitle
+    // OPTIMIZED: Only select id field since that's all we need to check existence
     const { data: existingByTitle, error: titleCheckError } = await supabase
       .from('generations')
-      .select('*')
+      .select('id')
       .eq('user_id', userId)
       .eq('idea_title', ideaTitle)
       .order('created_at', { ascending: false })
@@ -48,9 +48,10 @@ export async function POST(request: NextRequest) {
       console.log(`Found existing generation for ideaTitle "${ideaTitle}", will update instead of creating new`)
     } else if (generationId) {
       // If no match by title, but generationId was provided, verify it exists and belongs to the user
+      // OPTIMIZED: Only select id to verify existence
       const { data: existingGen, error: fetchError } = await supabase
         .from('generations')
-        .select('*')
+        .select('id')
         .eq('id', generationId)
         .eq('user_id', userId)
         .single()
@@ -94,10 +95,10 @@ export async function POST(request: NextRequest) {
         if (genError.code === '23505' || genError.message?.includes('duplicate') || genError.message?.includes('unique')) {
           console.log(`Insert failed due to duplicate, attempting update for ideaTitle "${ideaTitle}"`)
           
-          // Fetch the existing generation
+          // Fetch the existing generation - only need id
           const { data: existingGen, error: fetchError } = await supabase
             .from('generations')
-            .select('*')
+            .select('id')
             .eq('user_id', userId)
             .eq('idea_title', ideaTitle)
             .order('created_at', { ascending: false })
@@ -178,11 +179,13 @@ export async function POST(request: NextRequest) {
         
         const filePath = `${userId}/${generation.id}/slide-${i}.png`
         
+        // OPTIMIZED: Increased cacheControl to 7 days (604800 seconds) since images are immutable
         const { error: uploadError } = await supabase.storage
           .from('carousel-images')
           .upload(filePath, buffer, {
             contentType: 'image/png',
-            upsert: true
+            upsert: true,
+            cacheControl: '604800' // 7 days - images are immutable once created
           })
 
         if (uploadError) {
@@ -220,6 +223,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update generation with thumbnail URLs and all image URLs for caching
+    // OPTIMIZED: Don't return data from update since we don't use it
     const { error: urlUpdateError } = await supabase
       .from('generations')
       .update({ 

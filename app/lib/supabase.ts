@@ -37,7 +37,7 @@ export interface UserCredits {
 export async function getUserCredits(userId: string): Promise<UserCredits | null> {
   const { data, error } = await supabase
     .from('user_credits')
-    .select('*')
+    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, created_at, updated_at')
     .eq('user_id', userId)
     .single()
 
@@ -75,7 +75,7 @@ export async function createInitialCreditRecord(userId: string): Promise<UserCre
 
 // Deduct credit (client-side)
 export async function deductCredit(userId: string): Promise<UserCredits | null> {
-  // First get current credits
+  // First get current credits - only need the fields we'll use
   const current = await getUserCredits(userId)
   if (!current) {
     return null
@@ -88,7 +88,7 @@ export async function deductCredit(userId: string): Promise<UserCredits | null> 
       total_credits_used: current.total_credits_used + 1,
     })
     .eq('user_id', userId)
-    .select()
+    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, created_at, updated_at')
     .single()
 
   if (error) {
@@ -116,7 +116,7 @@ export async function updateUserSubscription(
     .from('user_credits')
     .update(subscriptionData)
     .eq('user_id', userId)
-    .select()
+    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, created_at, updated_at')
     .single()
 
   if (error) {
@@ -134,10 +134,10 @@ export async function addCredits(
 ): Promise<UserCredits | null> {
   const serverClient = createServerClient()
   
-  // Get current credits by user_id
+  // Get current credits by user_id - only need credits_remaining for calculation
   const { data: currentData } = await serverClient
     .from('user_credits')
-    .select('*')
+    .select('credits_remaining')
     .eq('user_id', userId)
     .single()
   
@@ -151,7 +151,7 @@ export async function addCredits(
       credits_remaining: currentData.credits_remaining + creditsToAdd,
     })
     .eq('user_id', userId)
-    .select()
+    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, created_at, updated_at')
     .single()
 
   if (error) {
@@ -170,7 +170,7 @@ export async function getUserCreditsByStripeCustomerId(
   
   const { data, error } = await serverClient
     .from('user_credits')
-    .select('*')
+    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, created_at, updated_at')
     .eq('stripe_customer_id', stripeCustomerId)
     .single()
 
@@ -188,7 +188,7 @@ export async function getUserCreditsServer(userId: string): Promise<UserCredits 
   
   const { data, error } = await serverClient
     .from('user_credits')
-    .select('*')
+    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, created_at, updated_at')
     .eq('user_id', userId)
     .single()
 
@@ -230,7 +230,7 @@ export async function createInitialCreditRecordServer(userId: string): Promise<U
 export async function deductCreditServer(userId: string): Promise<UserCredits | null> {
   const serverClient = createServerClient()
   
-  // First get current credits
+  // First get current credits - only need the fields we'll use
   const current = await getUserCreditsServer(userId)
   if (!current) {
     return null
@@ -243,7 +243,7 @@ export async function deductCreditServer(userId: string): Promise<UserCredits | 
       total_credits_used: current.total_credits_used + 1,
     })
     .eq('user_id', userId)
-    .select()
+    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, created_at, updated_at')
     .single()
 
   if (error) {
