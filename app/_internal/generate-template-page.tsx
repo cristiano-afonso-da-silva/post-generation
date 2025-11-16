@@ -159,11 +159,7 @@ export default function GenerateTemplatePage() {
           fontWeight: '700',
           color: '#000000',
           marginBottom: '12px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
         }}>
-          <Sparkles size={32} />
           Generate Template
         </h1>
         <p style={{
@@ -171,7 +167,7 @@ export default function GenerateTemplatePage() {
           color: '#666666',
           lineHeight: '1.5',
         }}>
-          Upload 1-3 images and provide a description. Our AI will analyze your images and create a custom template that matches your style.
+          Upload 1–3 images and add a short description. Our AI will scan your images and build a template that matches your style.
         </p>
       </div>
 
@@ -297,29 +293,39 @@ export default function GenerateTemplatePage() {
         }}>
           Description
         </label>
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Describe the style, mood, and aesthetic you want for your template. For example: 'Modern and minimalist with clean lines, bright colors, and lots of white space' or 'Elegant and sophisticated with serif fonts and muted tones'"
-          style={{
-            width: '100%',
-            minHeight: '150px',
-            padding: '16px',
-            fontSize: '15px',
-            border: '2px solid #e5e5e5',
-            borderRadius: '12px',
-            resize: 'vertical',
-            fontFamily: 'inherit',
-            transition: 'border-color 0.2s ease',
-            outline: 'none',
-          }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = '#000000'
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = '#e5e5e5'
-          }}
-        />
+        <div style={{
+          width: '100%',
+          background: '#f5f5f5',
+          borderRadius: '12px',
+          border: '2px solid #e5e5e5',
+          overflow: 'hidden',
+        }}>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Describe the style, mood, and aesthetic you want for your template. For example: 'Modern and minimalist with clean lines, bright colors, and lots of white space' or 'Elegant and sophisticated with serif fonts and muted tones'"
+            style={{
+              width: '100%',
+              minHeight: '150px',
+              padding: '20px',
+              fontSize: '15px',
+              border: 'none',
+              borderRadius: '12px',
+              resize: 'vertical',
+              fontFamily: 'inherit',
+              color: '#333333',
+              background: 'transparent',
+              outline: 'none',
+              lineHeight: '1.5',
+            }}
+            onFocus={(e) => {
+              e.currentTarget.closest('div')!.style.borderColor = '#cccccc'
+            }}
+            onBlur={(e) => {
+              e.currentTarget.closest('div')!.style.borderColor = '#e5e5e5'
+            }}
+          />
+        </div>
       </div>
 
       {/* Error Message */}

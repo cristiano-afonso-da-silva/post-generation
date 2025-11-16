@@ -4,6 +4,12 @@ import { getSupabaseAdmin } from '@/app/lib/supabase-admin';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+// Define the connection type
+interface ThreadsConnection {
+  id: string;
+  user_id: string;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await request.json();
@@ -28,8 +34,8 @@ export async function POST(request: NextRequest) {
     });
 
     // Find the connection for this user
-    const existingConnection = allConnections?.find(
-      (conn: any) => conn.user_id === userId
+    const existingConnection = (allConnections as ThreadsConnection[] | null)?.find(
+      (conn) => conn.user_id === userId
     );
 
     console.log('[Threads Disconnect] Existing connection check:', {
@@ -43,12 +49,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: 'Already disconnected' });
     }
 
-    // Delete the connection by ID using raw SQL (more reliable)
+    // Delete the connection by ID
     console.log('[Threads Disconnect] Attempting to delete connection by ID...', {
       connectionId: existingConnection.id
     });
     
-    // Try deletion using the Supabase client first
     const { data: deletedData, error: deleteError } = await supabaseAdmin
       .from('threads_connections')
       .delete()
@@ -64,28 +69,17 @@ export async function POST(request: NextRequest) {
 
     if (deleteError) {
       console.error('❌ Failed to disconnect Threads account:', deleteError);
-      // Try raw SQL as fallback
-      console.log('[Threads Disconnect] Trying raw SQL deletion...');
-      const { data: sqlResult, error: sqlError } = await supabaseAdmin.rpc('exec_sql', {
-        query: `DELETE FROM threads_connections WHERE id = '${existingConnection.id}' RETURNING id`
-      });
-      
-      if (sqlError) {
-        console.error('❌ Raw SQL deletion also failed:', sqlError);
-        return NextResponse.json(
-          { error: 'Failed to disconnect Threads account' },
-          { status: 500 }
-        );
-      }
-      
-      console.log('✅ Raw SQL deletion succeeded:', sqlResult);
-    } else {
-      console.log('✅ Threads connection deleted via client:', { 
-        userId, 
-        deletedCount: deletedData?.length || 0,
-        deletedData 
-      });
+      return NextResponse.json(
+        { error: 'Failed to disconnect Threads account' },
+        { status: 500 }
+      );
     }
+
+    console.log('✅ Threads connection deleted via client:', { 
+      userId, 
+      deletedCount: deletedData?.length || 0,
+      deletedData 
+    });
 
     // Verify deletion by checking if connection still exists
     console.log('[Threads Disconnect] Verifying deletion...');
@@ -94,7 +88,7 @@ export async function POST(request: NextRequest) {
       .from('threads_connections')
       .select('id, user_id');
 
-    const stillExists = allConnectionsAfter?.find((conn: any) => conn.user_id === userId);
+    const stillExists = (allConnectionsAfter as ThreadsConnection[] | null)?.find((conn) => conn.user_id === userId);
 
     if (stillExists) {
       console.error('⚠️ WARNING: Connection still exists after deletion!', {

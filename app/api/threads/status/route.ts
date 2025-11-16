@@ -4,6 +4,19 @@ import { getSupabaseAdmin } from '@/app/lib/supabase-admin';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+// Define the connection types
+interface ThreadsConnectionBasic {
+  id: string;
+  user_id: string;
+}
+
+interface ThreadsConnectionFull extends ThreadsConnectionBasic {
+  threads_user_id: string | null;
+  threads_username: string | null;
+  token_expires_at: string | null;
+  created_at: string;
+}
+
 export async function GET(request: NextRequest) {
   try {
     // Get userId from query params
@@ -47,19 +60,21 @@ export async function GET(request: NextRequest) {
     });
     
     // If filtered query fails, try finding it manually from all connections
-    let connection = filteredConnections?.[0] || null;
+    let connection: ThreadsConnectionFull | null = (filteredConnections as ThreadsConnectionFull[] | null)?.[0] || null;
     
     if (!connection && allConnections) {
       // Fallback: manually filter in JavaScript
       // If we found a match, fetch the full connection data
-      const matchedConnection = allConnections.find((conn: any) => conn.user_id === userId);
+      const matchedConnection = (allConnections as ThreadsConnectionBasic[] | null)?.find(
+        (conn) => conn.user_id === userId
+      );
       if (matchedConnection) {
         const { data: fullConnection } = await supabaseAdmin
           .from('threads_connections')
           .select('id, user_id, threads_user_id, threads_username, token_expires_at, created_at')
           .eq('id', matchedConnection.id)
           .single();
-        connection = fullConnection;
+        connection = fullConnection as ThreadsConnectionFull | null;
         console.log('[Threads Status] Found connection via manual filter:', !!connection);
       }
     }

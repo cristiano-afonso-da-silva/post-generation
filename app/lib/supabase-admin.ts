@@ -20,9 +20,6 @@ export function getSupabaseAdmin() {
       autoRefreshToken: false,
       persistSession: false,
     },
-    db: {
-      schema: 'public'
-    },
     global: {
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
