@@ -1396,7 +1396,7 @@ function CarouselImageGeneratorComponent({
       if (template.hookLayout?.showTopic || template.hookLayout?.showSubtitle || template.hookLayout?.showCTA) {
         // NEW TEMPLATE 3 LAYOUT: topic (at top), title (centered), subtitle, CTA with colored box and arrow
         const topicText = cleanCarousel.topic || ''
-        const titleText = cleanCarousel.title || ''
+        const titleText = ideaTitle?.trim() || cleanCarousel.title || ''
         const subtitleText = cleanCarousel.subtitle || ''
         const ctaText = cleanCarousel.cta || ''
 
@@ -1566,7 +1566,7 @@ function CarouselImageGeneratorComponent({
 
       } else {
         // ORIGINAL HOOK LAYOUT (templates 1 & 2): Simple centered hook with highlight
-      const hookText = cleanCarousel.title || cleanCarousel.content
+      const hookText = ideaTitle?.trim() || cleanCarousel.title || cleanCarousel.content
         const hookLetterSpacing = getLetterSpacingFor('hook')
         const hookAlign = getTextAlignFor('hook')
       
