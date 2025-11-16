@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
-import { SquarePen, ChevronLeft, Menu, Send, Sparkles } from 'lucide-react'
+import { SquarePen, ChevronLeft, Menu, Send, Sparkle } from 'lucide-react'
 import Image from 'next/image'
 import AccountModal from './AccountModal'
 
@@ -26,7 +26,7 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
   const menuItems = [
     { id: 'create' as const, label: 'Create', icon: SquarePen },
     { id: 'post' as const, label: 'Post', icon: Send },
-    { id: 'generate-template' as const, label: 'Generate Template', icon: Sparkles },
+    { id: 'generate-template' as const, label: 'Generate Template', icon: Sparkle },
   ]
 
   // On mobile, always show full width sidebar (never collapsed)

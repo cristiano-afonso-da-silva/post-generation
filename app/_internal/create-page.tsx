@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowUp, ChevronDown } from 'lucide-react'
 import '../globals.css'
@@ -106,6 +106,8 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
   const hasInitializedRef = useRef(false)
   const prevColorThemeIdRef = useRef(colorThemeId)
   const prevTemplateIdRef = useRef(templateId)
+  const profileSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const hasFetchedFromDbRef = useRef(false)
 
   // Check for unsaved work
   const hasUnsavedWork = Boolean(
@@ -125,6 +127,30 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
     }
   }, [hasUnsavedWork, onHasUnsavedWorkChange])
 
+  // Debounced function to save profile to database
+  const saveProfileToDatabase = useCallback(async (accountHandle: string, websiteValue: string) => {
+    if (!user?.id) return
+    
+    try {
+      const response = await fetch(`${API_URL}/api/user/profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          accountHandle: accountHandle || null,
+          website: websiteValue || null,
+        }),
+      })
+      
+      if (!response.ok) {
+        console.error('Failed to save profile to database')
+      }
+    } catch (error) {
+      // Silent failure - localStorage is source of truth
+      console.error('Error saving profile to database:', error)
+    }
+  }, [user?.id])
+
   useEffect(() => {
     if (!user || authLoading || hasInitializedRef.current) return
     hasInitializedRef.current = true
@@ -140,18 +166,76 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
       
       // Load account name and website from localStorage
       const savedAccountName = localStorage.getItem('postGeneration_accountName')
-      if (savedAccountName) {
-        setAccountName(savedAccountName)
-      }
-      
       const savedWebsite = localStorage.getItem('postGeneration_website')
-      if (savedWebsite) {
-        setWebsite(savedWebsite)
+      
+      // If localStorage is empty, fetch from database once
+      if (!savedAccountName && !savedWebsite && !hasFetchedFromDbRef.current && user?.id) {
+        hasFetchedFromDbRef.current = true
+        // Fetch from database (one-time only to minimize egress)
+        fetch(`${API_URL}/api/user/profile?userId=${user.id}`)
+          .then(async (response) => {
+            if (response.ok) {
+              const data = await response.json()
+              if (data.success) {
+                // Update state and localStorage from database
+                if (data.accountHandle) {
+                  setAccountName(data.accountHandle)
+                  try {
+                    localStorage.setItem('postGeneration_accountName', data.accountHandle)
+                  } catch (error) {
+                    console.error('Error saving account name to localStorage:', error)
+                  }
+                }
+                if (data.website) {
+                  setWebsite(data.website)
+                  try {
+                    localStorage.setItem('postGeneration_website', data.website)
+                  } catch (error) {
+                    console.error('Error saving website to localStorage:', error)
+                  }
+                }
+              }
+            }
+          })
+          .catch((error) => {
+            // Silent failure - localStorage is source of truth
+            console.error('Error fetching profile from database:', error)
+          })
+      } else {
+        // Use localStorage values
+        if (savedAccountName) {
+          setAccountName(savedAccountName)
+        }
+        if (savedWebsite) {
+          setWebsite(savedWebsite)
+        }
       }
     } catch (error) {
       console.error('Error loading from localStorage:', error)
     }
   }, [user, authLoading])
+
+  // Debounced save to database when accountName or website changes
+  useEffect(() => {
+    if (!user?.id || !hasInitializedRef.current) return
+    
+    // Clear existing timeout
+    if (profileSaveTimeoutRef.current) {
+      clearTimeout(profileSaveTimeoutRef.current)
+    }
+    
+    // Set new timeout to save after 1 second of no changes
+    profileSaveTimeoutRef.current = setTimeout(() => {
+      saveProfileToDatabase(accountName, website)
+    }, 1000)
+    
+    // Cleanup on unmount
+    return () => {
+      if (profileSaveTimeoutRef.current) {
+        clearTimeout(profileSaveTimeoutRef.current)
+      }
+    }
+  }, [accountName, website, saveProfileToDatabase])
 
   // Auto-focus textarea when page loads
   useEffect(() => {
@@ -232,6 +316,12 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
     setTemplateId(generation.template_id || 'template1')
     setColorThemeId(generation.color_theme_id || 'purple-black')
     
+    // Load accountName and website from generation data or localStorage
+    const savedAccountName = generation.account_name || localStorage.getItem('postGeneration_accountName') || ''
+    const savedWebsite = generation.website || localStorage.getItem('postGeneration_website') || ''
+    setAccountName(savedAccountName)
+    setWebsite(savedWebsite)
+    
     // Store minimal data in localStorage for CarouselImageGenerator
     try {
       localStorage.setItem('postGeneration_generationId', generation.id)
@@ -239,9 +329,15 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
       localStorage.setItem('postGeneration_ideaTitle', generation.idea_title)
       localStorage.setItem('postGeneration_fromHistory', 'true')
       
-      // Store images if available
+      // Store images if available - use data URLs from cache if available
       if (generation.image_urls && generation.image_urls.length > 0) {
-        localStorage.setItem('postGeneration_canvasImages', JSON.stringify(generation.image_urls))
+        // Check if we have cached data URLs for these images
+        const { getCachedImageDataUrl } = require('../lib/imageCache')
+        const imageUrls = generation.image_urls.map((url: string) => {
+          const cached = getCachedImageDataUrl(url)
+          return cached || url
+        })
+        localStorage.setItem('postGeneration_canvasImages', JSON.stringify(imageUrls))
       }
     } catch (error) {
       console.error('Error storing in localStorage:', error)
@@ -610,10 +706,14 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
               if (generationId) {
                 console.log('✅ Navigating to history page with generationId:', generationId)
                 redirectingRef.current = true
+                // Get default theme for the selected template
+                const template = getCarouselTemplate(templateId)
+                const defaultTheme = template.defaultColorThemeId || colorThemeId || 'purple-black'
                 // Navigate IMMEDIATELY - don't update any React state
                 // State updates cause re-renders which show blank page
                 // Navigation happens synchronously, so no state updates needed
-                window.location.href = `/dashboard?view=post&id=${generationId}`
+                // Pass template and theme in URL so post page can use them
+                window.location.href = `/dashboard?view=post&id=${generationId}&template=${templateId}&theme=${defaultTheme}`
               } else {
                 console.error('❌ Cannot navigate: No generationId provided from database save')
                 console.error('   Database save may have failed or not completed')
@@ -1200,6 +1300,8 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
               ideaIndex={selectedIdea ? ideas.findIndex(idea => idea === selectedIdea) + 1 : null}
               caption={note.caption || ''}
               accountDescription={accountDescription}
+              accountName={accountName}
+              website={website}
               includeImages={includeImages}
               useAIImages={useAIImages}
               aiImageStyle={aiImageStyle}
@@ -1334,6 +1436,11 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
           selectedTemplateId={templateId}
           onSelectTemplate={(id) => {
             setTemplateId(id)
+            // Set color theme to template's default if it exists
+            const template = getCarouselTemplate(id)
+            if (template.defaultColorThemeId) {
+              setColorThemeId(template.defaultColorThemeId)
+            }
             try {
               localStorage.setItem('postGeneration_templateId', id)
             } catch (error) {

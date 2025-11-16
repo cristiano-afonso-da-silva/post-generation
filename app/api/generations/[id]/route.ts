@@ -21,7 +21,7 @@ export async function GET(
     // OPTIMIZED: Only select fields we actually use to reduce egress
     const { data: generation, error } = await supabase
       .from('generations')
-      .select('id, user_id, project_name, idea_title, account_description, slides, caption, underline_words, font_combination_id, color_theme_id, image_urls, thumbnail_urls, created_at, updated_at, threads_post_id, threads_posted_at, threads_post_status')
+      .select('id, user_id, project_name, idea_title, account_description, account_name, website, slides, caption, underline_words, font_combination_id, color_theme_id, template_id, image_urls, thumbnail_urls, created_at, updated_at, threads_post_id, threads_posted_at, threads_post_status')
       .eq('id', params.id)
       .eq('user_id', userId)
       .single()

@@ -3,6 +3,8 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase, getUserCredits, UserCredits } from '../lib/supabase'
+import { clearGenerationCache } from '../lib/cache'
+import { clearImageCache } from '../lib/imageCache'
 
 interface AuthContextType {
   user: User | null
@@ -62,7 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user?.id])
 
   // Helper function to clear all localStorage data
-  const clearLocalStorageData = () => {
+  const clearLocalStorageData = (userId?: string) => {
     try {
       localStorage.removeItem('postGeneration_note')
       localStorage.removeItem('postGeneration_accountDescription')
@@ -75,6 +77,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem('postGeneration_ideaTitle')
       localStorage.removeItem('postGeneration_userId')
       localStorage.removeItem('postGeneration_backgroundId')
+      
+      // Clear generation caches (data and images)
+      if (userId) {
+        clearGenerationCache(userId)
+      } else {
+        clearGenerationCache() // Clear all user caches
+      }
+      // Note: We keep image cache across users since images are identified by URL hash
+      // But we can clear it on logout if desired
     } catch (error) {
       console.error('Error clearing localStorage:', error)
     }
@@ -139,21 +150,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const signOut = async () => {
-    // Clear localStorage on sign out
+    // Clear localStorage and caches on sign out
+    const currentUserId = user?.id
+    clearLocalStorageData(currentUserId)
+    
+    // Also clear image cache on logout (optional - can be removed if you want to keep images cached)
     try {
-      localStorage.removeItem('postGeneration_note')
-      localStorage.removeItem('postGeneration_accountDescription')
-      localStorage.removeItem('postGeneration_fontCombinationId')
-      localStorage.removeItem('postGeneration_colorThemeId')
-      localStorage.removeItem('postGeneration_canvasImages')
-      localStorage.removeItem('postGeneration_contentHash')
-      localStorage.removeItem('postGeneration_generationId')
-      localStorage.removeItem('postGeneration_fullContentHash')
-      localStorage.removeItem('postGeneration_ideaTitle')
-      localStorage.removeItem('postGeneration_userId')
-      localStorage.removeItem('postGeneration_backgroundId')
+      clearImageCache()
     } catch (error) {
-      console.error('Error clearing localStorage on sign out:', error)
+      console.error('Error clearing image cache on sign out:', error)
     }
     
     await supabase.auth.signOut()

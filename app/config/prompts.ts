@@ -45,15 +45,80 @@ Return ONLY valid JSON matching this exact structure:
 Think strategically about what would make someone stop scrolling and engage.
 `.trim();
 
+// Default writing style (Template 1 style) for backward compatibility
+const DEFAULT_WRITING_STYLE = {
+  tone: 'friendly and conversational, like talking to a friend, warm and approachable',
+  lengthConstraints: {
+    hookTitle: { min: 6, max: 12 },
+    middleTitle: { min: 2, max: 5 },
+    middleContent: { min: 18, max: 32 },
+    caption: { min: 80, max: 120 }
+  },
+  structure: {
+    sentenceStyle: 'medium' as const,
+    paragraphStyle: 'multi' as const,
+    hookStyle: 'mixed' as const,
+    contentFlow: 'Tell a story with clear progression. Use relatable examples and practical insights. Build connection through shared experiences.',
+    includeMiddleTitles: true
+  }
+}
+
 /**
  * Prompt for generating a complete carousel note with slides and caption
  */
-export const NOTE_PROMPT = (ideaTitle: string, accountDescription: string) => `
+export const NOTE_PROMPT = (
+  ideaTitle: string, 
+  accountDescription: string,
+  writingStyle?: {
+    tone: string
+    lengthConstraints: {
+      hookTitle: { min: number; max: number }
+      middleTitle: { min: number; max: number }
+      middleContent: { min: number; max: number }
+      caption: { min: number; max: number }
+    }
+    structure: {
+      sentenceStyle: 'short' | 'medium' | 'long' | 'mixed'
+      paragraphStyle: 'single' | 'multi' | 'mixed'
+      hookStyle: 'question' | 'statement' | 'imperative' | 'mixed'
+      contentFlow: string
+      includeMiddleTitles?: boolean
+    }
+  }
+) => {
+  const style = writingStyle || DEFAULT_WRITING_STYLE
+  
+  // Build hook style guidance
+  const hookStyleGuidance = style.structure.hookStyle === 'question' 
+    ? 'Use questions to create curiosity and engagement'
+    : style.structure.hookStyle === 'statement'
+    ? 'Use bold, declarative statements that make strong claims'
+    : style.structure.hookStyle === 'imperative'
+    ? 'Use direct commands or calls to action'
+    : 'Mix questions, statements, and provocative claims for maximum impact'
+  
+  // Build sentence style guidance
+  const sentenceStyleGuidance = style.structure.sentenceStyle === 'short'
+    ? 'Use short, punchy sentences. Keep them concise and impactful.'
+    : style.structure.sentenceStyle === 'long'
+    ? 'Use longer, flowing sentences that build depth and nuance.'
+    : style.structure.sentenceStyle === 'medium'
+    ? 'Use medium-length sentences that balance clarity with depth.'
+    : 'Vary sentence length for rhythm and engagement.'
+  
+  return `
 You are an expert Instagram note creator. Your posts go viral because they're perfectly structured and valuable.
 
 CONTEXT
 Account: ${accountDescription || 'General audience'}
 Post Idea: "${ideaTitle}"
+
+WRITING STYLE & TONE
+${style.tone}
+
+${sentenceStyleGuidance}
+
+${style.structure.contentFlow}
 
 TASK
 Create a complete note with carousels and caption that follows these EXACT specifications:
@@ -63,18 +128,17 @@ REQUIREMENTS
 ✓ Each must be clearly distinct from others (no semantic overlap)
 ✓ Use plain, direct language
 ✓ Avoid complicated words - use day-to-day language that humans naturally use
-✓ Your post should be like talking to a friend, not like a sales pitch.
-✓ Here's a good example, learn from their tone: "Comfort kills more dreams than failure ever will. If it's easy, its costing you", "Create an Etsy listing for your digital product"
+✓ Your post should match the tone: ${style.tone}
 ✓ Focus on value delivery and curiosity
 ✓ NO dashes (-) or semicolons (;) anywhere in the generated content
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CAROUSEL 1: HOOK (FIRST CAROUSEL)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- title: A compelling hook that grabs attention (6-12 words, NOT a simple one-word title)
+- title: A compelling hook that grabs attention (${style.lengthConstraints.hookTitle.min}-${style.lengthConstraints.hookTitle.max} words, NOT a simple one-word title)
   * CRITICAL: This must be an engaging, attention-grabbing hook - NOT just a simple label or category
   * Create curiosity, intrigue, or a bold statement that makes people stop scrolling
-  * Use questions, surprising statements, or provocative claims
+  * ${hookStyleGuidance}
   * Examples of GOOD hooks:    
     * "You're One Habit Away From Burnout"
     * "The One Mistake That's Costing You Thousands of Followers"
@@ -96,11 +160,11 @@ CAROUSELS 2-N: MIDDLE CONTENT (2-7 carousels)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Each middle carousel needs:
 
-TITLE: 2-5 words (clear, punchy)
+${style.structure.includeMiddleTitles !== false ? `TITLE: ${style.lengthConstraints.middleTitle.min}-${style.lengthConstraints.middleTitle.max} words (clear, punchy)
 GOOD: "The Problem", "What Actually Works", "Mistake Three", "Try This Instead"
 BAD: "Here's what you need to know about the problem" (too long)
 
-CONTENT: 18-32 words (aim for 20-30 for optimal readability)
+` : 'IMPORTANT: Middle carousels should NOT have titles. Only include content text.\n\n'}CONTENT: ${style.lengthConstraints.middleContent.min}-${style.lengthConstraints.middleContent.max} words (aim for the middle of this range for optimal readability)
 GOOD EXAMPLE (24 words):
 "Most people pack their mornings with too many rigid tasks, creating stress instead of momentum. When one thing falls apart, the entire day feels ruined."
 
@@ -125,7 +189,7 @@ LAST CAROUSEL: CALL TO ACTION (CTA)
 - kind: "CTA"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-INSTAGRAM CAPTION (80-120 words)
+INSTAGRAM CAPTION (${style.lengthConstraints.caption.min}-${style.lengthConstraints.caption.max} words)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Structure:
 1. Opening hook (1-2 sentences that expand on the post idea)
@@ -156,8 +220,8 @@ Required JSON structure:
   "ideaTitle": "string (the original post idea)",
   "slides": [
     {"topic": "string", "title": "string", "subtitle": "string", "cta": "string", "content": "", "kind": "HOOK"},
-    {"title": "string", "content": "string", "kind": "MIDDLE"},
-    {"title": "string", "content": "string", "kind": "MIDDLE"},
+    ${style.structure.includeMiddleTitles !== false ? '{"title": "string", "content": "string", "kind": "MIDDLE"}' : '{"title": "", "content": "string", "kind": "MIDDLE"}'},
+    ${style.structure.includeMiddleTitles !== false ? '{"title": "string", "content": "string", "kind": "MIDDLE"}' : '{"title": "", "content": "string", "kind": "MIDDLE"}'},
     {"title": "string", "content": "string", "kind": "CTA"}
   ],
   "caption": "string (full Instagram caption with hashtags)"
@@ -165,19 +229,22 @@ Required JSON structure:
 
 IMPORTANT: The first slide (HOOK) MUST include topic, subtitle, and cta fields. Middle and CTA slides do NOT need these fields.
 
+${style.structure.includeMiddleTitles !== false ? 'Middle carousels MUST have both title and content.' : 'Middle carousels MUST have content but should have empty title ("").'}
+
 The "slides" array is REQUIRED and MUST contain at least 3 carousels.
 Each carousel MUST have: title, content, and kind properties.
 
 QUALITY CHECKLIST
-✓ Hook carousel has topic (1-2 words), compelling hook title (6-12 words, NOT a simple one-word title - must be engaging and attention-grabbing), subtitle (3-8 words), cta (2-3 words), empty content
-✓ Middle carousels have 2-5 word titles and 18-32 word content
-✓ Content flows logically and tells a story
+✓ Hook carousel has topic (1-2 words), compelling hook title (${style.lengthConstraints.hookTitle.min}-${style.lengthConstraints.hookTitle.max} words, NOT a simple one-word title - must be engaging and attention-grabbing), subtitle (3-8 words), cta (2-3 words), empty content
+${style.structure.includeMiddleTitles !== false ? `✓ Middle carousels have ${style.lengthConstraints.middleTitle.min}-${style.lengthConstraints.middleTitle.max} word titles and ${style.lengthConstraints.middleContent.min}-${style.lengthConstraints.middleContent.max} word content` : `✓ Middle carousels have NO titles, only ${style.lengthConstraints.middleContent.min}-${style.lengthConstraints.middleContent.max} word content`}
+✓ Content flows logically and tells a story following: ${style.structure.contentFlow}
 ✓ CTA is specific and actionable
-✓ Caption is 150-250 words
+✓ Caption is ${style.lengthConstraints.caption.min}-${style.lengthConstraints.caption.max} words
 ✓ No asterisks, no markdown formatting
 ✓ Simple, clear English throughout
 ✓ NO dashes (-) or semicolons (;) anywhere in titles, content, or captions
 `.trim();
+}
 
 /**
  * Prompt for extracting emphasis words from HOOK carousel

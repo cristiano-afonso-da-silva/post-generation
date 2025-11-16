@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { Upload, X, Sparkles, Check, Loader2 } from 'lucide-react'
+import { Upload, X, Sparkle, Check } from 'lucide-react'
 
 interface UploadedImage {
   file: File
@@ -17,6 +17,26 @@ export default function GenerateTemplatePage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [generatedTemplateName, setGeneratedTemplateName] = useState('')
+
+  // Warn user before leaving page during generation
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isGenerating) {
+        e.preventDefault()
+        // Modern browsers ignore custom messages, but we still need to set returnValue
+        e.returnValue = 'Template generation is in progress. Are you sure you want to leave?'
+        return e.returnValue
+      }
+    }
+
+    if (isGenerating) {
+      window.addEventListener('beforeunload', handleBeforeUnload)
+    }
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [isGenerating])
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
@@ -362,6 +382,36 @@ export default function GenerateTemplatePage() {
         </div>
       )}
 
+      {/* Instructions */}
+      <div style={{
+        marginTop: '0',
+        marginBottom: '32px',
+        padding: '24px',
+        background: '#f9f9f9',
+        borderRadius: '12px',
+        border: '1px solid #e5e5e5',
+      }}>
+        <h3 style={{
+          fontSize: '18px',
+          fontWeight: '600',
+          color: '#000000',
+          marginBottom: '12px',
+        }}>
+          Tips for Best Results
+        </h3>
+        <ul style={{
+          fontSize: '14px',
+          color: '#666666',
+          lineHeight: '1.8',
+          paddingLeft: '20px',
+        }}>
+          <li>Upload high-quality images that represent the style you want</li>
+          <li>Be specific in your description about fonts, colors, and layout preferences</li>
+          <li>Include examples of similar styles or designs you like</li>
+          <li>Mention if you want a specific mood (professional, playful, elegant, etc.)</li>
+        </ul>
+      </div>
+
       {/* Generate Button */}
       <button
         onClick={handleGenerate}
@@ -393,49 +443,25 @@ export default function GenerateTemplatePage() {
       >
         {isGenerating ? (
           <>
-            <Loader2 size={20} className="spinner" />
+            <div className="loader-circle" />
             Generating Template...
           </>
         ) : (
           <>
-            <Sparkles size={20} />
+            <Sparkle size={20} />
             Generate Template
           </>
         )}
       </button>
 
-      {/* Instructions */}
-      <div style={{
-        marginTop: '48px',
-        padding: '24px',
-        background: '#f9f9f9',
-        borderRadius: '12px',
-        border: '1px solid #e5e5e5',
-      }}>
-        <h3 style={{
-          fontSize: '18px',
-          fontWeight: '600',
-          color: '#000000',
-          marginBottom: '12px',
-        }}>
-          Tips for Best Results
-        </h3>
-        <ul style={{
-          fontSize: '14px',
-          color: '#666666',
-          lineHeight: '1.8',
-          paddingLeft: '20px',
-        }}>
-          <li>Upload high-quality images that represent the style you want</li>
-          <li>Be specific in your description about fonts, colors, and layout preferences</li>
-          <li>Include examples of similar styles or designs you like</li>
-          <li>Mention if you want a specific mood (professional, playful, elegant, etc.)</li>
-        </ul>
-      </div>
-
       <style jsx>{`
-        .spinner {
-          animation: spin 1s linear infinite;
+        .loader-circle {
+          width: 20px;
+          height: 20px;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          border-top-color: #ffffff;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
         }
 
         @keyframes spin {

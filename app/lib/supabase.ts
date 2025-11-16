@@ -29,6 +29,8 @@ export interface UserCredits {
   stripe_subscription_id: string | null
   subscription_status: 'active' | 'canceled' | 'past_due' | null
   current_plan: 'plan-10' | 'plan-20' | 'plan-50' | null
+  account_handle: string | null
+  website: string | null
   created_at: string
   updated_at: string
 }
@@ -188,7 +190,7 @@ export async function getUserCreditsServer(userId: string): Promise<UserCredits 
   
   const { data, error } = await serverClient
     .from('user_credits')
-    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, created_at, updated_at')
+    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, account_handle, website, created_at, updated_at')
     .eq('user_id', userId)
     .single()
 
@@ -248,6 +250,31 @@ export async function deductCreditServer(userId: string): Promise<UserCredits | 
 
   if (error) {
     console.error('Error deducting credit:', error)
+    return null
+  }
+
+  return data
+}
+
+// Update user profile fields (server-side only)
+export async function updateUserProfile(
+  userId: string,
+  profileData: {
+    account_handle?: string | null
+    website?: string | null
+  }
+): Promise<UserCredits | null> {
+  const serverClient = createServerClient()
+  
+  const { data, error } = await serverClient
+    .from('user_credits')
+    .update(profileData)
+    .eq('user_id', userId)
+    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, account_handle, website, created_at, updated_at')
+    .single()
+
+  if (error) {
+    console.error('Error updating user profile:', error)
     return null
   }
 

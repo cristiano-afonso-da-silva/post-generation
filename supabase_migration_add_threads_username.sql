@@ -10,3 +10,4 @@ ADD COLUMN IF NOT EXISTS threads_username TEXT;
 -- Success message
 SELECT 'Threads username column added successfully! ✅' AS status;
 
+

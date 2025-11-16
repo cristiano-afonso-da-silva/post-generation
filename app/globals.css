@@ -276,6 +276,11 @@ textarea.input {
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  box-shadow: none;
   animation: spin 0.8s linear infinite;
 }
 

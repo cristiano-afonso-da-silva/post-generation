@@ -10,11 +10,14 @@ export async function POST(request: NextRequest) {
       generationId: providedGenerationId, // Optional: if provided, update existing generation
       ideaTitle, 
       accountDescription,
+      accountName, // For footer (e.g., '@postmynote')
+      website, // For footer (e.g., 'postmynote.app')
       slides, 
       caption,
       underlineWords, 
       fontCombinationId, 
       colorThemeId,
+      templateId,
       images, // base64 image data array (legacy approach)
       imageUrls: providedImageUrls, // Already uploaded URLs (new efficient approach)
       thumbnailUrls: providedThumbnailUrls // Already uploaded thumbnail URLs
@@ -80,11 +83,14 @@ export async function POST(request: NextRequest) {
           project_name: projectName,
           idea_title: ideaTitle,
           account_description: accountDescription || null,
+          account_name: accountName || null,
+          website: website || null,
           slides,
           caption: caption || null,
           underline_words: underlineWords || null,
           font_combination_id: fontCombinationId || 'combination-1',
           color_theme_id: colorThemeId || 'purple-black',
+          template_id: templateId || 'template1',
         })
         .select()
         .single()
@@ -129,11 +135,14 @@ export async function POST(request: NextRequest) {
           project_name: projectName,
           idea_title: ideaTitle,
           account_description: accountDescription || null,
+          account_name: accountName || null,
+          website: website || null,
           slides,
           caption: caption || null,
           underline_words: underlineWords || null,
           font_combination_id: fontCombinationId || 'combination-1',
           color_theme_id: colorThemeId || 'purple-black',
+          template_id: templateId || 'template1',
           updated_at: new Date().toISOString()
         })
         .eq('id', generationId)

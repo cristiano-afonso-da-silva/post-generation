@@ -495,7 +495,7 @@ const NOTE_SCHEMA = {
           },
           title: {
             type: SchemaType.STRING,
-            description: "Carousel title (2-5 words for MIDDLE, ≤10 words for HOOK)"
+            description: "Carousel title (2-5 words for MIDDLE, ≤10 words for HOOK). For MIDDLE slides, use empty string \"\" if template doesn't require titles."
           },
           subtitle: {
             type: SchemaType.STRING,
@@ -998,15 +998,29 @@ async function extractUnderlineWords(carousels: any[], includeImages: boolean = 
   return results;
 }
 
-async function generateNoteWithGemini(ideaTitle: string, accountDescription: string) {
+async function generateNoteWithGemini(ideaTitle: string, accountDescription: string, templateId?: string) {
   const startTime = Date.now();
   
   try {
+    // Get template and extract writing style
+    let writingStyle = undefined
+    if (templateId) {
+      try {
+        const template = getCarouselTemplate(templateId)
+        writingStyle = template.writingStyle
+        if (writingStyle) {
+          console.log(`📝 Using writing style from template: ${templateId}`)
+        }
+      } catch (error) {
+        console.warn(`⚠️  Failed to load template ${templateId}, using default writing style:`, error)
+      }
+    }
+    
     const model = getModel();
     const result = await callGeminiWithRetry(model, {
       contents: [{
         role: 'user',
-        parts: [{ text: NOTE_PROMPT(ideaTitle, accountDescription) }]
+        parts: [{ text: NOTE_PROMPT(ideaTitle, accountDescription, writingStyle) }]
       }],
       generationConfig: {
         temperature: 0.8,
@@ -1114,9 +1128,10 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
     console.log(`🖼️ generateNote: includeImages parameter =`, includeImages);
     console.log(`🎨 generateNote: useAIImages parameter =`, useAIImages);
     console.log(`🎭 generateNote: aiImageStyle parameter =`, aiImageStyle);
+    console.log(`📋 generateNote: templateId parameter =`, templateId);
     
     // Get note data from Gemini
-    const noteResult = await generateNoteWithGemini(ideaTitle, accountDescription);
+    const noteResult = await generateNoteWithGemini(ideaTitle, accountDescription, templateId);
     
     if (!noteResult.success) {
       return noteResult;

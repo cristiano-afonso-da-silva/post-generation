@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     // Fetch generations - only fetch fields we actually need for the history view
     const { data: generations, error } = await supabase
       .from('generations')
-      .select('id, project_name, idea_title, created_at, thumbnail_urls, image_urls, caption, threads_post_id, threads_posted_at, threads_post_status')
+      .select('id, project_name, idea_title, created_at, thumbnail_urls, image_urls, caption, threads_post_id, threads_posted_at, threads_post_status, template_id, color_theme_id')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
@@ -152,7 +152,9 @@ export async function GET(request: NextRequest) {
           imageUrls, // camelCase for History/Post pages
           threads_post_id: gen.threads_post_id || null,
           threads_posted_at: gen.threads_posted_at || null,
-          threads_post_status: gen.threads_post_status || null
+          threads_post_status: gen.threads_post_status || null,
+          template_id: gen.template_id || null,
+          color_theme_id: gen.color_theme_id || null
         }
       })
     )

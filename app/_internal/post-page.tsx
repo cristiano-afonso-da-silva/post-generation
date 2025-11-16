@@ -10,7 +10,7 @@ import type { LucideIcon } from 'lucide-react'
 import CarouselImageGenerator from '../components/CarouselImageGenerator'
 import type { CarouselImageGeneratorHandle } from '../components/CarouselImageGenerator'
 import { COLOR_THEMES } from '../config/carouselThemes'
-import { getTemplateOptions } from '../config/carouselTemplates'
+import { getTemplateOptions, getCarouselTemplate } from '../config/carouselTemplates'
 import TemplateSelectorModal from '../components/TemplateSelectorModal'
 import { createPortal } from 'react-dom'
 import JSZip from 'jszip'
@@ -71,8 +71,15 @@ function PostCard({
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
 
+  // Reset image state when thumbnailUrl changes
+  useEffect(() => {
+    setImageLoaded(false)
+    setImageError(false)
+  }, [thumbnailUrl])
+
   const handleImageLoad = () => {
     setImageLoaded(true)
+    setImageError(false)
   }
 
   const handleImageError = () => {
@@ -120,6 +127,7 @@ function PostCard({
         )}
         {thumbnailUrl ? (
           <img
+            key={thumbnailUrl}
             src={thumbnailUrl}
             alt={generation.idea_title}
             onLoad={handleImageLoad}
@@ -236,6 +244,8 @@ function PostPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const generationId = searchParams.get('id')
+  const urlTemplate = searchParams.get('template')
+  const urlTheme = searchParams.get('theme')
   const { user, loading: authLoading } = useAuth()
   const isMobile = useMobile()
   const [page, setPage] = useState(1)
@@ -263,6 +273,11 @@ function PostPageContent() {
   const [note, setNote] = useState<Note | null>(null)
   const [templateId, setTemplateId] = useState('template1')
   const [colorThemeId, setColorThemeId] = useState('purple-black')
+  const [accountName, setAccountName] = useState('')
+  const [website, setWebsite] = useState('')
+  const [hasUserChangedTemplate, setHasUserChangedTemplate] = useState(false)
+  const [hasUserChangedTheme, setHasUserChangedTheme] = useState(false)
+  const [hasInitializedFromUrl, setHasInitializedFromUrl] = useState(false)
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [activeLeftTab, setActiveLeftTab] = useState<'design' | 'carousels' | 'caption'>('design')
   const [editedCarousels, setEditedCarousels] = useState<Note['carousels']>([])
@@ -370,7 +385,54 @@ function PostPageContent() {
     setEditedCaption('')
     setCarouselsDirty(false)
     setExpandedCarouselIndexes([])
+    setHasInitializedFromUrl(false) // Reset URL initialization flag when generationId changes
+    setHasUserChangedTemplate(false)
+    setHasUserChangedTheme(false)
   }, [generationId])
+
+  // Function to save template and theme to database and update URL
+  const saveTemplateAndThemeToDatabase = async (newTemplateId: string, newColorThemeId: string) => {
+    if (!generationId || !user?.id) return
+    
+    try {
+      const response = await fetch('/api/generations/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          generationId: generationId,
+          ideaTitle: generation?.idea_title || note?.ideaTitle || '',
+          accountDescription: generation?.account_description || '',
+          slides: generation?.slides || note?.carousels || [],
+          caption: generation?.caption || note?.caption || '',
+          underlineWords: generation?.underline_words || note?.underlineWords || {},
+          templateId: newTemplateId,
+          colorThemeId: newColorThemeId,
+          imageUrls: generation?.image_urls || [],
+          thumbnailUrls: generation?.thumbnail_urls || []
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to save template and theme')
+      }
+
+      // Update URL params to reflect the new template and theme (without page reload)
+      const newUrl = new URL(window.location.href)
+      newUrl.searchParams.set('template', newTemplateId)
+      newUrl.searchParams.set('theme', newColorThemeId)
+      window.history.replaceState({}, '', newUrl.toString())
+
+      // Refresh generation data to get updated values (but don't override user changes)
+      if (mutateGeneration) {
+        mutateGeneration()
+      }
+    } catch (err: any) {
+      console.error('Error saving template and theme to database:', err)
+      setError(err.message || 'Failed to save template and theme changes')
+    }
+  }
 
   // Load generation data when generation is available
   useEffect(() => {
@@ -390,10 +452,56 @@ function PostPageContent() {
     setNote(noteData)
     setEditedCarousels(generation.slides.map((slide: any) => ({ ...slide })))
     setEditedCaption(generation.caption || '')
-    const templateOptions = getTemplateOptions()
-    const validTemplateId = templateOptions.find(t => t.id === generation.template_id)?.id || 'template1'
-    setTemplateId(validTemplateId)
-    setColorThemeId(generation.color_theme_id || 'purple-black')
+    
+    // Load accountName and website from generation data or localStorage
+    const savedAccountName = generation.account_name || localStorage.getItem('postGeneration_accountName') || ''
+    const savedWebsite = generation.website || localStorage.getItem('postGeneration_website') || ''
+    setAccountName(savedAccountName)
+    setWebsite(savedWebsite)
+    
+    // Only initialize from URL params on first load (when hasInitializedFromUrl is false)
+    // After user makes changes, don't override with URL params
+    if (!hasInitializedFromUrl) {
+      const templateOptions = getTemplateOptions()
+      let finalTemplateId = 'template1'
+      let finalColorThemeId = 'purple-black'
+      
+      if (urlTemplate && templateOptions.find(t => t.id === urlTemplate)) {
+        // Use template from URL (first load only)
+        finalTemplateId = urlTemplate
+        // If URL has theme, use it; otherwise use template's default theme
+        if (urlTheme) {
+          finalColorThemeId = urlTheme
+        } else {
+          const template = getCarouselTemplate(urlTemplate)
+          finalColorThemeId = template.defaultColorThemeId || 'purple-black'
+        }
+      } else if (generation.template_id) {
+        // Fall back to database
+        const validTemplateId = templateOptions.find(t => t.id === generation.template_id)?.id || 'template1'
+        finalTemplateId = validTemplateId
+        finalColorThemeId = generation.color_theme_id || 'purple-black'
+      }
+      
+      setTemplateId(finalTemplateId)
+      setColorThemeId(finalColorThemeId)
+      setHasInitializedFromUrl(true)
+    } else if (generation.template_id && !hasUserChangedTemplate && !hasUserChangedTheme) {
+      // If user hasn't made changes and database has values, use them
+      // This handles the case where generation data is refreshed
+      const templateOptions = getTemplateOptions()
+      const validTemplateId = templateOptions.find(t => t.id === generation.template_id)?.id || templateId
+      const dbThemeId = generation.color_theme_id || colorThemeId
+      
+      // Only update if different from current state
+      if (validTemplateId !== templateId) {
+        setTemplateId(validTemplateId)
+      }
+      if (dbThemeId !== colorThemeId) {
+        setColorThemeId(dbThemeId)
+      }
+    }
+    
     setCarouselsDirty(false)
     setExpandedCarouselIndexes([])
     
@@ -404,12 +512,18 @@ function PostPageContent() {
       localStorage.setItem('postGeneration_fromHistory', 'true')
       
       if (generation.image_urls && generation.image_urls.length > 0) {
-        localStorage.setItem('postGeneration_canvasImages', JSON.stringify(generation.image_urls))
+        // Check if we have cached data URLs for these images
+        const { getCachedImageDataUrl } = require('../lib/imageCache')
+        const imageUrls = generation.image_urls.map((url: string) => {
+          const cached = getCachedImageDataUrl(url)
+          return cached || url
+        })
+        localStorage.setItem('postGeneration_canvasImages', JSON.stringify(imageUrls))
       }
     } catch (error) {
       console.error('Error storing in localStorage:', error)
     }
-  }, [generation, user, generationId, isLoadingGeneration])
+  }, [generation, user, generationId, isLoadingGeneration, urlTemplate, urlTheme, hasInitializedFromUrl, hasUserChangedTemplate, hasUserChangedTheme, templateId, colorThemeId])
 
   // Sync editable carousels with note
   useEffect(() => {
@@ -1231,7 +1345,7 @@ function PostPageContent() {
                     </div>
 
                     {/* Tab content */}
-                    <div style={{ flex: 1, overflowY: 'auto', padding: '20px', paddingTop: '20px', paddingLeft: '20px', borderRight: isMobile ? 'none' : '1px solid rgb(229, 229, 229)', minHeight: 0 }}>
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '20px', paddingTop: '20px', paddingLeft: '20px', paddingRight: '24px', borderRight: isMobile ? 'none' : '1px solid rgb(229, 229, 229)', minHeight: 0 }}>
                     {activeLeftTab === 'design' && (
                       <div style={{ marginBottom: '24px' }}>
                         <h4 style={{ fontSize: isMobile ? '14px' : '16px', fontWeight: '600', marginBottom: '16px', color: '#000000' }}>
@@ -1297,6 +1411,7 @@ function PostPageContent() {
                               }}>
                                 {COLOR_THEMES.map(theme => {
                                   const isSelected = colorThemeId === theme.id
+                                  const isTransparent = theme.highlightColor === 'transparent'
                                   return (
                                     <button
                                       key={theme.id}
@@ -1305,12 +1420,17 @@ function PostPageContent() {
                                         setIsSaving(true)
                                         setLastSaveTime(null)
                                         setColorThemeId(theme.id)
+                                        setHasUserChangedTheme(true)
+                                        // Save to database when user changes theme
+                                        saveTemplateAndThemeToDatabase(templateId, theme.id)
                                       }}
                                       style={{
                                         aspectRatio: '1',
                                         borderRadius: isMobile ? '6px' : '8px',
-                                        border: isSelected ? '2px solid rgb(229, 229, 229)' : 'none',
-                                        background: theme.highlightColor,
+                                        border: isSelected ? '2px solid rgb(229, 229, 229)' : (isTransparent ? '1px solid #e5e5e5' : 'none'),
+                                        background: isTransparent 
+                                          ? 'repeating-conic-gradient(#f0f0f0 0% 25%, #ffffff 0% 50%) 50% / 8px 8px'
+                                          : theme.highlightColor,
                                         cursor: 'pointer',
                                         padding: 0,
                                         position: 'relative',
@@ -1612,6 +1732,8 @@ function PostPageContent() {
                       templateId={templateId}
                       colorThemeId={colorThemeId}
                       accountDescription=""
+                      accountName={accountName}
+                      website={website}
                       caption={note.caption}
                       includeImages={false}
                       useAIImages={false}
@@ -1639,7 +1761,16 @@ function PostPageContent() {
           isOpen={showTemplateModal}
           onClose={() => setShowTemplateModal(false)}
           selectedTemplateId={templateId}
-          onSelectTemplate={(id) => setTemplateId(id)}
+          onSelectTemplate={(id) => {
+            setTemplateId(id)
+            setHasUserChangedTemplate(true)
+            // Get default theme for the new template
+            const newTemplate = getCarouselTemplate(id)
+            const newDefaultTheme = newTemplate.defaultColorThemeId || colorThemeId || 'purple-black'
+            setColorThemeId(newDefaultTheme)
+            // Save to database when user changes template
+            saveTemplateAndThemeToDatabase(id, newDefaultTheme)
+          }}
         />
 
         {/* Share to Threads Modal */}
@@ -2118,9 +2249,21 @@ function PostPageContent() {
               const status = generation.threads_post_status || postingStatus[generation.id] || 'idle'
               const isPosting = status === 'posting' || status === 'pending'
               
-              // Only use first URL as thumbnail for post page
-              const allImageUrls = generation.imageUrls || generation.image_urls || []
-              const thumbnailUrl = allImageUrls.length > 0 ? allImageUrls[0] : (generation.thumbnail_urls && generation.thumbnail_urls.length > 0 ? generation.thumbnail_urls[0] : null)
+              // Get thumbnail URL - check all possible sources
+              // Priority: imageUrls (camelCase) > image_urls (snake_case) > thumbnail_urls
+              const imageUrls = generation.imageUrls || generation.image_urls || []
+              const thumbnailUrls = generation.thumbnail_urls || []
+              
+              // Find first valid URL (non-empty string)
+              let thumbnailUrl: string | null = null
+              
+              if (imageUrls.length > 0) {
+                thumbnailUrl = imageUrls.find((url: string) => url && typeof url === 'string' && url.trim().length > 0) || null
+              }
+              
+              if (!thumbnailUrl && thumbnailUrls.length > 0) {
+                thumbnailUrl = thumbnailUrls.find((url: string) => url && typeof url === 'string' && url.trim().length > 0) || null
+              }
               
               return (
                 <PostCard
@@ -2130,7 +2273,21 @@ function PostPageContent() {
                   status={status}
                   connectionStatus={connectionStatus}
                   postingStatus={postingStatus}
-                  onCardClick={() => router.push(`/dashboard?view=post&id=${generation.id}`)}
+                  onCardClick={() => {
+                    // Include template and theme in URL if available from database
+                    // This ensures the detail view shows the correct template/theme
+                    const urlParams = new URLSearchParams({
+                      view: 'post',
+                      id: generation.id
+                    })
+                    if (generation.template_id) {
+                      urlParams.set('template', generation.template_id)
+                    }
+                    if (generation.color_theme_id) {
+                      urlParams.set('theme', generation.color_theme_id)
+                    }
+                    router.push(`/dashboard?${urlParams.toString()}`)
+                  }}
                   onPostClick={(e: React.MouseEvent) => {
                     e.stopPropagation()
                     if (status === 'idle') {

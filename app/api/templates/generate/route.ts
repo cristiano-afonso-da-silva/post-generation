@@ -2,14 +2,41 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/app/lib/supabase'
 import OpenAI from 'openai'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPEN_AI_API_KEY || process.env.OPENAI_API_KEY,
-})
+// Get OpenAI API key from environment variables
+const OPENAI_API_KEY = process.env.OPEN_AI_API_KEY || process.env.OPENAI_API_KEY
+
+// Validate API key at module load
+if (!OPENAI_API_KEY) {
+  console.error('❌ Missing OPENAI_API_KEY in environment variables')
+  console.error('   Please add OPENAI_API_KEY or OPEN_AI_API_KEY to your .env.local file')
+} else {
+  console.log('✅ OPENAI_API_KEY loaded successfully')
+  console.log(`   Key preview: ${OPENAI_API_KEY.substring(0, 10)}...`)
+}
+
+// Create OpenAI client only if API key is available (will be validated at request time)
+const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null
 
 export async function POST(request: NextRequest) {
   console.log('[TEMPLATES/GENERATE] Starting template generation request...')
   
   try {
+    // Validate OpenAI API key at request time
+    if (!OPENAI_API_KEY || OPENAI_API_KEY.trim().length === 0) {
+      console.error('❌ OPENAI_API_KEY is missing or empty')
+      return NextResponse.json(
+        { error: 'OPENAI_API_KEY is not configured. Please set OPENAI_API_KEY or OPEN_AI_API_KEY in your environment variables.' },
+        { status: 500 }
+      )
+    }
+
+    if (!openai) {
+      console.error('❌ OpenAI client not initialized')
+      return NextResponse.json(
+        { error: 'OpenAI client not initialized. Please check your environment variables.' },
+        { status: 500 }
+      )
+    }
     console.log('[TEMPLATES/GENERATE] Parsing request body...')
     const { images, description, userId } = await request.json()
 

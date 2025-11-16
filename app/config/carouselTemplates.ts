@@ -180,6 +180,25 @@ export interface CarouselTemplate {
     left: number
     right: number
   }
+  
+  // Writing style configuration (tone, length constraints, structure)
+  writingStyle?: {
+    tone: string
+    lengthConstraints: {
+      hookTitle: { min: number; max: number }
+      middleTitle: { min: number; max: number }
+      middleContent: { min: number; max: number }
+      caption: { min: number; max: number }
+    }
+    structure: {
+      sentenceStyle: 'short' | 'medium' | 'long' | 'mixed'
+      paragraphStyle: 'single' | 'multi' | 'mixed'
+      hookStyle: 'question' | 'statement' | 'imperative' | 'mixed'
+      contentFlow: string
+      includeMiddleTitles?: boolean  // Whether middle slides should have titles (default: true)
+    }
+  }
+  defaultColorThemeId?: string  // Default color theme for this template
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -251,7 +270,24 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     },
     footer: {
       enabled: false
-    }
+    },
+    writingStyle: {
+      tone: 'friendly and conversational, like talking to a friend, warm and approachable',
+      lengthConstraints: {
+        hookTitle: { min: 6, max: 12 },
+        middleTitle: { min: 2, max: 5 },
+        middleContent: { min: 18, max: 32 },
+        caption: { min: 80, max: 120 }
+      },
+      structure: {
+        sentenceStyle: 'medium',
+        paragraphStyle: 'multi',
+        hookStyle: 'mixed',
+        contentFlow: 'Tell a story with clear progression. Use relatable examples and practical insights. Build connection through shared experiences.',
+        includeMiddleTitles: true
+      }
+    },
+    defaultColorThemeId: 'gold-green'
   },
   {
     id: 'template2',
@@ -317,7 +353,24 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     },
     footer: {
       enabled: false
-    }
+    },
+    writingStyle: {
+      tone: 'sophisticated and refined, elegant and thoughtful, with a touch of poetic grace',
+      lengthConstraints: {
+        hookTitle: { min: 8, max: 14 },
+        middleTitle: { min: 3, max: 6 },
+        middleContent: { min: 25, max: 40 },
+        caption: { min: 100, max: 150 }
+      },
+      structure: {
+        sentenceStyle: 'long',
+        paragraphStyle: 'multi',
+        hookStyle: 'statement',
+        contentFlow: 'Use flowing, elegant language with sophisticated vocabulary. Create depth through nuanced explanations. Build atmosphere and meaning.',
+        includeMiddleTitles: true
+      }
+    },
+    defaultColorThemeId: 'gold-green'
   },
   {
     id: 'template3',
@@ -424,7 +477,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     },
     hookLayout: {
       showTopic: true,
-      showSubtitle: true,
+      showSubtitle: false,
       showCTA: true
     },
     textColor: '#000000',  // Black text for light background
@@ -441,7 +494,24 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     },
     footer: {
       enabled: false
-    }
+    },
+    writingStyle: {
+      tone: 'casual and direct, modern and straightforward, no-nonsense approach',
+      lengthConstraints: {
+        hookTitle: { min: 6, max: 10 },
+        middleTitle: { min: 2, max: 4 },
+        middleContent: { min: 15, max: 28 },
+        caption: { min: 70, max: 110 }
+      },
+      structure: {
+        sentenceStyle: 'short',
+        paragraphStyle: 'single',
+        hookStyle: 'statement',
+        contentFlow: 'Get straight to the point. Use short, punchy sentences. Be direct and actionable. Cut the fluff.',
+        includeMiddleTitles: true
+      }
+    },
+    defaultColorThemeId: 'gold-green'
   },
   // NEW: Template 4 – Dark Retention-style
   {
@@ -529,7 +599,148 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
       rightText: 'postmynote.app',  // Default, can be overridden by user input
       fontRole: 'content',
       fontSize: 28  // Smaller footer text (content font is 50px, footer will be 28px)
-    }
+    },
+    writingStyle: {
+      tone: 'bold and dramatic, impactful and provocative, with a sense of urgency and intensity',
+      lengthConstraints: {
+        hookTitle: { min: 4, max: 8 },
+        middleTitle: { min: 2, max: 4 },
+        middleContent: { min: 12, max: 25 },
+        caption: { min: 60, max: 100 }
+      },
+      structure: {
+        sentenceStyle: 'short',
+        paragraphStyle: 'single',
+        hookStyle: 'statement',
+        contentFlow: 'Make bold, provocative statements. Use short, impactful sentences. Create tension and urgency. Every word must count.',
+        includeMiddleTitles: false  // Template 4 doesn't need titles on middle slides
+      }
+    },
+    defaultColorThemeId: 'transparent'
+  },
+  {
+    id: 'template5',
+    name: 'Template 5 (Serif Minimal)',
+    fonts: {
+      hook: {
+        family: 'DreamingOutloudSans',
+        file: '/templates/template5/fonts/DreamingOutloudSans-Regular.otf',
+        weight: 'normal',
+        style: 'normal',
+        cssFont: '100px DreamingOutloudSans, sans-serif',
+        lineHeight: 120,
+        size: 100
+      },
+      title: {
+        family: 'Playfair Display',
+        file: '/templates/template5/fonts/PlayfairDisplay-Bold.ttf',
+        weight: 'bold',
+        style: 'normal',
+        cssFont: 'bold 64px "Playfair Display", serif',
+        lineHeight: 80,
+        size: 64
+      },
+      content: {
+        family: 'Playfair Display',
+        file: '/templates/template5/fonts/PlayfairDisplay-Regular.ttf',
+        weight: 'normal',
+        style: 'normal',
+        cssFont: '44px "Playfair Display", serif',
+        lineHeight: 64,
+        size: 44
+      }
+    },
+    background: {
+      type: 'image',
+      src: '/templates/template5/bg-paper.jpg'
+    },
+    styles: {
+      letterSpacing: {
+        hook: 0,
+        title: 0,
+        content: 0,
+        cta: 0
+      },
+      textAlign: {
+        hook: 'center',
+        title: 'left',
+        content: 'left',
+        cta: 'left'
+      }
+    },
+    hookLayout: {
+      showTopic: false,
+      showSubtitle: false,
+      showCTA: false,
+      useImage: false
+    },
+    textColor: '#000000',
+    roleColors: {
+      hook: '#C53030',
+      title: '#C53030',
+      content: '#000000',
+      cta: '#000000'
+    },
+    layout: {
+      contentMaxWidth: 820,
+      verticalAlign: 'top',
+      hookPadding: { top: 260, right: 140, bottom: 0, left: 140 },
+      titlePadding: { top: 220, right: 140, bottom: 0, left: 140 },
+      contentPadding: { top: 320, right: 140, bottom: 0, left: 140 },
+      gapTitleToContent: 40
+    },
+    imageLayout: {
+      position: 'top',
+      maxHeightRatio: 0,
+      marginBottom: 0
+    },
+    footer: {
+      enabled: true,
+      height: 80,
+      lineColor: '#000000',
+      lineThickness: 0,
+      paddingX: 80,
+      leftText: '',
+      rightText: '@your_handle',
+      fontRole: 'content',
+      fontSize: 26
+    },
+    perSlideType: {
+      hook: {
+        contentMaxWidth: 760,
+        gapTitleToContent: 0
+      },
+      body: {
+        contentMaxWidth: 820
+      },
+      outro: {
+        contentMaxWidth: 820
+      }
+    },
+    safeArea: {
+      enabled: true,
+      top: 80,
+      bottom: 140,
+      left: 80,
+      right: 80
+    },
+    writingStyle: {
+      tone: 'gentle, sincere, reflective and calm',
+      lengthConstraints: {
+        hookTitle: { min: 8, max: 16 },
+        middleTitle: { min: 1, max: 4 },
+        middleContent: { min: 30, max: 80 },
+        caption: { min: 90, max: 180 }
+      },
+      structure: {
+        sentenceStyle: 'long',
+        paragraphStyle: 'multi',
+        hookStyle: 'imperative',
+        contentFlow: 'Intro hook slide followed by several numbered title-and-paragraph slides, with an optional closing slide that is paragraph-only.',
+        includeMiddleTitles: true
+      }
+    },
+    defaultColorThemeId: 'transparent'
   }
   // Add more templates here in the future
 ]

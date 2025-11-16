@@ -120,6 +120,14 @@ export const COLOR_THEMES: ColorTheme[] = [
     highlightColor: 'rgba(0, 230, 118, 0.5)',
     underlineColor: '#000000',
     primaryColor: '#00E676'
+  },
+  {
+    id: 'transparent',
+    name: 'Transparent',
+    textColor: '#000000',
+    highlightColor: 'transparent',
+    underlineColor: '#000000',
+    primaryColor: '#000000'
   }
 ]
 

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { X, Sparkles } from 'lucide-react'
-import { getTemplateOptions, fetchCustomTemplates } from '../config/carouselTemplates'
+import { getTemplateOptions, fetchCustomTemplates, getCarouselTemplate } from '../config/carouselTemplates'
 import { useMobile } from '../hooks/useMobile'
 import { useAuth } from '../context/AuthContext'
 
@@ -18,6 +18,69 @@ interface TemplateOption {
   id: string
   name: string
   isCustom?: boolean
+}
+
+// Helper function to extract style tags from template configuration
+function getTemplateTags(templateId: string): string[] {
+  try {
+    const template = getCarouselTemplate(templateId)
+    if (!template || !template.writingStyle) {
+      return []
+    }
+
+    const tags: string[] = []
+    const { tone, structure } = template.writingStyle
+
+    // Extract meaningful words from tone description
+    if (tone) {
+      // Split by common separators and extract meaningful adjectives
+      const stopWords = new Set([
+        'like', 'with', 'the', 'and', 'for', 'from', 'that', 'this', 'are', 'was', 'been',
+        'to', 'a', 'an', 'in', 'on', 'at', 'by', 'of', 'as', 'is', 'it', 'be', 'have',
+        'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may',
+        'might', 'can', 'must', 'shall', 'talking', 'touch', 'sense'
+      ])
+      
+      // Split by commas, "and", and spaces, then clean
+      const words = tone
+        .toLowerCase()
+        .replace(/[.,]/g, '')
+        .split(/\s+and\s+|[,\s]+/)
+        .map(word => word.trim())
+        .filter(word => {
+          // Keep words that are 4+ characters and not stop words
+          return word.length >= 4 && !stopWords.has(word)
+        })
+      
+      tags.push(...words)
+    }
+
+    // Add structure-based tags (only if they add value)
+    if (structure) {
+      // Map sentenceStyle to more descriptive tags
+      if (structure.sentenceStyle && structure.sentenceStyle !== 'mixed') {
+        const styleMap: Record<string, string> = {
+          'short': 'concise',
+          'medium': 'balanced',
+          'long': 'detailed'
+        }
+        const styleTag = styleMap[structure.sentenceStyle] || structure.sentenceStyle
+        if (!tags.includes(styleTag)) {
+          tags.push(styleTag)
+        }
+      }
+    }
+
+    // Remove duplicates, prioritize distinctive words, limit to 3
+    const uniqueTags = Array.from(new Set(tags))
+      .slice(0, 3)
+      .map(tag => tag.charAt(0).toUpperCase() + tag.slice(1)) // Capitalize first letter
+
+    return uniqueTags
+  } catch (error) {
+    console.error('Error extracting template tags:', error)
+    return []
+  }
 }
 
 export default function TemplateSelectorModal({
@@ -187,12 +250,13 @@ export default function TemplateSelectorModal({
               const isSelected = template.id === localSelectedId
               const isCustom = template.isCustom || false
               
-              // Get all preview images (t1-t5.png)
-              // Custom templates won't have preview images, so we'll show a placeholder
-              const previewImages = []
-              for (let i = 1; i <= 5; i++) {
-                previewImages.push(`/templates/${template.id}/t${i}.png`)
-              }
+              // Get only first, middle, and last preview images (t1, t3, t5.png)
+              // For 5 images, show indices 0, 2, 4 (1st, 3rd, 5th)
+              const previewIndices = [0, 2, 4] // For 5 images: 1st, 3rd, 5th
+              const previewImages = previewIndices.map(i => `/templates/${template.id}/t${i + 1}.png`)
+              
+              // Get tags for this template
+              const tags = getTemplateTags(template.id)
 
               return (
                 <div
@@ -218,25 +282,7 @@ export default function TemplateSelectorModal({
                     }
                   }}
                 >
-                  {/* Template name - at the top */}
-                  <div
-                    style={{
-                      padding: '12px 16px',
-                      background: isSelected ? '#fafafa' : '#ffffff',
-                      borderBottom: '1px solid #e5e5e5',
-                      fontSize: '13px',
-                      fontWeight: '500',
-                      color: '#000000',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px'
-                    }}
-                  >
-                    {isCustom && <Sparkles size={14} color="#ffbd59" />}
-                    {template.name}
-                  </div>
-
-                  {/* 5 preview images in a horizontal row - no gaps, fills container */}
+                  {/* Preview images - at the top */}
                   {isCustom ? (
                     // Show placeholder for custom templates
                     <div
@@ -246,7 +292,6 @@ export default function TemplateSelectorModal({
                         justifyContent: 'center',
                         padding: '48px',
                         background: 'linear-gradient(135deg, #fafafa 0%, #f0f0f0 100%)',
-                        borderRadius: '0 0 8px 8px',
                         minHeight: '120px'
                       }}
                     >
@@ -276,11 +321,10 @@ export default function TemplateSelectorModal({
                         gap: 0,
                         padding: 0,
                         background: '#fafafa',
-                        borderRadius: '0 0 8px 8px',
                         overflow: 'hidden',
                         position: 'relative',
                         width: '100%',
-                        paddingBottom: '25%' // 20:5 aspect ratio (5/20 = 0.25)
+                        paddingBottom: '25%' // Maintain aspect ratio
                       }}
                     >
                       {previewImages.map((imagePath, index) => (
@@ -288,8 +332,8 @@ export default function TemplateSelectorModal({
                           key={index}
                           style={{
                             position: 'absolute',
-                            left: `${(index / 5) * 100}%`,
-                            width: '20%', // Each image takes 1/5 of width
+                            left: `${(index / 3) * 100}%`,
+                            width: '33.33%', // Each image takes 1/3 of width
                             height: '100%',
                             background: '#ffffff',
                             borderRadius: 0,
@@ -299,14 +343,14 @@ export default function TemplateSelectorModal({
                         >
                           <Image
                             src={imagePath}
-                            alt={`${template.name} slide ${index + 1}`}
+                            alt={`${template.name} slide ${previewIndices[index] + 1}`}
                             fill
                             style={{
                               objectFit: 'cover',
                               width: '100%',
                               height: '100%'
                             }}
-                            sizes="(max-width: 768px) 20vw, 15vw"
+                            sizes="(max-width: 768px) 33vw, 25vw"
                             onError={(e) => {
                               // Show slide number if image doesn't exist
                               e.currentTarget.style.display = 'none'
@@ -324,7 +368,7 @@ export default function TemplateSelectorModal({
                                     text-align: center;
                                     font-weight: 500;
                                   ">
-                                    ${index + 1}
+                                    ${previewIndices[index] + 1}
                                   </div>
                                 `
                               }
@@ -334,6 +378,60 @@ export default function TemplateSelectorModal({
                       ))}
                     </div>
                   )}
+
+                  {/* Template name and tags - at the bottom */}
+                  <div
+                    style={{
+                      padding: '12px 16px',
+                      background: isSelected ? '#fafafa' : '#ffffff',
+                      borderTop: '1px solid #e5e5e5'
+                    }}
+                  >
+                    {/* Template name */}
+                    <div
+                      style={{
+                        fontSize: '13px',
+                        fontWeight: '500',
+                        color: '#000000',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginBottom: tags.length > 0 ? '8px' : '0'
+                      }}
+                    >
+                      {isCustom && <Sparkles size={14} color="#ffbd59" />}
+                      {template.name}
+                    </div>
+                    
+                    {/* Tags */}
+                    {tags.length > 0 && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: '6px',
+                          marginTop: '4px'
+                        }}
+                      >
+                        {tags.map((tag, tagIndex) => (
+                          <span
+                            key={tagIndex}
+                            style={{
+                              fontSize: '11px',
+                              fontWeight: '500',
+                              color: '#666666',
+                              background: '#f0f0f0',
+                              padding: '4px 8px',
+                              borderRadius: '12px',
+                              lineHeight: '1'
+                            }}
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )
             })}

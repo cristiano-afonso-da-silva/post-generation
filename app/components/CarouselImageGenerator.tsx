@@ -160,11 +160,35 @@ const getInitialImages = (carousels: Carousel[], ideaTitle: string, underlineWor
     
     if (savedImages && savedHash && savedHash === currentFullContentHash) {
       const imageDataUrls = JSON.parse(savedImages)
-      // Verify all images are present and valid data URLs
-      if (imageDataUrls.length === carousels.length && 
-          imageDataUrls.every((img: string) => img && typeof img === 'string' && img.startsWith('data:image/'))) {
-        console.log('✅ Loaded all', imageDataUrls.length, 'images from cache')
-        return imageDataUrls
+      
+      // Check if we need to convert signed URLs to data URLs from cache
+      const { getCachedImageDataUrl } = require('../lib/imageCache')
+      const convertedUrls = imageDataUrls.map((url: string) => {
+        // If it's already a data URL, use it
+        if (url && typeof url === 'string' && url.startsWith('data:image/')) {
+          return url
+        }
+        // Otherwise, check if we have a cached data URL for this signed URL
+        const cached = getCachedImageDataUrl(url)
+        return cached || url
+      })
+      
+      // Verify all images are present and valid (either data URLs or we have cached versions)
+      const allValid = convertedUrls.every((img: string) => 
+        img && typeof img === 'string' && (img.startsWith('data:image/') || img.startsWith('http'))
+      )
+      
+      if (convertedUrls.length === carousels.length && allValid) {
+        // If we have data URLs, use them; otherwise use the original URLs
+        const hasDataUrls = convertedUrls.some((img: string) => img.startsWith('data:image/'))
+        if (hasDataUrls) {
+          console.log('✅ Loaded all', convertedUrls.length, 'images from cache (with data URLs)')
+          return convertedUrls
+        } else {
+          // All are signed URLs - this is okay, they'll be loaded from storage
+          console.log('✅ Loaded all', convertedUrls.length, 'images from cache (signed URLs)')
+          return convertedUrls
+        }
       } else {
         console.warn('⚠️ Cached images incomplete or invalid, will regenerate')
       }
@@ -463,13 +487,17 @@ function CarouselImageGeneratorComponent({
   
   // Use refs for values that should not trigger re-renders when changed
   const accountDescriptionRef = useRef(accountDescription)
+  const accountNameRef = useRef(accountName)
+  const websiteRef = useRef(website)
   const captionRef = useRef(caption)
   
   // Update refs when props change
   useEffect(() => {
     accountDescriptionRef.current = accountDescription
+    accountNameRef.current = accountName
+    websiteRef.current = website
     captionRef.current = caption
-  }, [accountDescription, caption])
+  }, [accountDescription, accountName, website, caption])
 
   // Get selected template and color theme
   const TEMPLATE = getCarouselTemplate(templateId)
@@ -529,6 +557,10 @@ function CarouselImageGeneratorComponent({
           generationId: generationIdToSend,
           ideaTitle,
           accountDescription: accountDescriptionRef.current,
+          accountName: accountNameRef.current,
+          website: websiteRef.current,
+          accountName: accountNameRef.current,
+          website: websiteRef.current,
           slides: orderedCarousels,
           caption: captionRef.current,
           underlineWords: orderedUnderlineWords,
@@ -651,6 +683,8 @@ function CarouselImageGeneratorComponent({
           generationId: generationId,
           ideaTitle,
           accountDescription: accountDescriptionRef.current,
+          accountName: accountNameRef.current,
+          website: websiteRef.current,
           slides: orderedCarousels,
           caption: captionRef.current,
           underlineWords: orderedUnderlineWords,
@@ -1367,13 +1401,21 @@ function CarouselImageGeneratorComponent({
     // Safe area (avoiding Instagram UI elements and footer)
     const originalSafeMarginTop = 150
     const originalSafeMarginBottom = 150
-    const safeMarginSides = 100
+    let safeMarginSides = 100
     
     // Account for footer height if enabled
     const footerHeight = template.footer?.enabled && template.footer.height ? template.footer.height : 0
     
     let safeMarginTop = originalSafeMarginTop
     let safeMarginBottom = originalSafeMarginBottom + footerHeight  // Add footer height to bottom margin
+    
+    // For template 5, use its specific safe area if enabled
+    if (template.id === 'template5' && template.safeArea?.enabled) {
+      safeMarginTop = template.safeArea.top
+      safeMarginBottom = template.safeArea.bottom + footerHeight
+      safeMarginSides = template.safeArea.left
+      console.log(`   Template 5 safe area: top=${safeMarginTop}, bottom=${safeMarginBottom}, sides=${safeMarginSides}`)
+    }
     
     // For template 4, use larger safe area margins to ensure footer stays within bounds
     if (template.id === 'template4') {
@@ -1426,11 +1468,16 @@ function CarouselImageGeneratorComponent({
     // Center content area
     const centerY = safeMarginTop + (safeHeight / 2)
 
-    const highlightFillStyle = ensureColorAlpha(colorTheme.highlightColor, 0.5)
+    const isTransparentHighlight = colorTheme.highlightColor === 'transparent'
+    const highlightFillStyle = isTransparentHighlight ? 'transparent' : ensureColorAlpha(colorTheme.highlightColor, 0.5)
     
     // Helper to get text color for a specific role (roleColors > textColor > colorTheme.textColor)
     const getTextColor = (role: 'hook' | 'title' | 'content' | 'cta'): string => {
-      return template.roleColors?.[role] || template.textColor || colorTheme.textColor
+      const color = template.roleColors?.[role] || template.textColor || colorTheme.textColor
+      if (template.id === 'template5' && role === 'title') {
+        console.log(`🎨 Template 5 title color: roleColors.title=${template.roleColors?.title}, textColor=${template.textColor}, final=${color}`)
+      }
+      return color
     }
 
     if (cleanCarousel.kind === 'HOOK') {
@@ -1636,7 +1683,7 @@ function CarouselImageGeneratorComponent({
           }
           
           ctx.font = template.fonts.hook.cssFont.replace(/(\d+\.?\d*)px/, `${hookFontSize}px`)
-          ctx.fillStyle = template.textColor || colorTheme.textColor
+          ctx.fillStyle = getTextColor('hook')
           ctx.textAlign = 'left'
 
           hookWrappedLines.forEach(line => {
@@ -1691,7 +1738,7 @@ function CarouselImageGeneratorComponent({
         if (template.hookLayout.showCTA && ctaText && template.fonts.hookCTA && template.styles?.ctaBox) {
           const boxConfig = template.styles.ctaBox
           ctx.font = template.fonts.hookCTA.cssFont
-          ctx.fillStyle = boxConfig.useThemeColor ? colorTheme.primaryColor : (template.textColor || colorTheme.textColor)
+          ctx.fillStyle = boxConfig.useThemeColor ? colorTheme.primaryColor : getTextColor('cta')
           ctx.textAlign = 'left'
           const ctaLetterSpacing = getLetterSpacingFor('hookCTA')
 
@@ -1752,7 +1799,7 @@ function CarouselImageGeneratorComponent({
         // 5. Render SUBTITLE at the very bottom middle
         if (template.hookLayout.showSubtitle && subtitleText && template.fonts.hookSubtitle) {
           ctx.font = template.fonts.hookSubtitle.cssFont
-          ctx.fillStyle = template.textColor || colorTheme.textColor
+          ctx.fillStyle = getTextColor('hook')
           ctx.textAlign = 'left'
           const subtitleLetterSpacing = getLetterSpacingFor('hookSubtitle')
 
@@ -1981,7 +2028,7 @@ function CarouselImageGeneratorComponent({
       const highlightHeight = hookFontSize * highlightHeightRatio
 
       ctx.font = buildHookFont(hookFontSize)
-      ctx.fillStyle = template.textColor || colorTheme.textColor
+      ctx.fillStyle = getTextColor('hook')
       ctx.textAlign = 'left'
 
       // Get highlight word - use ref first (for regeneration from edit), then fall back to state
@@ -2081,8 +2128,10 @@ function CarouselImageGeneratorComponent({
 
             const bgX = tempX + leadingWidth
             const bgY = y - highlightOffset
-            ctx.fillStyle = highlightFillStyle
-            ctx.fillRect(bgX, bgY, cleanedWidth, highlightHeight)
+            if (!isTransparentHighlight) {
+              ctx.fillStyle = highlightFillStyle
+              ctx.fillRect(bgX, bgY, cleanedWidth, highlightHeight)
+            }
           }
 
           const wordWidth = measureTextWithLetterSpacing(ctx, word, hookLetterSpacing)
@@ -2095,7 +2144,7 @@ function CarouselImageGeneratorComponent({
         // Second pass: Draw text
         let currentX = startX
         lineWords.forEach((word, wordIndex) => {
-          ctx.fillStyle = template.textColor || colorTheme.textColor
+          ctx.fillStyle = getTextColor('hook')
           const drawnWidth = drawTextWithLetterSpacing(ctx, word, currentX, y, hookLetterSpacing)
           currentX += drawnWidth
           if (wordIndex < lineWords.length - 1) {
@@ -2129,7 +2178,7 @@ function CarouselImageGeneratorComponent({
       const ctaAlign = getTextAlignFor('cta')
 
       ctx.font = template.fonts.content.cssFont
-      ctx.fillStyle = template.textColor || colorTheme.textColor
+      ctx.fillStyle = getTextColor('cta')
       ctx.textAlign = 'left'
       
       const sentences = cleanCarousel.content.split(/([.!?])\s+/).filter(s => s.trim())
@@ -2255,11 +2304,11 @@ function CarouselImageGeneratorComponent({
       })
       
       // Render subtitle at the bottom for template 3 CTA page
-      if (template.id === 'template3' && template.fonts.hookSubtitle) {
+      if (template.id === 'template3' && template.hookLayout?.showSubtitle && template.fonts.hookSubtitle) {
         const subtitleText = carousels[0]?.subtitle || '' // Get subtitle from HOOK slide
         if (subtitleText) {
           ctx.font = template.fonts.hookSubtitle.cssFont
-          ctx.fillStyle = template.textColor || colorTheme.textColor
+          ctx.fillStyle = getTextColor('hook')
           ctx.textAlign = 'left'
           const subtitleLetterSpacing = getLetterSpacingFor('hookSubtitle')
 
@@ -2431,8 +2480,11 @@ function CarouselImageGeneratorComponent({
         }
         if (currentLine) wrappedContent.push(currentLine)
         
-        const titleLH = titleSize * 1.2
-        const contentLH = contentSize * 1.27
+        // Use template's actual lineHeight values instead of hardcoded multipliers
+        const titleLineHeightRatio = template.fonts.title.lineHeight / template.fonts.title.size
+        const contentLineHeightRatio = template.fonts.content.lineHeight / template.fonts.content.size
+        const titleLH = titleSize * titleLineHeightRatio
+        const contentLH = contentSize * contentLineHeightRatio
         
         const titleH = wrappedTitle.length > 0 
           ? titleSize + (wrappedTitle.length - 1) * titleLH + (titleSize * 0.2)
@@ -2456,6 +2508,14 @@ function CarouselImageGeneratorComponent({
       
       // Calculate effective safe height for ALL templates
       let effectiveSafeHeight = safeHeight
+      
+      // For template 5, use its specific safe area if enabled
+      if (template.id === 'template5' && template.safeArea?.enabled) {
+        const template5SafeTop = template.safeArea.top
+        const template5SafeBottom = template.safeArea.bottom
+        effectiveSafeHeight = height - template5SafeTop - template5SafeBottom
+        console.log(`   Template 5: Using safe area (top: ${template5SafeTop}, bottom: ${template5SafeBottom}), available height=${effectiveSafeHeight}px`)
+      }
       
       // For template 3 MIDDLE slides, account for topic and page number
       if (template.id === 'template3' && cleanCarousel.kind === 'MIDDLE') {
@@ -2674,7 +2734,7 @@ function CarouselImageGeneratorComponent({
       }
         
       ctx.font = buildTitleFont(titleFontSize)
-        ctx.fillStyle = template.textColor || colorTheme.textColor
+        ctx.fillStyle = getTextColor('title')
 
         titleLines.forEach(line => {
         const lineWidth = measureTextWithLetterSpacing(ctx, line, titleLetterSpacing)
@@ -2686,7 +2746,7 @@ function CarouselImageGeneratorComponent({
         y += titleContentGap
         
       ctx.font = buildContentFont(contentFontSize)
-        ctx.fillStyle = template.textColor || colorTheme.textColor
+        ctx.fillStyle = getTextColor('content')
       const spaceWidth = ctx.measureText(' ').width
         
         const underlinePhrases = emphasisData.underline.split(',').map((p: string) => p.trim()).filter((p: string) => p)
@@ -2752,8 +2812,10 @@ function CarouselImageGeneratorComponent({
             const leadingWidth = measureTextWithLetterSpacing(ctx, leadingPunc, contentLetterSpacing)
             const cleanedWidth = measureTextWithLetterSpacing(ctx, cleanedWord, contentLetterSpacing)
               
+            if (!isTransparentHighlight) {
               ctx.fillStyle = highlightFillStyle
-            ctx.fillRect(tempX + leadingWidth, y - contentFontSize * 0.91, cleanedWidth, contentFontSize * 1.09)
+              ctx.fillRect(tempX + leadingWidth, y - contentFontSize * 0.91, cleanedWidth, contentFontSize * 1.09)
+            }
           }
 
           const wordWidth = measureTextWithLetterSpacing(ctx, word, contentLetterSpacing)
@@ -2765,7 +2827,7 @@ function CarouselImageGeneratorComponent({
 
         let currentX = startX
           words.forEach((word, wordIndex) => {
-            ctx.fillStyle = template.textColor || colorTheme.textColor
+            ctx.fillStyle = getTextColor('content')
           const startPos = currentX
           const drawnWidth = drawTextWithLetterSpacing(ctx, word, currentX, y, contentLetterSpacing)
           const endPos = startPos + drawnWidth
@@ -2913,7 +2975,7 @@ function CarouselImageGeneratorComponent({
         const footerCssFont = footerFont.cssFont.replace(/(\d+\.?\d*)px/, `${footerFontSize}px`)
         
         ctx.font = footerCssFont
-        ctx.fillStyle = template.textColor || colorTheme.textColor
+        ctx.fillStyle = getTextColor(footerFontRole as 'hook' | 'title' | 'content' | 'cta')
         ctx.textAlign = 'left'
         
         const paddingX = template.footer.paddingX || 48
@@ -3088,7 +3150,8 @@ function CarouselImageGeneratorComponent({
                 background: '#ffffff',
                 borderRadius: '12px',
                 overflow: 'hidden',
-                marginBottom: '12px'
+                marginBottom: '12px',
+                border: '1px solid #e5e5e5'
               }}>
                 {/* Placeholder while images are generating */}
                 {!isImageReady && (
