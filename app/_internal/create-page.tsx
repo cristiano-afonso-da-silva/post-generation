@@ -152,6 +152,17 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
   // Template options
   const templateOptions = getTemplateOptions()
   const colorThemes = Object.entries(COLOR_THEMES)
+  
+  // Helper function to check if a template is text-only (doesn't support images)
+  const isTextOnlyTemplate = (templateId: string): boolean => {
+    try {
+      const template = getCarouselTemplate(templateId)
+      return template.imageLayout?.maxHeightRatio === 0
+    } catch (error) {
+      console.error('Error checking if template is text-only:', error)
+      return false
+    }
+  }
 
   const hasInitializedRef = useRef(false)
   const prevColorThemeIdRef = useRef(colorThemeId)
@@ -1070,6 +1081,7 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
                           useAIImages,
                           aiImageStyle
                         }}
+                        isTextOnly={isTextOnlyTemplate(templateId)}
                         onSelectMode={(mode) => {
                           console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
                           console.log('🎯 MODE SELECTED');
@@ -1601,6 +1613,20 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
             if (template.defaultColorThemeId) {
               setColorThemeId(template.defaultColorThemeId)
             }
+            
+            // If template is text-only and user has images enabled, revert to text-only mode
+            if (isTextOnlyTemplate(id) && includeImages) {
+              console.log('🔄 Template is text-only, reverting to Text Only mode')
+              setIncludeImages(false)
+              setUseAIImages(false)
+              try {
+                localStorage.setItem('postGeneration_includeImages', 'false')
+                localStorage.setItem('postGeneration_useAIImages', 'false')
+              } catch (error) {
+                console.error('Error saving mode to localStorage:', error)
+              }
+            }
+            
             try {
               localStorage.setItem('postGeneration_templateId', id)
             } catch (error) {

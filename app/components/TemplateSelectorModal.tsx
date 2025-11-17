@@ -20,6 +20,17 @@ interface TemplateOption {
   isCustom?: boolean
 }
 
+// Helper function to check if a template is text-only (doesn't support images)
+function isTextOnlyTemplate(templateId: string): boolean {
+  try {
+    const template = getCarouselTemplate(templateId)
+    return template.imageLayout?.maxHeightRatio === 0
+  } catch (error) {
+    console.error('Error checking if template is text-only:', error)
+    return false
+  }
+}
+
 // Helper function to extract style tags from template configuration
 function getTemplateTags(templateId: string): string[] {
   try {
@@ -257,6 +268,7 @@ export default function TemplateSelectorModal({
               
               // Get tags for this template
               const tags = getTemplateTags(template.id)
+              const isTextOnly = isTextOnlyTemplate(template.id)
 
               return (
                 <div
@@ -396,41 +408,58 @@ export default function TemplateSelectorModal({
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px',
-                        marginBottom: tags.length > 0 ? '8px' : '0'
+                        marginBottom: (tags.length > 0 || isTextOnly) ? '8px' : '0'
                       }}
                     >
                       {isCustom && <Sparkles size={14} color="#ffbd59" />}
                       {template.name}
                     </div>
                     
-                    {/* Tags */}
-                    {tags.length > 0 && (
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: '6px',
-                          marginTop: '4px'
-                        }}
-                      >
-                        {tags.map((tag, tagIndex) => (
-                          <span
-                            key={tagIndex}
-                            style={{
-                              fontSize: '11px',
-                              fontWeight: '500',
-                              color: '#666666',
-                              background: '#f0f0f0',
-                              padding: '4px 8px',
-                              borderRadius: '12px',
-                              lineHeight: '1'
-                            }}
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    {/* Text Only badge and Tags */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '6px',
+                        marginTop: '4px'
+                      }}
+                    >
+                      {/* Text Only badge - show first if template is text-only */}
+                      {isTextOnly && (
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            color: '#666666',
+                            background: '#e8e8e8',
+                            padding: '4px 8px',
+                            borderRadius: '12px',
+                            lineHeight: '1',
+                            border: '1px solid #d0d0d0'
+                          }}
+                        >
+                          Text Only
+                        </span>
+                      )}
+                      
+                      {/* Style tags */}
+                      {tags.map((tag, tagIndex) => (
+                        <span
+                          key={tagIndex}
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: '500',
+                            color: '#666666',
+                            background: '#f0f0f0',
+                            padding: '4px 8px',
+                            borderRadius: '12px',
+                            lineHeight: '1'
+                          }}
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )

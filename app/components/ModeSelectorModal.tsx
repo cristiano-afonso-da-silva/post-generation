@@ -25,6 +25,7 @@ interface ModeSelectorDropdownProps {
     aiImageStyle: 'animated' | 'surreal'
   }) => void
   buttonRef: React.RefObject<HTMLButtonElement>
+  isTextOnly?: boolean
 }
 
 const MODE_OPTIONS: ModeOption[] = [
@@ -50,7 +51,8 @@ export default function ModeSelectorDropdown({
   onClose,
   currentMode,
   onSelectMode,
-  buttonRef
+  buttonRef,
+  isTextOnly = false
 }: ModeSelectorDropdownProps) {
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -102,6 +104,11 @@ export default function ModeSelectorDropdown({
   if (!isOpen) return null
 
   const handleSelectMode = (modeId: string) => {
+    // Prevent selecting "Text + Image" if template is text-only
+    if (isTextOnly && modeId === 'text-image') {
+      return
+    }
+    
     const mode = MODE_OPTIONS.find(m => m.id === modeId)
     if (mode) {
       onSelectMode({
@@ -149,21 +156,23 @@ export default function ModeSelectorDropdown({
     >
       {MODE_OPTIONS.map((mode) => {
         const isSelected = mode.id === currentModeId
+        const isDisabled = isTextOnly && mode.id === 'text-image'
 
         return (
           <div
             key={mode.id}
-            onClick={() => handleSelectMode(mode.id)}
+            onClick={() => !isDisabled && handleSelectMode(mode.id)}
             style={{
               padding: '12px 16px',
-              cursor: 'pointer',
+              cursor: isDisabled ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s ease',
               background: isSelected ? '#f5f5f5' : 'transparent',
               borderRadius: '6px',
-              border: 'none'
+              border: 'none',
+              opacity: isDisabled ? 0.5 : 1
             }}
             onMouseEnter={(e) => {
-              if (!isSelected) {
+              if (!isSelected && !isDisabled) {
                 e.currentTarget.style.background = '#f5f5f5'
               }
             }}
@@ -174,6 +183,7 @@ export default function ModeSelectorDropdown({
                 e.currentTarget.style.background = '#f5f5f5'
               }
             }}
+            title={isDisabled ? 'This template does not support images' : undefined}
           >
             <div
               style={{
@@ -188,7 +198,7 @@ export default function ModeSelectorDropdown({
                   style={{
                     fontSize: '14px',
                     fontWeight: '500',
-                    color: '#000000'
+                    color: isDisabled ? '#999999' : '#000000'
                   }}
                 >
                   {mode.label}
