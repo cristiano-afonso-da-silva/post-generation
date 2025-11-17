@@ -91,41 +91,45 @@ export async function GET(request: NextRequest) {
             )
           }
         } else if (userId) {
-          // Cached URLs are completely missing - only then check storage directly
-          // This is a last resort to avoid unnecessary storage.list() calls
-          const { data: files, error: listError } = await supabase.storage
-            .from('carousel-images')
-            .list(`${userId}/${gen.id}`)
-
-          if (!listError && files && files.length > 0) {
-            // Sort files by name to ensure correct order (slide-0.png, slide-1.png, etc.)
-            const sortedFiles = files.sort((a, b) => {
-              const aNum = parseInt(a.name.match(/\d+/)?.[0] || '0')
-              const bNum = parseInt(b.name.match(/\d+/)?.[0] || '0')
-              return aNum - bNum
-            })
-
-            // Generate fresh signed URLs for private bucket access (24 hour expiry)
-            imageUrls = await Promise.all(
-              sortedFiles.map(async (file) => {
-                const { data, error } = await supabase.storage
-                  .from('carousel-images')
-                  .createSignedUrl(`${userId}/${gen.id}/${file.name}`, 86400)
-                if (error) {
-                  console.error(`Error creating signed URL for ${file.name}:`, error)
-                  // Fallback to public URL if signed URL fails
-                  const { data: publicData } = supabase.storage
-                    .from('carousel-images')
-                    .getPublicUrl(`${userId}/${gen.id}/${file.name}`)
-                  return publicData.publicUrl
-                }
-                return data.signedUrl
-              })
+          // Cached URLs are completely missing - try to reconstruct from known pattern
+          // FIXED: Avoid storage.list() which causes egress - instead try common file paths
+          // We know images follow the pattern: slide-0.png, slide-1.png, etc.
+          // Try up to 10 slides (most carousels have 3-5 slides)
+          console.log(`⚠️ Generation ${gen.id}: No cached URLs, attempting to reconstruct from known pattern`)
+          
+          const maxSlides = 10
+          const pathPromises: Promise<string | null>[] = []
+          
+          for (let i = 0; i < maxSlides; i++) {
+            const filePath = `${userId}/${gen.id}/slide-${i}.png`
+            pathPromises.push(
+              supabase.storage
+                .from('carousel-images')
+                .createSignedUrl(filePath, 86400)
+                .then(({ data, error }) => {
+                  if (error) {
+                    // File doesn't exist at this index, return null
+                    return null
+                  }
+                  return data.signedUrl
+                })
+                .catch(() => null)
             )
-
-            console.log(`✅ Generation ${gen.id}: Found ${imageUrls.length} files in storage (cache was missing)`)
+          }
+          
+          const results = await Promise.all(pathPromises)
+          imageUrls = results.filter((url): url is string => url !== null)
+          
+          if (imageUrls.length > 0) {
+            console.log(`✅ Generation ${gen.id}: Reconstructed ${imageUrls.length} URLs from known pattern`)
+            // Update database with these URLs to avoid future storage operations
+            await supabase
+              .from('generations')
+              .update({ image_urls: imageUrls })
+              .eq('id', gen.id)
+              .eq('user_id', userId)
           } else {
-            console.log(`❌ Generation ${gen.id}: No files in storage`)
+            console.log(`❌ Generation ${gen.id}: No images found (tried up to ${maxSlides} slides)`)
           }
         }
 

@@ -7,22 +7,8 @@
 /* ════════════════════════════════════════════════════════════════════════════
    FONTS
    ════════════════════════════════════════════════════════════════════════════ */
-
-@font-face {
-  font-family: 'Poppins';
-  src: url('/fonts/Poppins-Bold.ttf') format('truetype');
-  font-weight: bold;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'DreamingOutloudSans';
-  src: url('/fonts/DreamingOutloudSans-Regular.otf') format('opentype');
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
+/* Fonts are now loaded dynamically from Google Fonts via the Google Fonts API */
+/* See app/lib/googleFonts.ts for font loading utilities */
 
 html,
 body {

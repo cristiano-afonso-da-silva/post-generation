@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { getCarouselTemplate } from '../config/carouselTemplates'
 import { getColorTheme } from '../config/carouselThemes'
 import { useAuth } from '../context/AuthContext'
 import { useMobile } from '../hooks/useMobile'
+import { loadGoogleFont } from '../lib/googleFonts'
 import JSZip from 'jszip'
 
 function ensureColorAlpha(color: string, alpha = 0.5): string {
@@ -140,6 +141,7 @@ const getInitialImages = (carousels: Carousel[], ideaTitle: string, underlineWor
     const savedFullContentHash = localStorage.getItem('postGeneration_fullContentHash')
     const savedContentHash = localStorage.getItem('postGeneration_contentHash')
     const savedHash = savedFullContentHash || savedContentHash
+    const fromHistory = localStorage.getItem('postGeneration_fromHistory') === 'true'
     
     // Create deterministic hash with consistent property order
     const currentFullContentHash = JSON.stringify({ 
@@ -150,15 +152,18 @@ const getInitialImages = (carousels: Carousel[], ideaTitle: string, underlineWor
       colorThemeId
     })
     
-    console.log('🔍 Cache check:', {
-      hasSavedImages: !!savedImages,
-      savedHash,
-      currentHash: currentFullContentHash,
-      hashMatch: savedHash === currentFullContentHash,
-      colorThemeId
-    })
+    // Only log cache check in development mode to reduce console spam
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 Cache check:', {
+        hasSavedImages: !!savedImages,
+        savedHash,
+        currentHash: currentFullContentHash,
+        hashMatch: savedHash === currentFullContentHash,
+        colorThemeId
+      })
+    }
     
-    if (savedImages && savedHash && savedHash === currentFullContentHash) {
+    if (savedImages) {
       const imageDataUrls = JSON.parse(savedImages)
       
       // Check if we need to convert signed URLs to data URLs from cache
@@ -173,24 +178,28 @@ const getInitialImages = (carousels: Carousel[], ideaTitle: string, underlineWor
         return cached || url
       })
       
-      // Verify all images are present and valid (either data URLs or we have cached versions)
+      // Verify all images are present and valid (either data URLs or valid URLs)
       const allValid = convertedUrls.every((img: string) => 
         img && typeof img === 'string' && (img.startsWith('data:image/') || img.startsWith('http'))
       )
       
+      // Check if we have the right number of images
       if (convertedUrls.length === carousels.length && allValid) {
-        // If we have data URLs, use them; otherwise use the original URLs
-        const hasDataUrls = convertedUrls.some((img: string) => img.startsWith('data:image/'))
-        if (hasDataUrls) {
-          console.log('✅ Loaded all', convertedUrls.length, 'images from cache (with data URLs)')
+        // On post page, always use cached images
+        if (fromHistory) {
           return convertedUrls
-        } else {
-          // All are signed URLs - this is okay, they'll be loaded from storage
-          console.log('✅ Loaded all', convertedUrls.length, 'images from cache (signed URLs)')
+        }
+        
+        // Otherwise, only use if hash matches
+        if (savedHash && savedHash === currentFullContentHash) {
           return convertedUrls
         }
       } else {
-        console.warn('⚠️ Cached images incomplete or invalid, will regenerate')
+        console.warn('⚠️ Cached images incomplete or invalid, will regenerate', {
+          convertedUrlsLength: convertedUrls.length,
+          carouselsLength: carousels.length,
+          allValid
+        })
       }
     } else if (savedHash && savedHash !== currentFullContentHash) {
       console.log('🔄 Hash mismatch - cache invalid, will regenerate')
@@ -264,18 +273,22 @@ function CarouselImageGeneratorComponent({
   
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([])
   const [generating, setGenerating] = useState(false)
-  const [carouselImages, setCarouselImages] = useState<string[]>(() => 
-    getInitialImages(carousels, ideaTitle, underlineWords, templateId, colorThemeId)
+  // Cache to track which fonts have been loaded for which template
+  const loadedFontsCache = useRef<Map<string, Set<string>>>(new Map())
+  
+  // Memoize initial images to avoid calling getInitialImages multiple times
+  const initialImagesMemo = useMemo(() => 
+    getInitialImages(carousels, ideaTitle, underlineWords, templateId, colorThemeId),
+    [carousels, ideaTitle, underlineWords, templateId, colorThemeId]
   )
+  
+  const [carouselImages, setCarouselImages] = useState<string[]>(initialImagesMemo)
   // Keep previous images visible during regeneration to prevent layout shifts
-  const initialImages = getInitialImages(carousels, ideaTitle, underlineWords, templateId, colorThemeId)
-  const previousImagesRef = useRef<string[]>(initialImages)
+  const previousImagesRef = useRef<string[]>(initialImagesMemo)
   
   // Local state for reordered carousels (allows drag-and-drop reordering)
   const [orderedCarousels, setOrderedCarousels] = useState<Carousel[]>(carousels)
-  const [orderedCarouselImages, setOrderedCarouselImages] = useState<string[]>(() => 
-    getInitialImages(carousels, ideaTitle, underlineWords, templateId, colorThemeId)
-  )
+  const [orderedCarouselImages, setOrderedCarouselImages] = useState<string[]>(initialImagesMemo)
   const [orderedUnderlineWords, setOrderedUnderlineWords] = useState<Record<number, any>>(underlineWords)
   
   // Update local state when props change
@@ -289,31 +302,21 @@ function CarouselImageGeneratorComponent({
       underlineWordsForGenerationRef.current = underlineWords
     }
     
-    // Only reload images from localStorage if we don't already have them
-    // OR if we're regenerating from a text edit (in which case we cleared them)
-    // This prevents images from disappearing when Reset is clicked
-    // But allows new images to be displayed when text is edited and saved
+    // Check if colorThemeId or templateId changed - if so, clear cached images
+    const prevSettings = prevDesignSettings.current
+    const designChanged = prevSettings.templateId !== templateId || prevSettings.colorThemeId !== colorThemeId
+    
+    // Load images from cache if we don't have them AND design hasn't changed
+    // If design changed, the regeneration useEffect will handle it
     setOrderedCarouselImages(prev => {
-      // If we cleared images for regeneration, let new ones be loaded
-      if (isRegeneratingFromEditRef.current || prev.length === 0) {
-        if (prev.length === 0 && !isRegeneratingFromEditRef.current) {
-          console.log('🔄 Attempting to load images from cache...')
-        }
-        if (isRegeneratingFromEditRef.current) {
-          console.log('✨ Regenerating images with new text - showing updated images!')
-        }
+      if (prev.length === 0 && !designChanged) {
         return getInitialImages(carousels, ideaTitle, underlineWords, templateId, colorThemeId)
       }
-      
-      // We already have images and NOT regenerating - keep them (for Reset button)
-      if (prev.length > 0 && prev.length === carousels.length) {
-        console.log('✅ Preserving existing images (count:', prev.length, ')')
-        return prev
+      // If design changed, clear images to trigger regeneration
+      if (designChanged && prev.length > 0) {
+        return []
       }
-      
-      // No images, load from cache
-      console.log('🔄 Attempting to load images from cache...')
-      return getInitialImages(carousels, ideaTitle, underlineWords, templateId, colorThemeId)
+      return prev
     })
   }, [carousels, ideaTitle, underlineWords, templateId, colorThemeId])
   
@@ -400,6 +403,9 @@ function CarouselImageGeneratorComponent({
   
   // ✅ Expose regenerateAndSave method for parent component to call after text edits
   useImperativeHandle(ref, () => ({
+    getImages: () => {
+      return orderedCarouselImages
+    },
     regenerateAndSave: async (updatedUnderlineWords?: Record<number, { underline: string; highlight: string; imageUrl?: string | null; originalImageUrl?: string | null }>) => {
       console.log('📤 regenerateAndSave called - triggering full carousel regeneration with new text...')
       
@@ -464,7 +470,10 @@ function CarouselImageGeneratorComponent({
       // If generationId exists and ideaTitle matches, credits were already deducted for this idea
       // (regardless of content edits)
       if (storedGenerationId && storedIdeaTitle === ideaTitle) {
-        console.log('✅ Credits already deducted for this ideaTitle (found generationId)', ideaTitle)
+        // Only log in development mode to reduce console spam
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Credits already deducted for this ideaTitle (found generationId)', ideaTitle)
+        }
         return true
       }
     } catch (error) {
@@ -482,6 +491,8 @@ function CarouselImageGeneratorComponent({
   const hasInitialized = useRef(false)
   // Track previous carousel content for detecting edits
   const prevCarouselsContent = useRef<string>(JSON.stringify(carousels))
+  // Track previous ideaTitle to only reset credits when it actually changes
+  const prevIdeaTitleRef = useRef<string>(ideaTitle)
   // Track if a save is in progress to prevent duplicate saves
   const isSavingRef = useRef<boolean>(false)
   
@@ -502,6 +513,18 @@ function CarouselImageGeneratorComponent({
   // Get selected template and color theme
   const TEMPLATE = getCarouselTemplate(templateId)
   const COLOR_THEME = getColorTheme(colorThemeId)
+  
+  // Validate template structure
+  if (!TEMPLATE || !TEMPLATE.fonts || !TEMPLATE.fonts.hook || !TEMPLATE.fonts.title || !TEMPLATE.fonts.content) {
+    console.error('❌ Invalid template structure detected:', {
+      templateId,
+      hasTemplate: !!TEMPLATE,
+      hasFonts: !!TEMPLATE?.fonts,
+      hasHook: !!TEMPLATE?.fonts?.hook,
+      hasTitle: !!TEMPLATE?.fonts?.title,
+      hasContent: !!TEMPLATE?.fonts?.content
+    })
+  }
 
 
   // Auto-save function
@@ -511,10 +534,8 @@ function CarouselImageGeneratorComponent({
       return undefined
     }
 
-    if (imageDataUrls.length === 0) {
-      console.warn('Cannot save: no images to save')
-      return undefined
-    }
+    // Allow saving text-only generations (when imageDataUrls.length === 0)
+    // This is needed for includeImages=false mode
 
     // Prevent multiple simultaneous saves
     if (isSavingRef.current) {
@@ -559,14 +580,12 @@ function CarouselImageGeneratorComponent({
           accountDescription: accountDescriptionRef.current,
           accountName: accountNameRef.current,
           website: websiteRef.current,
-          accountName: accountNameRef.current,
-          website: websiteRef.current,
           slides: orderedCarousels,
           caption: captionRef.current,
           underlineWords: orderedUnderlineWords,
           templateId,
           colorThemeId,
-          // No images or imageUrls - will upload separately
+          // No images or imageUrls - will upload separately if images exist
         })
       })
 
@@ -586,128 +605,151 @@ function CarouselImageGeneratorComponent({
       const generationId = createResult.generationId
       
       console.log('✅ Generation created/retrieved:', generationId)
-      console.log('📤 [STEP 2] Uploading images directly to Supabase Storage (bypasses Vercel)...')
-
-      // Step 2: Upload images directly to Supabase Storage from client
-      // This bypasses Vercel entirely, eliminating Fast Origin Transfer (incoming) costs
-      let imageUrls: string[]
-      let thumbnailUrls: string[]
       
-      try {
-        const { checkImagesExist, deleteOldImages, uploadImagesToStorage } = await import('../lib/uploadImages')
+      // Step 2: Upload images if we have any valid image data URLs
+      let imageUrls: string[] = []
+      let thumbnailUrls: string[] = []
+      
+      // Filter to only valid data URLs and ensure we have all expected images
+      const validImageUrls = imageDataUrls.filter((url, idx) => {
+        const isValid = url && url.startsWith('data:image/') && url.length > 100
+        if (!isValid) {
+          console.error(`⚠️ Image ${idx + 1} is invalid and will be skipped:`, {
+            hasData: !!url,
+            isDataUrl: url?.startsWith('data:image/'),
+            length: url?.length || 0
+          })
+        }
+        return isValid
+      })
+      
+      // Ensure we have all expected images - if not, log warning but continue
+      if (validImageUrls.length !== imageDataUrls.length) {
+        console.warn(`⚠️ Expected ${imageDataUrls.length} images but only ${validImageUrls.length} are valid. Missing indices: ${imageDataUrls.map((url, idx) => (!url || !url.startsWith('data:image/') || url.length <= 100) ? idx + 1 : -1).filter(i => i !== -1).join(', ')}`)
+      }
+      
+      if (validImageUrls.length > 0) {
+        console.log('📤 [STEP 2] Uploading images to Supabase Storage...')
         
-        // If updating an existing generation, delete old images first
-        if (createResult.isUpdate) {
-          console.log('🗑️  Deleting old images for update...')
-          try {
-            await deleteOldImages(user.id, generationId)
-          } catch (deleteError) {
-            // Non-fatal - upsert will overwrite anyway
-            console.warn('⚠️ Failed to delete old images (non-fatal):', deleteError)
-          }
-          // After deleting, we always need to upload new images
-          console.log('📤 Uploading new images after deleting old ones...')
-          const uploadResult = await uploadImagesToStorage(user.id, generationId, imageDataUrls)
-          imageUrls = uploadResult.imageUrls
-          thumbnailUrls = uploadResult.thumbnailUrls
-          console.log('✅ Images uploaded successfully:', imageUrls.length)
-        } else {
-          // Check if images already exist (deduplication - prevents unnecessary uploads)
-          console.log('🔍 Checking if images already exist in storage...')
-          const existingImages = await checkImagesExist(user.id, generationId, imageDataUrls.length)
+        try {
+          const { checkImagesExist, deleteOldImages, uploadImagesToStorage } = await import('../lib/uploadImages')
           
-          if (existingImages.exists && existingImages.imageUrls) {
-            console.log('✅ Using existing images (skipping upload to save bandwidth)')
-            imageUrls = existingImages.imageUrls
-            thumbnailUrls = existingImages.thumbnailUrls || existingImages.imageUrls.slice(0, 2)
-          } else {
-            // Upload images directly to Supabase Storage (bypasses Vercel, eliminates Fast Origin Transfer)
-            console.log('📤 Uploading images directly to Supabase Storage (client-side)...')
-            const uploadResult = await uploadImagesToStorage(user.id, generationId, imageDataUrls)
+          // If updating an existing generation, delete old images first
+          if (createResult.isUpdate) {
+            console.log('🗑️  Deleting old images for update...')
+            try {
+              await deleteOldImages(user.id, generationId)
+            } catch (deleteError) {
+              // Non-fatal - upsert will overwrite anyway
+              console.warn('⚠️ Failed to delete old images (non-fatal):', deleteError)
+            }
+            // After deleting, we always need to upload new images
+            console.log('📤 Uploading new images after deleting old ones...')
+            const uploadResult = await uploadImagesToStorage(user.id, generationId, validImageUrls)
             imageUrls = uploadResult.imageUrls
             thumbnailUrls = uploadResult.thumbnailUrls
             console.log('✅ Images uploaded successfully:', imageUrls.length)
+          } else {
+            // Check if images already exist (deduplication - prevents unnecessary uploads)
+            console.log('🔍 Checking if images already exist in storage...')
+            const existingImages = await checkImagesExist(user.id, generationId, validImageUrls.length)
+            
+            if (existingImages.exists && existingImages.imageUrls) {
+              console.log('✅ Using existing images (skipping upload to save bandwidth)')
+              imageUrls = existingImages.imageUrls
+              thumbnailUrls = existingImages.thumbnailUrls || existingImages.imageUrls.slice(0, 2)
+            } else {
+              // Upload images directly to Supabase Storage (bypasses Vercel, eliminates Fast Origin Transfer)
+              console.log('📤 Uploading images directly to Supabase Storage (client-side)...')
+              const uploadResult = await uploadImagesToStorage(user.id, generationId, validImageUrls)
+              imageUrls = uploadResult.imageUrls
+              thumbnailUrls = uploadResult.thumbnailUrls
+              console.log('✅ Images uploaded successfully:', imageUrls.length)
+            }
           }
-        }
-      } catch (uploadError: any) {
-        console.error('❌ Failed to upload images:', uploadError)
-        // If client-side upload fails, fall back to per-image server-side upload
-        // This avoids sending a huge array of base64 images to /api/generations/save (which caused 413 errors)
-        console.warn('⚠️ Falling back to server-side upload (per-image)...')
-        try {
-          const uploadPromises = imageDataUrls.map(async (imageData, imageIndex) => {
-            const response = await fetch('/api/generations/upload-image', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                userId: user.id,
-                generationId,
-                imageIndex,
-                imageData,
-              }),
+        } catch (uploadError: any) {
+          console.error('❌ Failed to upload images:', uploadError)
+          // If client-side upload fails, fall back to per-image server-side upload
+          // This avoids sending a huge array of base64 images to /api/generations/save (which caused 413 errors)
+          console.warn('⚠️ Falling back to server-side upload (per-image)...')
+          try {
+            const uploadPromises = validImageUrls.map(async (imageData, imageIndex) => {
+              const response = await fetch('/api/generations/upload-image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  userId: user.id,
+                  generationId,
+                  imageIndex,
+                  imageData,
+                }),
+              })
+
+              if (!response.ok) {
+                let errorMessage = `Failed to upload image ${imageIndex} via server (${response.status})`
+                try {
+                  const errorData = await response.json()
+                  errorMessage = errorData.error || errorMessage
+                } catch {
+                  errorMessage = response.statusText || errorMessage
+                }
+                console.error('❌ Server-side image upload error:', errorMessage)
+                throw new Error(errorMessage)
+              }
+
+              const result = await response.json()
+              return result.imageUrl as string
             })
 
-            if (!response.ok) {
-              let errorMessage = `Failed to upload image ${imageIndex} via server (${response.status})`
-              try {
-                const errorData = await response.json()
-                errorMessage = errorData.error || errorMessage
-              } catch {
-                errorMessage = response.statusText || errorMessage
-              }
-              console.error('❌ Server-side image upload error:', errorMessage)
-              throw new Error(errorMessage)
-            }
+            imageUrls = await Promise.all(uploadPromises)
+            thumbnailUrls = imageUrls.slice(0, 2)
+            console.log('✅ Fallback server-side per-image upload completed')
+          } catch (fallbackError) {
+            console.error('❌ Fallback server-side upload failed:', fallbackError)
+            throw new Error('Failed to upload images (both client and server methods failed)')
+          }
+        }
 
-            const result = await response.json()
-            return result.imageUrl as string
+        // Step 3: Update generation with image URLs (small payload, just URLs)
+        console.log('📤 [STEP 3] Updating generation with image URLs...')
+        
+        const updateResponse = await fetch('/api/generations/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user.id,
+            generationId: generationId,
+            ideaTitle,
+            accountDescription: accountDescriptionRef.current,
+            accountName: accountNameRef.current,
+            website: websiteRef.current,
+            slides: orderedCarousels,
+            caption: captionRef.current,
+            underlineWords: orderedUnderlineWords,
+            templateId,
+            colorThemeId,
+            imageUrls: imageUrls,
+            thumbnailUrls: thumbnailUrls,
           })
-
-          imageUrls = await Promise.all(uploadPromises)
-          thumbnailUrls = imageUrls.slice(0, 2)
-          console.log('✅ Fallback server-side per-image upload completed')
-        } catch (fallbackError) {
-          console.error('❌ Fallback server-side upload failed:', fallbackError)
-          throw new Error('Failed to upload images (both client and server methods failed)')
-        }
-      }
-
-      // Step 3: Update generation with image URLs (small payload, just URLs)
-      console.log('📤 [STEP 3] Updating generation with image URLs...')
-      
-      const updateResponse = await fetch('/api/generations/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.id,
-          generationId: generationId,
-          ideaTitle,
-          accountDescription: accountDescriptionRef.current,
-          accountName: accountNameRef.current,
-          website: websiteRef.current,
-          slides: orderedCarousels,
-          caption: captionRef.current,
-          underlineWords: orderedUnderlineWords,
-          templateId,
-          colorThemeId,
-          imageUrls: imageUrls,
-          thumbnailUrls: thumbnailUrls,
         })
-      })
 
-      if (!updateResponse.ok) {
-        let errorMessage = `Failed to update generation with images (${updateResponse.status})`
-        try {
-          const errorData = await updateResponse.json()
-          errorMessage = errorData.error || errorMessage
-        } catch (e) {
-          errorMessage = updateResponse.statusText || errorMessage
+        if (!updateResponse.ok) {
+          let errorMessage = `Failed to update generation with images (${updateResponse.status})`
+          try {
+            const errorData = await updateResponse.json()
+            errorMessage = errorData.error || errorMessage
+          } catch (e) {
+            errorMessage = updateResponse.statusText || errorMessage
+          }
+          console.error('❌ Failed to update generation:', errorMessage)
+          throw new Error(errorMessage)
         }
-        console.error('❌ Failed to update generation:', errorMessage)
-        throw new Error(errorMessage)
-      }
 
-      const updateResult = await updateResponse.json()
+        await updateResponse.json()
+        console.log('✅ Generation updated with image URLs')
+      } else {
+        console.log('📝 No images to upload (text-only generation)')
+      }
       
       // Store generation_id, content hash, and ideaTitle in localStorage
       localStorage.setItem('postGeneration_generationId', generationId)
@@ -717,7 +759,7 @@ function CarouselImageGeneratorComponent({
         localStorage.setItem('postGeneration_userId', user.id)
       }
       
-      if (updateResult.isUpdate) {
+      if (createResult.isUpdate) {
         console.log('✅ Generation updated in history (same ideaTitle):', generationId)
       } else {
         console.log('✅ Generation auto-saved to history (new ideaTitle):', generationId)
@@ -733,13 +775,18 @@ function CarouselImageGeneratorComponent({
     }
   }, [ideaTitle, carousels, underlineWords, templateId, colorThemeId, user?.id])
 
-  const generateAllCarousels = useCallback(async (overrideTemplateId?: string, overrideColorId?: string) => {
+  const generateAllCarousels = useCallback(async (overrideTemplateId?: string, overrideColorId?: string, skipFontLoading = false) => {
     const renderStartTime = performance.now()
     console.log('🎨 [RENDERING START] CarouselImageGenerator.generateAllCarousels() called')
     console.log('   ⏱️ Timestamp:', new Date().toISOString())
     console.log('   📊 Carousels to render:', orderedCarousels.length)
     console.log('   🎨 Template:', overrideTemplateId ?? templateId)
     console.log('   🎨 Color Theme:', overrideColorId ?? colorThemeId)
+    console.log('   👤 User ID:', user?.id)
+    console.log('   📝 Idea Title:', ideaTitle)
+    if (skipFontLoading) {
+      console.log('   ⏭️ Skipping font loading (optimization for color-only change)')
+    }
     
     setGenerating(true)
     
@@ -754,12 +801,42 @@ function CarouselImageGeneratorComponent({
     console.log('   ⏱️ Template/Theme loading took:', (performance.now() - templateStartTime).toFixed(2), 'ms')
     
     // Ensure canvasRefs array has correct length
+    // Preserve existing refs when resizing to avoid losing canvas references
     if (canvasRefs.current.length !== orderedCarousels.length) {
+      const oldRefs = canvasRefs.current
       canvasRefs.current = new Array(orderedCarousels.length).fill(null)
+      // Copy existing refs to preserve them
+      for (let i = 0; i < Math.min(oldRefs.length, orderedCarousels.length); i++) {
+        if (oldRefs[i]) {
+          canvasRefs.current[i] = oldRefs[i]
+        }
+      }
     }
     
     // Initialize array with correct length to maintain order
     const imageDataUrls: string[] = new Array(orderedCarousels.length).fill('')
+    
+    // Wait for all canvas refs to be set before starting generation
+    // This ensures the first canvas (index 0) is ready
+    const waitForCanvasRefs = async (maxWaitMs = 2000): Promise<void> => {
+      const startTime = Date.now()
+      while (Date.now() - startTime < maxWaitMs) {
+        const allRefsSet = canvasRefs.current.every((ref, idx) => {
+          if (idx < orderedCarousels.length) {
+            return ref !== null && ref !== undefined
+          }
+          return true
+        })
+        if (allRefsSet) {
+          console.log('✅ All canvas refs are ready')
+          return
+        }
+        await new Promise(resolve => setTimeout(resolve, 50))
+      }
+      console.warn('⚠️ Some canvas refs may not be ready, but proceeding anyway')
+    }
+    
+    await waitForCanvasRefs()
     
     // Generate all carousels first without updating state (prevents layout shifts)
     // Use yield mechanism that works in background tabs
@@ -782,22 +859,47 @@ function CarouselImageGeneratorComponent({
       }
       
       // Generate carousel - this will continue even in background tabs
-      await generateCarouselImage(i, currentTemplate, currentColorTheme)
+      await generateCarouselImage(i, currentTemplate, currentColorTheme, skipFontLoading)
       
       const carouselEndTime = performance.now()
       const carouselDuration = carouselEndTime - carouselStartTime
       console.log(`   ✅ [CAROUSEL ${i + 1}/${orderedCarousels.length}] Generated in ${carouselDuration.toFixed(2)}ms`)
       
       // Save canvas to data URL at the specific index to maintain order
-      const canvas = canvasRefs.current[i]
+      // Retry logic to ensure canvas is available
+      let canvas = canvasRefs.current[i]
+      let retries = 0
+      const maxRetries = 5
+      
+      while (!canvas && retries < maxRetries) {
+        console.warn(`   ⚠️ Canvas not found for carousel ${i + 1}, retrying... (${retries + 1}/${maxRetries})`)
+        await new Promise(resolve => setTimeout(resolve, 100))
+        canvas = canvasRefs.current[i]
+        retries++
+      }
+      
       if (canvas) {
-        const dataUrlStartTime = performance.now()
-        const dataUrl = canvas.toDataURL('image/png')
-        const dataUrlDuration = performance.now() - dataUrlStartTime
-        imageDataUrls[i] = dataUrl
-        console.log(`      📸 Canvas toDataURL took: ${dataUrlDuration.toFixed(2)}ms`)
+        try {
+          const dataUrlStartTime = performance.now()
+          const dataUrl = canvas.toDataURL('image/png')
+          const dataUrlDuration = performance.now() - dataUrlStartTime
+          
+          // Validate data URL is not empty and is a valid image
+          if (dataUrl && dataUrl.startsWith('data:image/') && dataUrl.length > 100) {
+            imageDataUrls[i] = dataUrl
+            console.log(`      📸 Canvas toDataURL took: ${dataUrlDuration.toFixed(2)}ms`)
+          } else {
+            console.error(`   ❌ Invalid data URL for carousel ${i + 1} (length: ${dataUrl?.length || 0})`)
+            throw new Error(`Invalid data URL generated for carousel ${i + 1}`)
+          }
+        } catch (error: any) {
+          console.error(`   ❌ Failed to convert canvas ${i + 1} to data URL:`, error.message)
+          throw new Error(`Failed to generate image for carousel ${i + 1}: ${error.message}`)
+        }
       } else {
-        console.warn(`   ⚠️ Canvas not found for carousel ${i + 1}`)
+        const errorMsg = `Canvas not found for carousel ${i + 1} after ${maxRetries} retries. Canvas refs: ${canvasRefs.current.map((c, idx) => `${idx}:${c ? '✓' : '✗'}`).join(', ')}`
+        console.error(`   ❌ ${errorMsg}`)
+        throw new Error(errorMsg)
       }
       
       // Yield control between carousels to prevent blocking, but continue rendering
@@ -817,10 +919,29 @@ function CarouselImageGeneratorComponent({
     const carouselGenerationEnd = performance.now()
     console.log(`   ⏱️ Total carousel generation time: ${(carouselGenerationEnd - carouselGenerationStart).toFixed(2)}ms`)
     
-    // Verify all images were generated
-    const allImagesValid = imageDataUrls.every(img => img && img.startsWith('data:image/'))
+    // Verify all images were generated and are valid
+    const allImagesValid = imageDataUrls.every((img, idx) => {
+      const isValid = img && img.startsWith('data:image/') && img.length > 100
+      if (!isValid) {
+        console.error(`   ❌ Image ${idx + 1} is invalid:`, {
+          hasData: !!img,
+          isDataUrl: img?.startsWith('data:image/'),
+          length: img?.length || 0
+        })
+      }
+      return isValid
+    })
+    
     if (!allImagesValid) {
-      console.error('❌ [RENDERING ERROR] Some images failed to generate')
+      const missingIndices = imageDataUrls
+        .map((img, idx) => (!img || !img.startsWith('data:image/') || img.length <= 100) ? idx : -1)
+        .filter(idx => idx !== -1)
+      console.error('❌ [RENDERING ERROR] Some images failed to generate:', {
+        missingIndices: missingIndices.map(i => i + 1),
+        totalExpected: orderedCarousels.length,
+        totalGenerated: imageDataUrls.filter(img => img && img.startsWith('data:image/')).length
+      })
+      throw new Error(`Failed to generate all carousel images. Missing indices: ${missingIndices.map(i => i + 1).join(', ')}`)
     } else {
       console.log('✅ [RENDERING] All', imageDataUrls.length, 'carousels generated successfully')
       console.log('   ⏱️ Total rendering time so far:', (performance.now() - renderStartTime).toFixed(2), 'ms')
@@ -932,100 +1053,100 @@ function CarouselImageGeneratorComponent({
     const beforeSaveTime = performance.now()
     console.log('   ⏱️ Rendering complete, total time:', (beforeSaveTime - renderStartTime).toFixed(2), 'ms')
     
-    // Save to Supabase immediately after generation (always save, including design updates)
+    // Always save to database after rendering
     let savedGenerationId: string | undefined
-    if (user?.id && imageDataUrls.length > 0) {
-      const isDataUrl = imageDataUrls[0]?.startsWith('data:image/')
-      if (isDataUrl) {
-        // Database save is part of rendering - don't notify parent
-        // The rendering step will stay active until save completes
-        const saveStartTime = performance.now()
-        console.log('💾 [SAVE] Saving images to Supabase (design update or new generation)...')
-        console.log('   ⏱️ Timestamp:', new Date().toISOString())
-        try {
-          savedGenerationId = await saveToDatabase(imageDataUrls)
-          const saveEndTime = performance.now()
-          console.log('✅ [SAVE] Images saved to Supabase successfully')
-          console.log('   ⏱️ Save duration:', (saveEndTime - saveStartTime).toFixed(2), 'ms')
-          console.log('   📝 Saved generationId:', savedGenerationId)
-        } catch (err) {
-          console.error('❌ [SAVE ERROR] Failed to save to Supabase:', err)
-          savedGenerationId = undefined
-        }
+    if (user?.id) {
+      const saveStartTime = performance.now()
+      console.log('💾 [SAVE] Saving generation to Supabase...')
+      try {
+        savedGenerationId = await saveToDatabase(imageDataUrls)
+        const saveEndTime = performance.now()
+        console.log('✅ [SAVE] Generation saved successfully')
+        console.log('   ⏱️ Save duration:', (saveEndTime - saveStartTime).toFixed(2), 'ms')
+        console.log('   📝 Saved generationId:', savedGenerationId)
+      } catch (err) {
+        console.error('❌ [SAVE ERROR] Failed to save:', err)
       }
     }
     
     const finalTime = performance.now()
-    console.log('🎨 [RENDERING COMPLETE] Total end-to-end time:', (finalTime - renderStartTime).toFixed(2), 'ms')
-    console.log('   ⏱️ Final timestamp:', new Date().toISOString())
+    console.log('🎨 [RENDERING COMPLETE] Total time:', (finalTime - renderStartTime).toFixed(2), 'ms')
     
-    // Notify parent component that generation is complete with the generation ID
-    // Only call if we have a valid generationId from database save
-    // Don't navigate if save failed or didn't happen
-    if (onGenerationComplete && savedGenerationId) {
-      console.log('📞 Calling onGenerationComplete with generationId:', savedGenerationId)
-      onGenerationComplete(savedGenerationId)
-    } else if (onGenerationComplete && !savedGenerationId) {
-      console.warn('⚠️ Database save did not return generationId - not calling onGenerationComplete')
-      console.warn('   This prevents navigation to wrong page')
-    } else if (!onGenerationComplete) {
-      console.warn('⚠️ onGenerationComplete callback not provided')
+    // Always notify parent when complete
+    if (onGenerationComplete) {
+      if (savedGenerationId) {
+        console.log('📞 Calling onGenerationComplete with generationId:', savedGenerationId)
+        onGenerationComplete(savedGenerationId)
+      } else {
+        console.warn('⚠️ No generationId - save may have failed')
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carousels, ideaTitle, underlineWords, templateId, colorThemeId, user?.id])
 
-  // Generate carousels if not loaded from storage
+  // Generate carousels if not loaded from storage (ONLY on initial mount, not on design changes)
   useEffect(() => {
-    // Check if cache should be skipped (e.g., when color theme changes)
-    const skipCache = localStorage.getItem('postGeneration_skipCache') === 'true'
+    // Skip if design change effect will handle it
+    const fromHistory = localStorage.getItem('postGeneration_fromHistory') === 'true'
+    const hasGenerationId = localStorage.getItem('postGeneration_generationId')
     
-    if (orderedCarousels.length > 0 && (orderedCarouselImages.length === 0 || skipCache)) {
-      // Generate if we don't have cached images OR if skipCache flag is set
-      if (skipCache) {
-        console.log('⏭️ Skip cache flag detected - forcing regeneration on mount')
-      } else {
-        console.log('Initial generation triggered')
-      }
-      generateAllCarousels().then(() => {
-        // Mark as not initial mount after first generation completes
-        isInitialMount.current = false
-        // Update prevDesignSettings to current values so future changes are detected
-        prevDesignSettings.current = { templateId, colorThemeId }
-        console.log('Initial mount flag set to false, prevDesignSettings updated:', prevDesignSettings.current)
-      })
-    } else if (orderedCarousels.length > 0 && orderedCarouselImages.length > 0 && isInitialMount.current) {
-      // If we have images from cache, mark as not initial mount
+    // If viewing existing post, skip
+    if (fromHistory && hasGenerationId) {
       isInitialMount.current = false
-      // Update prevDesignSettings to current values so future changes are detected
-      prevDesignSettings.current = { templateId, colorThemeId }
-      console.log('Initial mount flag set to false (cached images), prevDesignSettings updated:', prevDesignSettings.current)
+      return
+    }
+    
+    // Clear stale fromHistory flag
+    if (fromHistory && !hasGenerationId) {
+      localStorage.removeItem('postGeneration_fromHistory')
+    }
+    
+    // Only generate if we have carousels but no images AND it's initial mount
+    if (isInitialMount.current && orderedCarousels.length > 0 && orderedCarouselImages.length === 0) {
+      isInitialMount.current = false
+      generateAllCarousels().then(() => {
+        prevDesignSettings.current = { templateId, colorThemeId }
+      }).catch((err) => {
+        console.error('❌ [EFFECT] generateAllCarousels failed:', err)
+      })
+    } else if (orderedCarouselImages.length > 0) {
+      isInitialMount.current = false
     }
   }, [orderedCarousels.length, orderedCarouselImages.length, generateAllCarousels])
 
-  // Regenerate when design settings change (post initial mount)
+  // Regenerate when design settings change (template or color theme)
   useEffect(() => {
-    // Skip during initial mount; initial generation handles first render
-    if (isInitialMount.current) return
-
     const prev = prevDesignSettings.current
-    const hasChanged =
-      prev.templateId !== templateId ||
-      prev.colorThemeId !== colorThemeId
+    const templateChanged = prev.templateId !== templateId
+    const themeChanged = prev.colorThemeId !== colorThemeId
+    const designChanged = templateChanged || themeChanged
+    
+    // If no change, just update the ref on initial mount and return
+    if (!designChanged) {
+      if (isInitialMount.current) {
+        prevDesignSettings.current = { templateId, colorThemeId }
+      }
+      return
+    }
 
-    if (!hasChanged) return
-
-    console.log('🎨 Design change detected → regenerating', {
-      from: prev,
-      to: { templateId, colorThemeId }
-    })
-
+    // Design changed - regenerate
     const currentTemplateId = templateId
     const currentColorId = colorThemeId
+    
+    // Optimization: If only color theme changed (template unchanged), skip font loading
+    // Fonts are already loaded and cached, so we can skip the ~5 second font loading step
+    const skipFontLoading = !templateChanged && themeChanged
 
+    // Clear old images to show loading state
+    setCarouselImages([])
+    setOrderedCarouselImages([])
+    previousImagesRef.current = []
+
+    // Preserve credit deduction status
     const wasDeducted = hasDeductedCredit.current
     hasDeductedCredit.current = true
 
-    // Persist new full-content hash immediately
+    // Update hash
     try {
       localStorage.setItem(
         'postGeneration_fullContentHash',
@@ -1037,23 +1158,25 @@ function CarouselImageGeneratorComponent({
           colorThemeId: currentColorId
         })
       )
-      // Store user ID to ensure localStorage is user-specific
       if (user?.id) {
         localStorage.setItem('postGeneration_userId', user.id)
       }
     } catch (error) {
-      console.error('Error updating localStorage hash:', error)
+      // Ignore localStorage errors
     }
 
+    // Regenerate
     const run = async () => {
       try {
-        await generateAllCarousels(currentTemplateId, currentColorId)
-        prevDesignSettings.current = {
-          templateId: currentTemplateId,
-          colorThemeId: currentColorId
+        await new Promise(resolve => setTimeout(resolve, 0))
+        await generateAllCarousels(currentTemplateId, currentColorId, skipFontLoading)
+        prevDesignSettings.current = { templateId: currentTemplateId, colorThemeId: currentColorId }
+        if (isInitialMount.current) {
+          isInitialMount.current = false
         }
       } catch (error) {
         console.error('❌ Regeneration failed:', error)
+        setGenerating(false)
       } finally {
         hasDeductedCredit.current = wasDeducted
       }
@@ -1065,6 +1188,7 @@ function CarouselImageGeneratorComponent({
   // DISABLED: Auto-regeneration on content changes removed to preserve AI images
   // When text is edited, only underline/highlight words should be updated (handled by the API)
   // Images should remain unchanged
+  // NOTE: This effect only tracks CONTENT changes, not design changes (templateId/colorThemeId)
   useEffect(() => {
     // Just keep track of carousel content changes for reference
     // But DO NOT regenerate images
@@ -1076,69 +1200,54 @@ function CarouselImageGeneratorComponent({
     const currentCarouselsContent = JSON.stringify(carousels)
     const prevContent = prevCarouselsContent.current
     
-    // Only update the tracking ref, do NOT regenerate
+    // Only update the tracking ref if CONTENT actually changed (not design)
     if (currentCarouselsContent !== prevContent && carousels.length > 0) {
-      console.log('📝 Carousel content changed - tracking updated (regeneration disabled to preserve images)')
       prevCarouselsContent.current = currentCarouselsContent
-      
-      // Update hash for new content (for caching purposes only)
-      try {
-        const fullContentHash = JSON.stringify({ 
-          ideaTitle, 
-          carousels, 
-          underlineWords, 
-          templateId, 
-          colorThemeId
-        })
-        localStorage.setItem('postGeneration_fullContentHash', fullContentHash)
-        if (user?.id) {
-          localStorage.setItem('postGeneration_userId', user.id)
-        }
-      } catch (error) {
-        console.error('Error updating localStorage hash:', error)
-      }
+      // Don't update hash here - design change effect handles that
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [carousels, ideaTitle, underlineWords, templateId, colorThemeId])
+  }, [carousels, ideaTitle, underlineWords])
   
-  // Reset credit deduction flag when carousels change (new note)
-  // Note: Design settings (templateId, colorThemeId) are NOT in dependencies
-  // because changing styles should NOT reset credits - credits should only reset for new content
+  // Reset credit deduction flag ONLY when ideaTitle changes (new note)
+  // This should NOT run on every render or when design changes
   useEffect(() => {
-    // Check if credits were already deducted for this ideaTitle (not content hash)
-    // Credits should be deducted once per ideaTitle, not once per content version
+    // Only run if ideaTitle actually changed
+    if (prevIdeaTitleRef.current === ideaTitle) {
+      return
+    }
+    
+    prevIdeaTitleRef.current = ideaTitle
+    
+    // Don't reset during active generation to avoid interrupting
+    if (generating) {
+      return
+    }
+    
+    // Check if credits were already deducted for this ideaTitle
     try {
       const storedGenerationId = localStorage.getItem('postGeneration_generationId')
       const storedIdeaTitle = localStorage.getItem('postGeneration_ideaTitle')
-      // If generationId exists and ideaTitle matches, credits were already deducted for this idea
-      // (regardless of content edits)
       if (storedGenerationId && storedIdeaTitle === ideaTitle) {
-        console.log('✅ Credits already deducted for this ideaTitle (found generationId on reset)', ideaTitle)
         hasDeductedCredit.current = true
       } else {
-        // New ideaTitle - reset credit deduction flag
         hasDeductedCredit.current = false
-        // Clear stored ideaTitle if it's a new idea
         if (storedIdeaTitle !== ideaTitle) {
           try {
             localStorage.removeItem('postGeneration_ideaTitle')
           } catch (error) {
-            console.error('Error clearing ideaTitle:', error)
+            // Ignore errors
           }
         }
       }
     } catch (error) {
-      console.error('Error checking credit deduction status on reset:', error)
       hasDeductedCredit.current = false
     }
+    
+    // Reset tracking refs only when ideaTitle changes
     isInitialMount.current = true
     hasInitialized.current = false
-    // Reset design settings tracking with current values
-    prevDesignSettings.current = { templateId, colorThemeId }
-    // Reset carousel content tracking
     prevCarouselsContent.current = JSON.stringify(carousels)
-    console.log('🔄 Reset for new note, prevDesignSettings:', prevDesignSettings.current)
-  }, [ideaTitle, carousels.length])
+  }, [ideaTitle, generating])
 
   const loadImage = (src: string, timeout = 30000): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
@@ -1192,95 +1301,206 @@ function CarouselImageGeneratorComponent({
     })
   }
 
-  const loadFonts = async (template: typeof TEMPLATE, timeout = 30000) => {
+  const loadFonts = async (template: typeof TEMPLATE, timeout = 5000) => {
     try {
-      // Load fonts from template with timeout to prevent indefinite waiting
+      // Validate template structure before loading fonts
+      if (!template || !template.fonts) {
+        console.error('❌ Invalid template structure: missing fonts', template)
+        throw new Error('Template is missing required fonts property')
+      }
+      
+      if (!template.fonts.hook || !template.fonts.title || !template.fonts.content) {
+        console.error('❌ Invalid template structure: missing required font roles', {
+          hasHook: !!template.fonts.hook,
+          hasTitle: !!template.fonts.title,
+          hasContent: !!template.fonts.content,
+          templateId: template.id
+        })
+        throw new Error('Template is missing required font roles (hook, title, or content)')
+      }
+      
+      // Check if fonts are already loaded for this template
+      const templateCacheKey = template.id
+      const cachedFonts = loadedFontsCache.current.get(templateCacheKey) || new Set<string>()
+      
+      // Helper to create font key for caching
+      const getFontKey = (family: string, weight: string, style: string) => 
+        `${family}:${weight}:${style}`
+      
+      // Helper to check if font is already loaded in document.fonts
+      const isFontLoaded = (family: string, weight: string, style: string): boolean => {
+        const fontKey = getFontKey(family, weight, style)
+        if (cachedFonts.has(fontKey)) {
+          // Check if font is actually available in document.fonts
+          try {
+            // Use document.fonts.check() to verify font is loaded
+            // Format: "weight style family" (e.g., "400 normal Roboto")
+            const normalizedWeight = weight === 'bold' ? '700' : weight === 'normal' ? '400' : weight
+            const checkString = `${normalizedWeight} ${style} ${family}`
+            if (document.fonts.check(checkString)) {
+              return true
+            }
+          } catch (e) {
+            // If check fails, assume not loaded
+            cachedFonts.delete(fontKey)
+            return false
+          }
+        }
+        return false
+      }
+      
+      // Load Google Fonts from template with timeout to prevent indefinite waiting
       // Use display: 'swap' to ensure fonts load even in background tabs
       const fontFaces: FontFace[] = []
-      const fontPromises: Promise<FontFace>[] = []
+      const fontPromises: Promise<FontFace | null>[] = []
+      let skippedFontsCount = 0
       
-      const hookFont = new FontFace(template.fonts.hook.family, `url(${template.fonts.hook.file})`, {
-        weight: template.fonts.hook.weight,
-        style: template.fonts.hook.style,
-        display: 'swap' // Ensure fonts load even in background tabs
-      })
-      fontFaces.push(hookFont)
-      fontPromises.push(hookFont.load())
+      // Load hook font from Google Fonts (only if not already loaded)
+      const hookFontKey = getFontKey(template.fonts.hook.family, template.fonts.hook.weight, template.fonts.hook.style)
+      const hookFontPromise = isFontLoaded(template.fonts.hook.family, template.fonts.hook.weight, template.fonts.hook.style)
+        ? (skippedFontsCount++, Promise.resolve(null as FontFace | null))
+        : loadGoogleFont(
+            template.fonts.hook.family,
+            template.fonts.hook.weight,
+            template.fonts.hook.style
+          ).catch(error => {
+            console.warn(`⚠️ Failed to load hook font ${template.fonts.hook.family}:`, error)
+            return null
+          })
+      fontPromises.push(hookFontPromise)
       
-      const titleFont = new FontFace(template.fonts.title.family, `url(${template.fonts.title.file})`, {
-        weight: template.fonts.title.weight,
-        style: template.fonts.title.style,
-        display: 'swap'
-      })
-      fontFaces.push(titleFont)
-      fontPromises.push(titleFont.load())
+      // Load title font from Google Fonts (only if not already loaded)
+      const titleFontKey = getFontKey(template.fonts.title.family, template.fonts.title.weight, template.fonts.title.style)
+      const titleFontPromise = isFontLoaded(template.fonts.title.family, template.fonts.title.weight, template.fonts.title.style)
+        ? (skippedFontsCount++, Promise.resolve(null as FontFace | null))
+        : loadGoogleFont(
+            template.fonts.title.family,
+            template.fonts.title.weight,
+            template.fonts.title.style
+          ).catch(error => {
+            console.warn(`⚠️ Failed to load title font ${template.fonts.title.family}:`, error)
+            return null
+          })
+      fontPromises.push(titleFontPromise)
       
-      const contentFont = new FontFace(template.fonts.content.family, `url(${template.fonts.content.file})`, {
-        weight: template.fonts.content.weight,
-        style: template.fonts.content.style,
-        display: 'swap'
-      })
-      fontFaces.push(contentFont)
-      fontPromises.push(contentFont.load())
+      // Load content font from Google Fonts (only if not already loaded)
+      const contentFontKey = getFontKey(template.fonts.content.family, template.fonts.content.weight, template.fonts.content.style)
+      const contentFontPromise = isFontLoaded(template.fonts.content.family, template.fonts.content.weight, template.fonts.content.style)
+        ? (skippedFontsCount++, Promise.resolve(null as FontFace | null))
+        : loadGoogleFont(
+            template.fonts.content.family,
+            template.fonts.content.weight,
+            template.fonts.content.style
+          ).catch(error => {
+            console.warn(`⚠️ Failed to load content font ${template.fonts.content.family}:`, error)
+            return null
+          })
+      fontPromises.push(contentFontPromise)
       
       // Load additional fonts for template 3 (hookTopic, hookSubtitle, hookCTA)
       if (template.fonts.hookTopic) {
-        const hookTopicFont = new FontFace(template.fonts.hookTopic.family, `url(${template.fonts.hookTopic.file})`, {
-          weight: template.fonts.hookTopic.weight,
-          style: template.fonts.hookTopic.style,
-          display: 'swap'
-        })
-        fontFaces.push(hookTopicFont)
-        fontPromises.push(hookTopicFont.load())
+        const hookTopicFontKey = getFontKey(template.fonts.hookTopic.family, template.fonts.hookTopic.weight, template.fonts.hookTopic.style)
+        const hookTopicFontPromise = isFontLoaded(template.fonts.hookTopic.family, template.fonts.hookTopic.weight, template.fonts.hookTopic.style)
+          ? (skippedFontsCount++, Promise.resolve(null as FontFace | null))
+          : loadGoogleFont(
+              template.fonts.hookTopic.family,
+              template.fonts.hookTopic.weight,
+              template.fonts.hookTopic.style
+            ).catch(error => {
+              console.warn(`⚠️ Failed to load hookTopic font ${template.fonts.hookTopic?.family}:`, error)
+              return null
+            })
+        fontPromises.push(hookTopicFontPromise)
       }
       
       if (template.fonts.hookSubtitle) {
-        const hookSubtitleFont = new FontFace(template.fonts.hookSubtitle.family, `url(${template.fonts.hookSubtitle.file})`, {
-          weight: template.fonts.hookSubtitle.weight,
-          style: template.fonts.hookSubtitle.style,
-          display: 'swap'
-        })
-        fontFaces.push(hookSubtitleFont)
-        fontPromises.push(hookSubtitleFont.load())
+        const hookSubtitleFontKey = getFontKey(template.fonts.hookSubtitle.family, template.fonts.hookSubtitle.weight, template.fonts.hookSubtitle.style)
+        const hookSubtitleFontPromise = isFontLoaded(template.fonts.hookSubtitle.family, template.fonts.hookSubtitle.weight, template.fonts.hookSubtitle.style)
+          ? (skippedFontsCount++, Promise.resolve(null as FontFace | null))
+          : loadGoogleFont(
+              template.fonts.hookSubtitle.family,
+              template.fonts.hookSubtitle.weight,
+              template.fonts.hookSubtitle.style
+            ).catch(error => {
+              console.warn(`⚠️ Failed to load hookSubtitle font ${template.fonts.hookSubtitle?.family}:`, error)
+              return null
+            })
+        fontPromises.push(hookSubtitleFontPromise)
       }
       
       if (template.fonts.hookCTA) {
-        const hookCTAFont = new FontFace(template.fonts.hookCTA.family, `url(${template.fonts.hookCTA.file})`, {
-          weight: template.fonts.hookCTA.weight,
-          style: template.fonts.hookCTA.style,
-          display: 'swap'
-        })
-        fontFaces.push(hookCTAFont)
-        fontPromises.push(hookCTAFont.load())
+        const hookCTAFontKey = getFontKey(template.fonts.hookCTA.family, template.fonts.hookCTA.weight, template.fonts.hookCTA.style)
+        const hookCTAFontPromise = isFontLoaded(template.fonts.hookCTA.family, template.fonts.hookCTA.weight, template.fonts.hookCTA.style)
+          ? (skippedFontsCount++, Promise.resolve(null as FontFace | null))
+          : loadGoogleFont(
+              template.fonts.hookCTA.family,
+              template.fonts.hookCTA.weight,
+              template.fonts.hookCTA.style
+            ).catch(error => {
+              console.warn(`⚠️ Failed to load hookCTA font ${template.fonts.hookCTA?.family}:`, error)
+              return null
+            })
+        fontPromises.push(hookCTAFontPromise)
       }
       
-      // Load all fonts in parallel
+      // Load all fonts in parallel with timeout
       // In background tabs, browsers may throttle this, but it will still complete (just slower)
       // Use Promise.allSettled to continue even if some fonts fail to load
-      const loadResults = await Promise.allSettled(fontPromises)
+      const timeoutPromise = new Promise<null>((resolve) => {
+        setTimeout(() => resolve(null), timeout)
+      })
       
-      // Add successfully loaded fonts to document
+      const loadResults = await Promise.allSettled([
+        ...fontPromises,
+        timeoutPromise
+      ])
+      
+      // Filter out timeout and null results, add successfully loaded fonts to document
       let loadedCount = 0
       loadResults.forEach((result, index) => {
-        if (result.status === 'fulfilled') {
+        // Skip timeout promise result
+        if (index >= fontPromises.length) return
+        
+        if (result.status === 'fulfilled' && result.value !== null) {
           try {
-            document.fonts.add(result.value)
-            loadedCount++
+            const font = result.value
+            const fontKey = getFontKey(font.family, font.weight, font.style)
+            
+            // Only add to document if not already cached
+            if (!cachedFonts.has(fontKey)) {
+              document.fonts.add(font)
+              cachedFonts.add(fontKey)
+              fontFaces.push(font)
+              loadedCount++
+            } else {
+              // Font already loaded, just count it
+              loadedCount++
+            }
           } catch (error) {
-            console.warn('⚠️ Failed to add font to document:', fontFaces[index]?.family, error)
+            console.warn('⚠️ Failed to add font to document:', result.value?.family, error)
           }
-        } else {
-          console.warn('⚠️ Font failed to load:', fontFaces[index]?.family, result.reason)
+        } else if (result.status === 'rejected') {
+          console.warn('⚠️ Font failed to load:', result.reason)
         }
       })
       
-      if (loadedCount === fontFaces.length) {
-        console.log('✅ All fonts loaded successfully')
+      // Update cache for this template
+      loadedFontsCache.current.set(templateCacheKey, cachedFonts)
+      
+      const totalFonts = fontPromises.length
+      const newlyLoadedCount = loadedCount - skippedFontsCount
+      
+      if (loadedCount === totalFonts) {
+        if (skippedFontsCount > 0) {
+          console.log(`✅ All fonts ready (${skippedFontsCount} from cache, ${newlyLoadedCount} newly loaded)`)
+        } else {
+          console.log('✅ All fonts loaded successfully')
+        }
       } else {
-        console.log(`⚠️ ${loadedCount}/${fontFaces.length} fonts loaded, continuing with available fonts`)
+        console.log(`⚠️ ${loadedCount}/${totalFonts} fonts loaded, continuing with available fonts`)
       }
       
-      console.log('✓ Template fonts loaded successfully')
+      console.log('✓ Template fonts ready')
     } catch (error) {
       console.warn('⚠️  Failed to load template fonts, using fallback:', error)
       // Continue rendering even if fonts fail to load (browser will use fallback fonts)
@@ -1290,13 +1510,15 @@ function CarouselImageGeneratorComponent({
   const generateCarouselImage = async (
     index: number, 
     template = TEMPLATE, 
-    colorTheme = COLOR_THEME
+    colorTheme = COLOR_THEME,
+    skipFontLoading = false
   ) => {
     const carouselImageStartTime = performance.now()
     const canvas = canvasRefs.current[index]
     if (!canvas) {
-      console.warn(`      ⚠️ Canvas not found for carousel ${index + 1}`)
-      return
+      const errorMsg = `Canvas not found for carousel ${index + 1}. Canvas refs: ${canvasRefs.current.map((c, i) => `${i}:${c ? '✓' : '✗'}`).join(', ')}`
+      console.error(`      ❌ ${errorMsg}`)
+      throw new Error(errorMsg)
     }
 
     const ctx = canvas.getContext('2d')
@@ -1326,12 +1548,20 @@ function CarouselImageGeneratorComponent({
       content: carousel.content ? carousel.content.replace(/\*/g, '') : carousel.content
     }
 
-    // Load fonts before rendering
-    if (index === 0) {
+    // Load fonts before rendering (only for first carousel, and only if not skipped)
+    if (index === 0 && !skipFontLoading) {
       const fontLoadStart = performance.now()
       console.log(`      🔤 Loading fonts for template ${template.id}...`)
-      await loadFonts(template)
-      console.log(`      ⏱️ Font loading took: ${(performance.now() - fontLoadStart).toFixed(2)}ms`)
+      try {
+        // Use 5 second timeout for faster generation (loadFonts already has timeout built-in)
+        await loadFonts(template, 5000)
+        console.log(`      ⏱️ Font loading took: ${(performance.now() - fontLoadStart).toFixed(2)}ms`)
+      } catch (error) {
+        console.warn(`      ⚠️ Font loading failed or timed out, continuing with fallback fonts:`, error)
+        // Continue rendering even if fonts fail - browser will use fallback fonts
+      }
+    } else if (index === 0 && skipFontLoading) {
+      console.log(`      ⏭️ Skipping font loading (fonts already loaded for template ${template.id})`)
     }
 
     // Canvas dimensions - use template layout or defaults
@@ -1491,58 +1721,65 @@ function CarouselImageGeneratorComponent({
 
         const hookLetterSpacing = getLetterSpacingFor('hook')
         
-        // Load hook image if template uses images for hook slides
+        // Load hook image if available (always load when imageUrl is present, regardless of template setting)
         let hookImageHeight = 0
         let hookImageWidth = 0
         let loadedHookImage: HTMLImageElement | null = null
         let hookImageY = 0
         
-        if (template.hookLayout?.useImage) {
-          const emphasisData = underlineWordsForGenerationRef.current[index] || orderedUnderlineWords[index] || { underline: '', highlight: '', imageUrl: null, originalImageUrl: null }
-          let rawImageUrl = emphasisData.imageUrl || emphasisData.originalImageUrl || null
+        // Check template's imagePlacement configuration for hook slides
+        // Default to { hook: false, content: true, cta: false } if not specified
+        const defaultImagePlacement = { hook: false, content: true, cta: false };
+        const imagePlacement = template.imagePlacement || defaultImagePlacement;
+        const shouldShowHookImage = imagePlacement.hook === true;
+        
+        const emphasisData = underlineWordsForGenerationRef.current[index] || orderedUnderlineWords[index] || { underline: '', highlight: '', imageUrl: null, originalImageUrl: null }
+        let rawImageUrl = emphasisData.imageUrl || emphasisData.originalImageUrl || null
           
-          let imageSourceUrl: string | null = null
-          if (rawImageUrl) {
-            try {
-              const url = new URL(rawImageUrl)
-              if (url.hostname === 'image.pollinations.ai') {
-                imageSourceUrl = `/api/image/proxy?url=${encodeURIComponent(rawImageUrl)}`
-                console.log(`      🔄 Routing hook pollinations.ai image through proxy`)
-              } else {
-                imageSourceUrl = rawImageUrl
-              }
-            } catch (e) {
+        let imageSourceUrl: string | null = null
+        // Only process image URL if template allows images for hook slides
+        if (rawImageUrl && shouldShowHookImage) {
+          try {
+            const url = new URL(rawImageUrl)
+            if (url.hostname === 'image.pollinations.ai') {
+              imageSourceUrl = `/api/image/proxy?url=${encodeURIComponent(rawImageUrl)}`
+              console.log(`      🔄 Routing hook pollinations.ai image through proxy`)
+            } else {
               imageSourceUrl = rawImageUrl
             }
+          } catch (e) {
+            imageSourceUrl = rawImageUrl
           }
-          
-          if (imageSourceUrl) {
-            try {
-              const imageLoadStart = performance.now()
-              console.log(`      🖼️ Loading hook image from: ${imageSourceUrl.substring(0, 50)}...`)
-              loadedHookImage = await loadImage(imageSourceUrl)
-              const imageLoadDuration = performance.now() - imageLoadStart
-              console.log(`      ⏱️ Hook image load took: ${imageLoadDuration.toFixed(2)}ms`)
-              
-              // Use imageLayout.maxHeightRatio if provided, otherwise use 60% of safe width
-              if (template.imageLayout?.maxHeightRatio) {
-                const maxHeight = Math.round(height * template.imageLayout.maxHeightRatio)
-                hookImageHeight = maxHeight
-                hookImageWidth = Math.round(hookImageHeight * 16 / 9)  // Maintain 16:9 aspect ratio
-                // Ensure image doesn't exceed safeWidth
-                if (hookImageWidth > safeWidth) {
-                  hookImageWidth = safeWidth
-                  hookImageHeight = Math.round(hookImageWidth * 9 / 16)
-                }
-              } else {
-                // Fallback: use 60% of safe width
-                hookImageWidth = Math.round(safeWidth * 0.6)
+        } else if (rawImageUrl && !shouldShowHookImage) {
+          console.log(`      📝 Hook image URL present but imagePlacement.hook=false - skipping image display`)
+        }
+        
+        if (imageSourceUrl) {
+          try {
+            const imageLoadStart = performance.now()
+            console.log(`      🖼️ Loading hook image from: ${imageSourceUrl.substring(0, 50)}...`)
+            loadedHookImage = await loadImage(imageSourceUrl)
+            const imageLoadDuration = performance.now() - imageLoadStart
+            console.log(`      ⏱️ Hook image load took: ${imageLoadDuration.toFixed(2)}ms`)
+            
+            // Use imageLayout.maxHeightRatio if provided, otherwise use 60% of safe width
+            if (template.imageLayout?.maxHeightRatio) {
+              const maxHeight = Math.round(height * template.imageLayout.maxHeightRatio)
+              hookImageHeight = maxHeight
+              hookImageWidth = Math.round(hookImageHeight * 16 / 9)  // Maintain 16:9 aspect ratio
+              // Ensure image doesn't exceed safeWidth
+              if (hookImageWidth > safeWidth) {
+                hookImageWidth = safeWidth
                 hookImageHeight = Math.round(hookImageWidth * 9 / 16)
               }
-              console.log(`      ✅ Hook image loaded! Dimensions: ${loadedHookImage.width}x${loadedHookImage.height}, Display: ${hookImageWidth}x${hookImageHeight}`)
-            } catch (error) {
-              console.error(`❌ Hook slide: Failed to load image:`, error)
+            } else {
+              // Fallback: use 60% of safe width
+              hookImageWidth = Math.round(safeWidth * 0.6)
+              hookImageHeight = Math.round(hookImageWidth * 9 / 16)
             }
+            console.log(`      ✅ Hook image loaded! Dimensions: ${loadedHookImage.width}x${loadedHookImage.height}, Display: ${hookImageWidth}x${hookImageHeight}`)
+          } catch (error) {
+            console.error(`❌ Hook slide: Failed to load image:`, error)
           }
         }
         
@@ -1844,7 +2081,13 @@ function CarouselImageGeneratorComponent({
         let loadedHookImage: HTMLImageElement | null = null
         let hookImageY = 0
         
-        if (template.hookLayout?.useImage) {
+        // Check template's imagePlacement configuration for hook slides
+        // Default to { hook: false, content: true, cta: false } if not specified
+        const defaultImagePlacement = { hook: false, content: true, cta: false };
+        const imagePlacement = template.imagePlacement || defaultImagePlacement;
+        const shouldShowHookImage = imagePlacement.hook === true;
+        
+        if (shouldShowHookImage) {
           const emphasisData = underlineWordsForGenerationRef.current[index] || orderedUnderlineWords[index] || { underline: '', highlight: '', imageUrl: null, originalImageUrl: null }
           let rawImageUrl = emphasisData.imageUrl || emphasisData.originalImageUrl || null
           
@@ -2177,6 +2420,55 @@ function CarouselImageGeneratorComponent({
       const ctaLetterSpacing = getLetterSpacingFor('cta')
       const ctaAlign = getTextAlignFor('cta')
 
+      // Use ref first (for regeneration from edit), then fall back to state
+      const emphasisData = underlineWordsForGenerationRef.current[index] || orderedUnderlineWords[index] || { underline: '', highlight: '', imageUrl: null, originalImageUrl: null }
+      
+      // CTA slides should NEVER show images, regardless of template configuration
+      // Always skip image loading for CTA slides
+      let rawImageUrl = null
+      let imageSourceUrl: string | null = null
+      
+      let ctaImageHeight = 0
+      let ctaImageWidth = 0
+      let loadedCtaImage: HTMLImageElement | null = null
+      let ctaImageY = 0
+      
+      // Always skip images for CTA slides - do not load even if imageUrl exists
+      if (false) { // Hardcoded to never execute
+        try {
+          const imageLoadStart = performance.now()
+          console.log(`      🖼️ Loading CTA image from: ${imageSourceUrl?.substring(0, 50) || 'null'}...`)
+          if (imageSourceUrl !== null) {
+            loadedCtaImage = await loadImage(imageSourceUrl as string)
+            const imageLoadDuration = performance.now() - imageLoadStart
+            console.log(`      ⏱️ CTA image load took: ${imageLoadDuration.toFixed(2)}ms`)
+            
+            // Use imageLayout.maxHeightRatio if provided, otherwise use 60% of safe width
+            const maxHeightRatio = template.imageLayout?.maxHeightRatio
+            if (maxHeightRatio !== undefined && maxHeightRatio !== null) {
+              const maxHeight = Math.round(height * (maxHeightRatio as number))
+              ctaImageHeight = maxHeight
+              ctaImageWidth = Math.round(ctaImageHeight * 16 / 9)  // Maintain 16:9 aspect ratio
+              // Ensure image doesn't exceed safeWidth
+              if (ctaImageWidth > safeWidth) {
+                ctaImageWidth = safeWidth
+                ctaImageHeight = Math.round(ctaImageWidth * 9 / 16)
+              }
+            } else {
+              // Fallback: use 60% of safe width
+              ctaImageWidth = Math.round(safeWidth * 0.6)
+              ctaImageHeight = Math.round(ctaImageWidth * 9 / 16)
+            }
+            if (loadedCtaImage !== null) {
+              const image = loadedCtaImage as HTMLImageElement
+              console.log(`      ✅ CTA image loaded! Dimensions: ${image.width}x${image.height}, Display: ${ctaImageWidth}x${ctaImageHeight}`)
+            }
+          }
+        } catch (error) {
+          console.error(`❌ CTA slide: Failed to load image:`, error)
+        }
+      }
+      
       ctx.font = template.fonts.content.cssFont
       ctx.fillStyle = getTextColor('cta')
       ctx.textAlign = 'left'
@@ -2212,14 +2504,52 @@ function CarouselImageGeneratorComponent({
         }
       }
       
-      // Use ref first (for regeneration from edit), then fall back to state
-      const emphasisData = underlineWordsForGenerationRef.current[index] || orderedUnderlineWords[index] || { underline: '', highlight: '' }
       const underlinePhrases = emphasisData.underline.split(',').map((p: string) => p.trim()).filter((p: string) => p)
       
       const spaceWidth = ctx.measureText(' ').width
       const lineHeight = template.fonts.content.lineHeight
       const totalHeight = (lines.length - 1) * lineHeight
-      let y = centerY - (totalHeight / 2)
+      
+      // Adjust y position based on image presence
+      let y: number
+      if (loadedCtaImage && ctaImageHeight > 0) {
+        // Position image at top, then text below
+        const imageMarginBottom = template.imageLayout?.marginBottom || 40
+        ctaImageY = safeMarginTop + 60
+        y = ctaImageY + ctaImageHeight + imageMarginBottom + lineHeight
+      } else {
+        // Center text vertically
+        y = centerY - (totalHeight / 2)
+      }
+      
+      // Draw CTA image first (if exists)
+      if (loadedCtaImage !== null && ctaImageWidth > 0 && ctaImageHeight > 0) {
+        const image = loadedCtaImage as HTMLImageElement
+        try {
+          const imageX = (width - ctaImageWidth) / 2 // Center horizontally
+          const sourceAspect = image.width / image.height
+          const targetAspect = 16 / 9
+          
+          let sx = 0, sy = 0, sWidth = image.width, sHeight = image.height
+          
+          if (sourceAspect > targetAspect) {
+            sWidth = image.height * targetAspect
+            sx = (image.width - sWidth) / 2
+          } else {
+            sHeight = image.width / targetAspect
+            sy = (image.height - sHeight) / 2
+          }
+          
+          ctx.drawImage(
+            image,
+            sx, sy, sWidth, sHeight,
+            imageX, ctaImageY, ctaImageWidth, ctaImageHeight
+          )
+          console.log(`✅ CTA image successfully drawn at (${imageX}, ${ctaImageY}), Size: ${ctaImageWidth}x${ctaImageHeight}`)
+        } catch (error) {
+          console.error(`❌ Failed to render CTA image:`, error)
+        }
+      }
       
       lines.forEach(line => {
         if (!line.trim()) {
@@ -2351,23 +2681,46 @@ function CarouselImageGeneratorComponent({
       ctx.textAlign = 'left'
       
       // Use ref first (for regeneration from edit), then fall back to state
-      const emphasisData = underlineWordsForGenerationRef.current[index] || orderedUnderlineWords[index] || { underline: '', highlight: '', imageUrl: null, originalImageUrl: null }
+      // CRITICAL: Check both ref and state to ensure we get image URLs
+      const emphasisDataFromRef = underlineWordsForGenerationRef.current[index]
+      const emphasisDataFromState = orderedUnderlineWords[index]
+      const emphasisData = emphasisDataFromRef || emphasisDataFromState || { underline: '', highlight: '', imageUrl: null, originalImageUrl: null }
       
       if (cleanCarousel.kind === 'MIDDLE') {
-        console.log(`\n🖼️ Carousel ${index + 1} Image Check:`)
-        console.log('  Emphasis data:', emphasisData)
+        console.log(`\n🖼️ Carousel ${index + 1} (MIDDLE) Image Check:`)
+        console.log('  Emphasis data from ref:', emphasisDataFromRef)
+        console.log('  Emphasis data from state:', emphasisDataFromState)
+        console.log('  Final emphasis data:', emphasisData)
         console.log('  imageUrl present?', !!emphasisData.imageUrl)
         console.log('  originalImageUrl present?', !!emphasisData.originalImageUrl)
         console.log('  imageUrl value:', emphasisData.imageUrl)
         console.log('  originalImageUrl value:', emphasisData.originalImageUrl)
+        
+        // Warn if no image data found
+        if (!emphasisData.imageUrl && !emphasisData.originalImageUrl) {
+          console.warn(`   ⚠️  WARNING: No image URL found for MIDDLE carousel ${index + 1}!`)
+          console.warn(`   This carousel will render without an image.`)
+          console.warn(`   Check if image was fetched during generation.`)
+        }
       }
       
+      // Check template's imagePlacement configuration for content/middle slides
+      // Default to { hook: false, content: true, cta: false } if not specified
+      const defaultImagePlacement = { hook: false, content: true, cta: false };
+      const imagePlacement = template.imagePlacement || defaultImagePlacement;
+      const shouldShowContentImage = imagePlacement.content === true;
+      
       let rawImageUrl = emphasisData.imageUrl || emphasisData.originalImageUrl || null
+      
+      // Check if template explicitly disables images via maxHeightRatio: 0
+      // Template 5 uses this to disable images (template6 now supports images with maxHeightRatio: 0.35)
+      const templateDisablesImages = template.imageLayout?.maxHeightRatio === 0
       
       // Route pollinations.ai images through proxy to avoid CORS issues
       // The proxy fetches the image server-side and serves it with proper CORS headers
       let imageSourceUrl: string | null = null
-      if (rawImageUrl) {
+      // Only process image URL if template allows images for content slides AND doesn't explicitly disable them
+      if (rawImageUrl && shouldShowContentImage && !templateDisablesImages) {
         try {
           const url = new URL(rawImageUrl)
           if (url.hostname === 'image.pollinations.ai') {
@@ -2382,6 +2735,10 @@ function CarouselImageGeneratorComponent({
           // If URL parsing fails, use the raw URL as-is
           imageSourceUrl = rawImageUrl
         }
+      } else if (rawImageUrl && !shouldShowContentImage) {
+        console.log(`      📝 Content image URL present but imagePlacement.content=false - skipping image display`)
+      } else if (rawImageUrl && templateDisablesImages) {
+        console.log(`      📝 Content image URL present but template ${template.id} has maxHeightRatio: 0 - images disabled for this template`)
       }
       
       let imageHeight = 0
@@ -2396,8 +2753,9 @@ function CarouselImageGeneratorComponent({
           const imageLoadDuration = performance.now() - imageLoadStart
           console.log(`      ⏱️ Content image load took: ${imageLoadDuration.toFixed(2)}ms`)
           
-          // Use imageLayout.maxHeightRatio if provided, otherwise use template-specific defaults
-          if (template.imageLayout?.maxHeightRatio) {
+          // Use imageLayout.maxHeightRatio if provided and > 0, otherwise use template-specific defaults
+          // Note: maxHeightRatio: 0 check is handled above, so we won't reach here if images are disabled
+          if (template.imageLayout?.maxHeightRatio && template.imageLayout.maxHeightRatio > 0) {
             const maxHeight = Math.round(height * template.imageLayout.maxHeightRatio)
             imageHeight = maxHeight
             imageWidth = Math.round(imageHeight * 16 / 9)  // Maintain 16:9 aspect ratio
@@ -2407,7 +2765,7 @@ function CarouselImageGeneratorComponent({
               imageHeight = Math.round(imageWidth * 9 / 16)
             }
           } else {
-            // Fallback to template-specific sizing
+            // Fallback to template-specific sizing when maxHeightRatio is not specified
             const sizeMultiplier = template.id === 'template3' ? 0.7 : 1.0
             imageWidth = Math.round(safeWidth * sizeMultiplier)
             imageHeight = Math.round(imageWidth * 9 / 16)
@@ -2418,8 +2776,20 @@ function CarouselImageGeneratorComponent({
           console.error(`   Image URL was:`, imageSourceUrl)
         }
       } else if (cleanCarousel.kind === 'MIDDLE') {
-        console.warn(`⚠️ Carousel ${index + 1}: No imageUrl in emphasisData for MIDDLE carousel!`)
-        console.warn(`   This might mean images weren't fetched from Pexels or includeImages was false`)
+        // Provide detailed diagnostics for missing images
+        console.warn(`⚠️ Carousel ${index + 1} (MIDDLE): No imageUrl in emphasisData!`)
+        console.warn(`   rawImageUrl: ${rawImageUrl || 'null'}`)
+        console.warn(`   shouldShowContentImage: ${shouldShowContentImage}`)
+        console.warn(`   imagePlacement.content: ${imagePlacement.content}`)
+        console.warn(`   template.imagePlacement:`, template.imagePlacement)
+        if (!rawImageUrl) {
+          console.warn(`   This might mean:`)
+          console.warn(`   - Images weren't fetched during generation (includeImages=false)`)
+          console.warn(`   - Image fetch failed for this slide`)
+          console.warn(`   - Image URL was not stored in underlineWords`)
+        } else if (!shouldShowContentImage) {
+          console.warn(`   Image URL exists but template has imagePlacement.content=false`)
+        }
       }
       
       // Dynamic spacing - use layout values if provided
@@ -3141,8 +3511,7 @@ function CarouselImageGeneratorComponent({
                 transition: 'all 0.3s ease',
                 minWidth: isMobile ? '280px' : '400px',
                 maxWidth: isMobile ? '280px' : '400px',
-                flex: isMobile ? '0 0 280px' : '0 0 400px',
-                flexShrink: 0
+                flex: isMobile ? '0 0 280px' : '0 0 400px'
               }}>
               <div style={{ 
                 position: 'relative',

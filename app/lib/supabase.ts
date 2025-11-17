@@ -31,6 +31,7 @@ export interface UserCredits {
   current_plan: 'plan-10' | 'plan-20' | 'plan-50' | null
   account_handle: string | null
   website: string | null
+  template_generation_used: boolean | null
   created_at: string
   updated_at: string
 }
@@ -39,7 +40,7 @@ export interface UserCredits {
 export async function getUserCredits(userId: string): Promise<UserCredits | null> {
   const { data, error } = await supabase
     .from('user_credits')
-    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, created_at, updated_at')
+    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, account_handle, website, template_generation_used, created_at, updated_at')
     .eq('user_id', userId)
     .single()
 
@@ -90,7 +91,7 @@ export async function deductCredit(userId: string): Promise<UserCredits | null> 
       total_credits_used: current.total_credits_used + 1,
     })
     .eq('user_id', userId)
-    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, created_at, updated_at')
+    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, account_handle, website, template_generation_used, created_at, updated_at')
     .single()
 
   if (error) {
@@ -118,7 +119,7 @@ export async function updateUserSubscription(
     .from('user_credits')
     .update(subscriptionData)
     .eq('user_id', userId)
-    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, created_at, updated_at')
+    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, account_handle, website, template_generation_used, created_at, updated_at')
     .single()
 
   if (error) {
@@ -153,7 +154,7 @@ export async function addCredits(
       credits_remaining: currentData.credits_remaining + creditsToAdd,
     })
     .eq('user_id', userId)
-    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, created_at, updated_at')
+    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, account_handle, website, template_generation_used, created_at, updated_at')
     .single()
 
   if (error) {
@@ -172,7 +173,7 @@ export async function getUserCreditsByStripeCustomerId(
   
   const { data, error } = await serverClient
     .from('user_credits')
-    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, created_at, updated_at')
+    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, account_handle, website, template_generation_used, created_at, updated_at')
     .eq('stripe_customer_id', stripeCustomerId)
     .single()
 
@@ -190,7 +191,7 @@ export async function getUserCreditsServer(userId: string): Promise<UserCredits 
   
   const { data, error } = await serverClient
     .from('user_credits')
-    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, account_handle, website, created_at, updated_at')
+    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, account_handle, website, template_generation_used, created_at, updated_at')
     .eq('user_id', userId)
     .single()
 
@@ -245,7 +246,7 @@ export async function deductCreditServer(userId: string): Promise<UserCredits | 
       total_credits_used: current.total_credits_used + 1,
     })
     .eq('user_id', userId)
-    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, created_at, updated_at')
+    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, account_handle, website, template_generation_used, created_at, updated_at')
     .single()
 
   if (error) {
@@ -270,7 +271,7 @@ export async function updateUserProfile(
     .from('user_credits')
     .update(profileData)
     .eq('user_id', userId)
-    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, account_handle, website, created_at, updated_at')
+    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, account_handle, website, template_generation_used, created_at, updated_at')
     .single()
 
   if (error) {

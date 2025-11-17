@@ -122,6 +122,7 @@ export async function uploadImagesToStorage(
 
 /**
  * Check if images already exist for a generation
+ * FIXED: Check database first, then try known file paths - avoid storage.list() which causes egress
  * @param userId - User ID
  * @param generationId - Generation ID
  * @param expectedCount - Expected number of images
@@ -133,52 +134,74 @@ export async function checkImagesExist(
   expectedCount: number
 ): Promise<{ exists: boolean; imageUrls?: string[]; thumbnailUrls?: string[] }> {
   
-  const { data: existingFiles, error } = await supabase.storage
-    .from('carousel-images')
-    .list(`${userId}/${generationId}`)
+  // First, check database for cached URLs (no egress!)
+  const { data: generation, error: dbError } = await supabase
+    .from('generations')
+    .select('image_urls')
+    .eq('id', generationId)
+    .eq('user_id', userId)
+    .single()
   
-  if (error) {
-    console.warn('Error checking for existing images:', error)
-    return { exists: false }
+  if (!dbError && generation?.image_urls && Array.isArray(generation.image_urls)) {
+    const cachedUrls = generation.image_urls.filter((url): url is string => 
+      url && typeof url === 'string'
+    )
+    
+    if (cachedUrls.length === expectedCount) {
+      // Check if URLs are still valid
+      const { isSignedUrlValid } = await import('./urlValidation')
+      const validUrls = cachedUrls.filter(url => isSignedUrlValid(url))
+      
+      if (validUrls.length === expectedCount) {
+        console.log(`✅ Found ${validUrls.length} existing images in database cache, skipping upload`)
+        return {
+          exists: true,
+          imageUrls: validUrls,
+          thumbnailUrls: validUrls.slice(0, 2)
+        }
+      }
+    }
   }
   
-  // Check if we have the expected number of images
-  const imageFiles = existingFiles?.filter(file => file.name.startsWith('slide-')) || []
-  if (imageFiles.length === expectedCount) {
-    console.log(`✅ Found ${imageFiles.length} existing images, skipping upload`)
-    
-    // Get URLs for existing images
-    const urlPromises = imageFiles
-      .sort((a, b) => {
-        // Sort by slide number (slide-0.png, slide-1.png, etc.)
-        const aNum = parseInt(a.name.match(/slide-(\d+)\.png/)?.[1] || '0')
-        const bNum = parseInt(b.name.match(/slide-(\d+)\.png/)?.[1] || '0')
-        return aNum - bNum
-      })
-      .map(async (file) => {
-        const filePath = `${userId}/${generationId}/${file.name}`
-        const { data: urlData, error: urlError } = await supabase.storage
-          .from('carousel-images')
-          .createSignedUrl(filePath, 86400)
-        
-        if (urlError) {
-          console.error(`Error creating signed URL for ${file.name}:`, urlError)
-          const { data: publicData } = supabase.storage
-            .from('carousel-images')
-            .getPublicUrl(filePath)
-          return publicData.publicUrl
-        }
-        
-        return urlData.signedUrl
-      })
-    
-    const imageUrls = await Promise.all(urlPromises)
-    const thumbnailUrls = imageUrls.slice(0, 2)
+  // If database doesn't have URLs, try known file paths (no storage.list() - avoids egress)
+  // We know images follow the pattern: slide-0.png, slide-1.png, etc.
+  console.log(`⚠️ No cached URLs in database, checking known file paths for ${expectedCount} images`)
+  
+  const pathPromises: Promise<string | null>[] = []
+  
+  for (let i = 0; i < expectedCount; i++) {
+    const filePath = `${userId}/${generationId}/slide-${i}.png`
+    pathPromises.push(
+      supabase.storage
+        .from('carousel-images')
+        .createSignedUrl(filePath, 86400)
+        .then(({ data, error }) => {
+          if (error) {
+            // File doesn't exist at this index
+            return null
+          }
+          return data.signedUrl
+        })
+        .catch(() => null)
+    )
+  }
+  
+  const results = await Promise.all(pathPromises)
+  const imageUrls = results.filter((url): url is string => url !== null)
+  
+  if (imageUrls.length === expectedCount) {
+    console.log(`✅ Found ${imageUrls.length} existing images via path check, skipping upload`)
+    // Save URLs to database for future use
+    await supabase
+      .from('generations')
+      .update({ image_urls: imageUrls })
+      .eq('id', generationId)
+      .eq('user_id', userId)
     
     return {
       exists: true,
       imageUrls,
-      thumbnailUrls
+      thumbnailUrls: imageUrls.slice(0, 2)
     }
   }
   
@@ -187,21 +210,47 @@ export async function checkImagesExist(
 
 /**
  * Delete old images for a generation
+ * FIXED: Use known file pattern instead of storage.list() to avoid egress
  */
 export async function deleteOldImages(
   userId: string,
   generationId: string
 ): Promise<void> {
   
-  const { data: oldFiles } = await supabase.storage
-    .from('carousel-images')
-    .list(`${userId}/${generationId}`)
+  // FIXED: Avoid storage.list() which causes egress
+  // Try to delete up to 10 old slides (most carousels have 3-5 slides)
+  // We know the pattern: slide-0.png, slide-1.png, etc.
+  const maxOldSlides = 10
+  const filesToDelete: string[] = []
   
-  if (oldFiles && oldFiles.length > 0) {
-    const filesToDelete = oldFiles.map(file => `${userId}/${generationId}/${file.name}`)
+  // Check which files exist by trying to create signed URLs
+  // If URL creation succeeds, file exists and should be deleted
+  // Note: 400 errors are expected for non-existent files, we ignore them
+  for (let i = 0; i < maxOldSlides; i++) {
+    const filePath = `${userId}/${generationId}/slide-${i}.png`
+    try {
+      const { error } = await supabase.storage
+        .from('carousel-images')
+        .createSignedUrl(filePath, 86400)
+      
+      if (!error) {
+        // File exists, add to deletion list
+        filesToDelete.push(filePath)
+      }
+      // If error is 400, file doesn't exist - this is expected, ignore it
+      // Other errors are also ignored to prevent breaking the upload flow
+    } catch (err: any) {
+      // Silently ignore errors when checking for file existence
+      // 400 errors are expected for non-existent files
+      // This prevents console spam and doesn't affect functionality
+    }
+  }
+  
+  if (filesToDelete.length > 0) {
     await supabase.storage
       .from('carousel-images')
       .remove(filesToDelete)
+    console.log(`🗑️ Deleted ${filesToDelete.length} old image files`)
   }
 }
 

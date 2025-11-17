@@ -42,6 +42,34 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
   const { user, loading: authLoading, credits, refreshCredits } = useAuth()
   const redirectingRef = useRef(false) // Prevent multiple redirects
   const pendingGenerationRef = useRef<Note | null>(null) // Store generation data temporarily for redirect
+  const [navigationUrl, setNavigationUrl] = useState<string | null>(null) // Trigger navigation
+  
+  // Handle navigation in useEffect to ensure it happens outside render cycle
+  useEffect(() => {
+    if (navigationUrl && !redirectingRef.current) {
+      console.log('🚀 [USEFFECT] Executing navigation to:', navigationUrl)
+      redirectingRef.current = true
+      
+      // Extract the path and query from the absolute URL
+      const url = new URL(navigationUrl)
+      const pathWithQuery = url.pathname + url.search
+      
+      console.log('🚀 [USEFFECT] Path with query:', pathWithQuery)
+      
+      // Try router.replace first (client-side navigation)
+      router.replace(pathWithQuery)
+      
+      // Fallback: If router doesn't work, force full page navigation
+      // Use setTimeout to ensure router.replace has a chance to work first
+      setTimeout(() => {
+        // Check if we're still on the same page (navigation didn't work)
+        if (window.location.pathname + window.location.search !== pathWithQuery) {
+          console.log('🚀 [FALLBACK] Router navigation failed, forcing window.location')
+          window.location.href = navigationUrl
+        }
+      }, 500)
+    }
+  }, [navigationUrl, router])
   
   // Load generation if generationId is provided
   const { generation, isLoading: isLoadingGeneration } = useGeneration(
@@ -86,9 +114,31 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
   // Configuration
   const [templateId, setTemplateId] = useState('template1')
   const [colorThemeId, setColorThemeId] = useState('purple-black')
-  const [includeImages, setIncludeImages] = useState(false)
-  const [useAIImages, setUseAIImages] = useState(false)
-  const [aiImageStyle, setAiImageStyle] = useState<'animated' | 'surreal'>('animated')
+  // Load image mode from localStorage, default to false
+  const [includeImages, setIncludeImages] = useState(() => {
+    try {
+      const saved = localStorage.getItem('postGeneration_includeImages')
+      return saved === 'true'
+    } catch {
+      return false
+    }
+  })
+  const [useAIImages, setUseAIImages] = useState(() => {
+    try {
+      const saved = localStorage.getItem('postGeneration_useAIImages')
+      return saved === 'true'
+    } catch {
+      return false
+    }
+  })
+  const [aiImageStyle, setAiImageStyle] = useState<'animated' | 'surreal'>(() => {
+    try {
+      const saved = localStorage.getItem('postGeneration_aiImageStyle') as 'animated' | 'surreal' | null
+      return saved || 'animated'
+    } catch {
+      return 'animated'
+    }
+  })
   
   // UI states
   const [error, setError] = useState('')
@@ -126,6 +176,32 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
       onHasUnsavedWorkChange(hasUnsavedWork)
     }
   }, [hasUnsavedWork, onHasUnsavedWorkChange])
+
+  // Store beforeunload handler ref so we can remove it before navigation
+  const beforeUnloadHandlerRef = useRef<((e: BeforeUnloadEvent) => void) | null>(null)
+  
+  // Warn user before reloading page if there's unsaved work
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedWork) {
+        e.preventDefault()
+        // Modern browsers ignore custom messages, but we still need to set returnValue
+        e.returnValue = 'You have unsaved work. Are you sure you want to leave?'
+        return e.returnValue
+      }
+    }
+    
+    beforeUnloadHandlerRef.current = handleBeforeUnload
+
+    if (hasUnsavedWork) {
+      window.addEventListener('beforeunload', handleBeforeUnload)
+    }
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      beforeUnloadHandlerRef.current = null
+    }
+  }, [hasUnsavedWork])
 
   // Debounced function to save profile to database
   const saveProfileToDatabase = useCallback(async (accountHandle: string, websiteValue: string) => {
@@ -332,12 +408,23 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
       // Store images if available - use data URLs from cache if available
       if (generation.image_urls && generation.image_urls.length > 0) {
         // Check if we have cached data URLs for these images
-        const { getCachedImageDataUrl } = require('../lib/imageCache')
+        const { getCachedImageDataUrl, cacheImageUrls } = require('../lib/imageCache')
         const imageUrls = generation.image_urls.map((url: string) => {
           const cached = getCachedImageDataUrl(url)
           return cached || url
         })
         localStorage.setItem('postGeneration_canvasImages', JSON.stringify(imageUrls))
+        
+        // Convert signed URLs to data URLs in background (if not already cached)
+        const signedUrls = generation.image_urls.filter((url: string) => 
+          url && !url.startsWith('data:image/') && !getCachedImageDataUrl(url)
+        )
+        if (signedUrls.length > 0) {
+          // Convert in background without blocking
+          cacheImageUrls(signedUrls).catch((err: unknown) => 
+            console.error('[create-page] Error caching images in background:', err)
+          )
+        }
       }
     } catch (error) {
       console.error('Error storing in localStorage:', error)
@@ -390,30 +477,41 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
       return
     }
 
-    // Check credits
-    let creditsRemaining = 0
-    if (credits && credits.credits_remaining !== undefined && credits.credits_remaining !== null) {
-      creditsRemaining = credits.credits_remaining
-    } else {
-      try {
-        const checkResponse = await fetch(`/api/credits/check?userId=${user.id}`)
-        if (checkResponse.ok) {
-          const checkData = await checkResponse.json()
-          creditsRemaining = checkData.creditsRemaining ?? 0
-          if (checkData.creditsRemaining !== undefined) {
-            await refreshCredits()
-          }
-        } else {
-          creditsRemaining = credits?.credits_remaining ?? 0
+    // Check credits - CRITICAL: Always verify from server before allowing generation
+    let creditsRemaining: number | null = null
+    let creditsVerified = false
+    
+    // First try to get fresh credits from server
+    try {
+      const checkResponse = await fetch(`/api/credits/check?userId=${user.id}`)
+      if (checkResponse.ok) {
+        const checkData = await checkResponse.json()
+        if (checkData.creditsRemaining !== undefined && checkData.creditsRemaining !== null) {
+          creditsRemaining = checkData.creditsRemaining
+          creditsVerified = true
+          // Update local credits state
+          await refreshCredits()
         }
-      } catch (error) {
-        console.error('Error checking credits:', error)
-        creditsRemaining = credits?.credits_remaining ?? 0
+      }
+    } catch (error) {
+      console.error('Error checking credits from server:', error)
+    }
+    
+    // If server check failed, fall back to local state (but log warning)
+    if (!creditsVerified) {
+      if (credits && credits.credits_remaining !== undefined && credits.credits_remaining !== null) {
+        creditsRemaining = credits.credits_remaining
+        console.warn('[CREDIT CHECK] Using cached credits - server check failed. Credits may be stale.')
+      } else {
+        // If we can't verify credits, block generation for security
+        console.error('[CREDIT CHECK] Cannot verify credits - blocking generation for security')
+        setError('Unable to verify credits. Please refresh the page and try again.')
+        return
       }
     }
 
     const requiredCredits = includeImages ? 2 : 1
-    if (creditsRemaining < requiredCredits) {
+    if (creditsRemaining === null || creditsRemaining < requiredCredits) {
       setShowUpgradePrompt(true)
       return
     }
@@ -430,6 +528,8 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
       localStorage.removeItem('postGeneration_canvasImages')
       localStorage.removeItem('postGeneration_fullContentHash')
       localStorage.removeItem('postGeneration_contentHash')
+      localStorage.removeItem('postGeneration_fromHistory')
+      localStorage.removeItem('postGeneration_generationId')
     } catch (error) {
       console.error('Error clearing localStorage:', error)
     }
@@ -441,18 +541,31 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
     setTimeout(() => setCurrentStep('rendering'), 10000) // Generating for 5 seconds, then Rendering
 
     try {
+      const requestBody = {
+        action: 'note',
+        ideaTitle: idea,
+        accountDescription: accountDescription.trim(),
+        includeImages: includeImages,
+        useAIImages: useAIImages,
+        aiImageStyle: aiImageStyle,
+        templateId: templateId
+      };
+      
+      console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('📤 CLIENT: Sending generation request to /api/social');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('📝 ideaTitle:', idea);
+      console.log('🖼️ includeImages:', includeImages);
+      console.log('🎨 useAIImages:', useAIImages);
+      console.log('🎭 aiImageStyle:', aiImageStyle);
+      console.log('📋 templateId:', templateId);
+      console.log('📦 Request body:', JSON.stringify(requestBody, null, 2));
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+      
       const response = await fetch(`${API_URL}/api/social`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'note',
-          ideaTitle: idea,
-          accountDescription: accountDescription.trim(),
-          includeImages: includeImages,
-          useAIImages: useAIImages,
-          aiImageStyle: aiImageStyle,
-          templateId: templateId
-        })
+        body: JSON.stringify(requestBody)
       })
 
       const result = await response.json()
@@ -699,32 +812,60 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
             useAIImages={useAIImages}
             aiImageStyle={aiImageStyle}
             onGenerationComplete={(generationId) => {
-              if (redirectingRef.current) return
+              if (redirectingRef.current) {
+                return
+              }
               
-              // Only navigate if we have a valid generationId from the database save
-              // Don't use localStorage fallback - that could be a stale ID from previous generation
-              if (generationId) {
-                console.log('✅ Navigating to history page with generationId:', generationId)
-                redirectingRef.current = true
-                // Get default theme for the selected template
-                const template = getCarouselTemplate(templateId)
-                const defaultTheme = template.defaultColorThemeId || colorThemeId || 'purple-black'
-                // Navigate IMMEDIATELY - don't update any React state
-                // State updates cause re-renders which show blank page
-                // Navigation happens synchronously, so no state updates needed
-                // Pass template and theme in URL so post page can use them
-                window.location.href = `/dashboard?view=post&id=${generationId}&template=${templateId}&theme=${defaultTheme}`
-              } else {
-                console.error('❌ Cannot navigate: No generationId provided from database save')
-                console.error('   Database save may have failed or not completed')
-                // Show error to user and clear loading state
+              if (!generationId) {
+                console.error('❌ Cannot navigate: No generationId provided')
                 setError('Failed to save generation to database. Please try again.')
                 setLoadingNote(false)
                 setSelectedIdea(null)
                 setCurrentStep(null)
                 pendingGenerationRef.current = null
-                // Don't navigate - stay on create page so user can try again
+                return
               }
+              
+              console.log('✅ Navigating to history page with generationId:', generationId)
+              
+              // Clear ALL state immediately to prevent beforeunload from blocking
+              setLoadingNote(false)
+              setSelectedIdea(null)
+              setCurrentStep(null)
+              setIdeas([])
+              setNote(null)
+              pendingGenerationRef.current = null
+              
+              // Get default theme for the selected template
+              const template = getCarouselTemplate(templateId)
+              const defaultTheme = template.defaultColorThemeId || colorThemeId || 'purple-black'
+              const url = `/dashboard?view=post&id=${generationId}&template=${templateId}&theme=${defaultTheme}`
+              
+              console.log('🚀 Navigation URL:', url)
+              console.log('🚀 Current URL:', window.location.href)
+              
+              // Remove beforeunload handler if it exists to prevent blocking
+              if (beforeUnloadHandlerRef.current) {
+                window.removeEventListener('beforeunload', beforeUnloadHandlerRef.current)
+                beforeUnloadHandlerRef.current = null
+              }
+              
+              // CRITICAL: Use synchronous navigation that cannot be blocked
+              // Store in sessionStorage as backup signal
+              sessionStorage.setItem('pendingNavigation', url)
+              
+              // Force immediate navigation - this MUST work
+              // Use document.location instead of window.location for maximum compatibility
+              document.location.href = url
+              
+              // If that somehow doesn't work, try window.location as fallback
+              // But this should never execute if document.location works
+              setTimeout(() => {
+                if (document.location.href !== url && window.location.href !== url) {
+                  console.error('🚀 Navigation failed, trying fallback')
+                  window.location.replace(url)
+                }
+              }, 100)
             }}
           />
         </div>
@@ -777,103 +918,12 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
               Enter your idea below to get started
             </p>
             
-            {/* Account Name and Website Inputs */}
-            <div style={{
-              width: '100%',
-              display: 'flex',
-              gap: '12px',
-              marginBottom: '24px',
-            }}>
-              <div style={{ flex: 1 }}>
-                <label style={{
-                  display: 'block',
-                  fontSize: '13px',
-                  fontWeight: '500',
-                  color: '#666666',
-                  marginBottom: '6px',
-                }}>
-                  Account Name (for footer)
-                </label>
-                <input
-                  type="text"
-                  value={accountName}
-                  onChange={(e) => {
-                    setAccountName(e.target.value)
-                    try {
-                      localStorage.setItem('postGeneration_accountName', e.target.value)
-                    } catch (error) {
-                      console.error('Error saving account name:', error)
-                    }
-                  }}
-                  placeholder="@yourhandle"
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    fontSize: '14px',
-                    color: '#333333',
-                    background: '#ffffff',
-                    border: '1px solid #e5e5e5',
-                    borderRadius: '8px',
-                    outline: 'none',
-                    fontFamily: 'inherit',
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = '#cccccc'
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = '#e5e5e5'
-                  }}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{
-                  display: 'block',
-                  fontSize: '13px',
-                  fontWeight: '500',
-                  color: '#666666',
-                  marginBottom: '6px',
-                }}>
-                  Website (for footer)
-                </label>
-                <input
-                  type="text"
-                  value={website}
-                  onChange={(e) => {
-                    setWebsite(e.target.value)
-                    try {
-                      localStorage.setItem('postGeneration_website', e.target.value)
-                    } catch (error) {
-                      console.error('Error saving website:', error)
-                    }
-                  }}
-                  placeholder="yourwebsite.com"
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    fontSize: '14px',
-                    color: '#333333',
-                    background: '#ffffff',
-                    border: '1px solid #e5e5e5',
-                    borderRadius: '8px',
-                    outline: 'none',
-                    fontFamily: 'inherit',
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = '#cccccc'
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = '#e5e5e5'
-                  }}
-                />
-              </div>
-            </div>
-            
             {/* Textarea Input with Action Bar */}
             <div style={{
               width: '100%',
               background: '#ffffff',
               borderRadius: '12px',
-              border: '2px solid #e5e5e5',
+              border: '1px solid #e5e5e5',
               overflow: 'hidden',
             }}>
             <textarea
@@ -1021,9 +1071,26 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
                           aiImageStyle
                         }}
                         onSelectMode={(mode) => {
+                          console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                          console.log('🎯 MODE SELECTED');
+                          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                          console.log('🖼️ includeImages:', mode.includeImages);
+                          console.log('🎨 useAIImages:', mode.useAIImages);
+                          console.log('🎭 aiImageStyle:', mode.aiImageStyle);
+                          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+                          
                           setIncludeImages(mode.includeImages)
                           setUseAIImages(mode.useAIImages)
                           setAiImageStyle(mode.aiImageStyle)
+                          
+                          // Persist to localStorage
+                          try {
+                            localStorage.setItem('postGeneration_includeImages', String(mode.includeImages))
+                            localStorage.setItem('postGeneration_useAIImages', String(mode.useAIImages))
+                            localStorage.setItem('postGeneration_aiImageStyle', mode.aiImageStyle)
+                          } catch (error) {
+                            console.error('Error saving mode to localStorage:', error)
+                          }
                         }}
                         buttonRef={modeButtonRef}
                       />
@@ -1061,6 +1128,99 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
                 >
                   <ArrowUp size={18} color={loadingIdeas || loadingNote || !accountDescription.trim() ? '#999999' : '#000000'} />
                 </button>
+              </div>
+            </div>
+            
+            {/* Account Name and Website Inputs - Moved to bottom */}
+            <div style={{
+              width: '100%',
+              display: 'flex',
+              gap: '12px',
+              marginTop: '24px',
+            }}>
+              <div style={{ flex: 1 }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  color: '#666666',
+                  marginBottom: '6px',
+                  textAlign: 'left',
+                }}>
+                  Account Name (footer)
+                </label>
+                <input
+                  type="text"
+                  value={accountName}
+                  onChange={(e) => {
+                    setAccountName(e.target.value)
+                    try {
+                      localStorage.setItem('postGeneration_accountName', e.target.value)
+                    } catch (error) {
+                      console.error('Error saving account name:', error)
+                    }
+                  }}
+                  placeholder="@yourhandle"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    fontSize: '14px',
+                    color: '#333333',
+                    background: '#ffffff',
+                    border: '1px solid #e5e5e5',
+                    borderRadius: '8px',
+                    outline: 'none',
+                    fontFamily: 'inherit',
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = '#cccccc'
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = '#e5e5e5'
+                  }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  color: '#666666',
+                  marginBottom: '6px',
+                  textAlign: 'left',
+                }}>
+                  Website (footer)
+                </label>
+                <input
+                  type="text"
+                  value={website}
+                  onChange={(e) => {
+                    setWebsite(e.target.value)
+                    try {
+                      localStorage.setItem('postGeneration_website', e.target.value)
+                    } catch (error) {
+                      console.error('Error saving website:', error)
+                    }
+                  }}
+                  placeholder="yourwebsite.com"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    fontSize: '14px',
+                    color: '#333333',
+                    background: '#ffffff',
+                    border: '1px solid #e5e5e5',
+                    borderRadius: '8px',
+                    outline: 'none',
+                    fontFamily: 'inherit',
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = '#cccccc'
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = '#e5e5e5'
+                  }}
+                />
               </div>
             </div>
           </div>

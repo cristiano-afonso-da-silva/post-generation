@@ -38,14 +38,16 @@ export async function POST(request: NextRequest) {
       )
     }
     console.log('[TEMPLATES/GENERATE] Parsing request body...')
-    const { images, description, userId } = await request.json()
+    const { images, description, userId, isRegeneration, existingTemplate } = await request.json()
 
     console.log('[TEMPLATES/GENERATE] Request body parsed:', {
       hasImages: !!images,
       imageCount: images?.length,
       hasDescription: !!description,
       descriptionLength: description?.length,
-      userId
+      userId,
+      isRegeneration: !!isRegeneration,
+      hasExistingTemplate: !!existingTemplate
     })
 
     // Validate userId is provided
@@ -57,20 +59,62 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!images || images.length === 0) {
-      console.error('[TEMPLATES/GENERATE] Validation failed: No images')
-      return NextResponse.json(
-        { error: 'At least 1 image is required' },
-        { status: 400 }
-      )
+    // Check if user has already used the Generate Template feature (only for initial generation, not regeneration)
+    if (!isRegeneration) {
+      console.log('[TEMPLATES/GENERATE] Checking if user has already used template generation...')
+      const supabase = createServerClient()
+      const { data: userCredits, error: creditsError } = await supabase
+        .from('user_credits')
+        .select('template_generation_used')
+        .eq('user_id', userId)
+        .single()
+
+      if (creditsError && creditsError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error('[TEMPLATES/GENERATE] Error checking user credits:', creditsError)
+        return NextResponse.json(
+          { error: 'Failed to check template generation status' },
+          { status: 500 }
+        )
+      }
+
+      // If user has already used the feature, reject the request
+      if (userCredits?.template_generation_used === true) {
+        console.log('[TEMPLATES/GENERATE] User has already used template generation feature')
+        return NextResponse.json(
+          { 
+            error: 'Template Generation Limit Reached. This feature is limited to one use per account. You\'ve already used your available template generation.',
+            code: 'TEMPLATE_GENERATION_LIMIT_REACHED'
+          },
+          { status: 403 }
+        )
+      }
     }
 
-    if (images.length > 3) {
-      console.error('[TEMPLATES/GENERATE] Validation failed: Too many images:', images.length)
-      return NextResponse.json(
-        { error: 'Maximum 3 images allowed' },
-        { status: 400 }
-      )
+    if (!isRegeneration) {
+      if (!images || images.length === 0) {
+        console.error('[TEMPLATES/GENERATE] Validation failed: No images')
+        return NextResponse.json(
+          { error: 'At least 1 image is required' },
+          { status: 400 }
+        )
+      }
+
+      if (images.length > 3) {
+        console.error('[TEMPLATES/GENERATE] Validation failed: Too many images:', images.length)
+        return NextResponse.json(
+          { error: 'Maximum 3 images allowed' },
+          { status: 400 }
+        )
+      }
+    } else {
+      // For regeneration, we need generated template images
+      if (!images || images.length === 0) {
+        console.error('[TEMPLATES/GENERATE] Validation failed: No generated template images for regeneration')
+        return NextResponse.json(
+          { error: 'Generated template images are required for regeneration' },
+          { status: 400 }
+        )
+      }
     }
 
     if (!description || !description.trim()) {
@@ -91,7 +135,107 @@ export async function POST(request: NextRequest) {
     }))
 
     console.log('[TEMPLATES/GENERATE] Creating OpenAI prompt with new system prompt...')
-    const systemPrompt = `
+    
+    // Use different system prompt for regeneration vs initial generation
+    const systemPrompt = isRegeneration ? `
+You are a senior social media carousel design modifier and enhancer.
+
+INPUTS YOU RECEIVE
+
+- 1–3 images of a previously generated carousel template (showing the current template design).
+
+- A text description from the user describing what they want to alter or improve.
+
+- The existing template configuration (optional, for reference).
+
+YOUR JOB
+
+- Carefully analyze the existing template images.
+
+- Understand what the user wants to change based on their description.
+
+- Modify the template configuration to incorporate the requested changes while maintaining the overall design coherence.
+
+- Output a single JSON object that describes the updated carousel template.
+
+The user wants to alter: "${description}"
+
+====================================================
+
+ALTERATION GUIDELINES
+
+====================================================
+
+1. PRESERVE WHAT WORKS
+
+- Keep elements that the user doesn't mention changing.
+
+- Maintain the overall structure and layout unless specifically requested to change.
+
+- Preserve safe area, canvas dimensions, and core layout principles.
+
+2. APPLY REQUESTED CHANGES
+
+- If the user mentions fonts: update font families, weights, sizes, or styles accordingly.
+
+- If the user mentions colors: adjust textColor, roleColors, background colors, or theme colors.
+
+- If the user mentions spacing: modify padding, margins, gaps, or contentMaxWidth.
+
+- If the user mentions layout: adjust verticalAlign, contentMaxWidth, or component positions.
+
+- If the user mentions components: enable/disable footer, CTA, arrows, or other elements.
+
+- If the user mentions images: adjust imagePlacement (hook, content, cta) to control where images appear.
+
+3. MAINTAIN CONSISTENCY
+
+- Ensure all changes work together harmoniously.
+
+- Keep the template production-ready and usable.
+
+- Don't break existing functionality or create conflicting settings.
+
+4. IMAGE GENERATION NEGATIVE PROMPTS (CRITICAL - FOR POOMOODOIN AI)
+
+====================================================
+
+When creating "imagePrompt" and "hookImagePrompt" fields, you MUST include explicit negative prompt instructions that will be sent to Pomoodoin AI.
+
+IMPORTANT: All image prompts MUST explicitly state what should NOT be drawn. This is a NEGATIVE PROMPT requirement.
+
+You MUST append to every image prompt a clear negative prompt section that prohibits:
+
+- Anything that looks devious, sinister, or malicious
+- Anything that looks demonic, demon-like, or evil
+- Anything that looks strange, disturbing, or unsettling
+- Dark, menacing, or threatening imagery
+- Horror-themed or scary elements
+- Any content that could be considered inappropriate or offensive
+
+Format your image prompts like this:
+
+"imagePrompt": "positive description of the image style and content. NEGATIVE PROMPT: Do not draw anything that looks devious, demon, strange, sinister, evil, disturbing, menacing, threatening, horror-themed, scary, or inappropriate. Keep all imagery positive, friendly, and appropriate for social media."
+
+This negative prompt instruction will be sent directly to Pomoodoin AI to ensure safe, appropriate image generation.
+
+5. OUTPUT FORMAT
+
+- Return the complete template JSON structure (same as initial generation).
+
+- Include all required fields even if unchanged.
+
+- Make sure the output is valid JSON that can be used directly in production.
+
+====================================================
+
+OUTPUT FORMAT (CRITICAL)
+
+====================================================
+
+Return ONLY a single JSON object with the complete template structure. Use the same format as initial template generation, but with your modifications applied.
+
+` : `
 You are a senior social media carousel design reverse-engineer.
 
 INPUTS YOU RECEIVE
@@ -202,21 +346,18 @@ You must detect and configure each of these.
 
 - You must choose fonts, sizes and colors that match the reference.
 
-Allowed font families (you MUST pick from these only):
+FONT SELECTION (CRITICAL - USE ANY GOOGLE FONT):
 
-  - "Poppins"
-
-  - "Playfair Display"
-
-  - "OpenSauce"
-
-  - "Mansalva"
-
-  - "DreamingOutloudSans"
+- You can use ANY font from the Google Fonts database (250+ fonts available)
+- Choose fonts that visually match the reference carousel style
+- Use exact Google Font family names (e.g., "Roboto", "Montserrat", "Lato", "Open Sans", "Poppins", "Playfair Display", "Inter", "Work Sans", "Kalam", "Caveat", etc.)
+- Prioritize visual similarity to the reference over any predefined font list
+- Common Google Fonts include: Roboto, Montserrat, Lato, Open Sans, Poppins, Playfair Display, Inter, Work Sans, Raleway, Source Sans Pro, Nunito, Kalam, Caveat, and many more
+- Browse https://fonts.google.com for inspiration, but use the exact family name as it appears on Google Fonts
 
 For each text role ("hook", "title", "content", and optional "hookTopic", "hookSubtitle", "hookCTA"):
 
-- Choose 1 of the allowed font families.
+- Choose a Google Font family name that visually matches the reference style.
 
 - Set:
 
@@ -280,9 +421,11 @@ Text colors:
 
   - Allow different scenes while keeping the same subject and style.
 
+  - MUST include negative prompt instructions (see CRITICAL: IMAGE GENERATION NEGATIVE PROMPTS section below)
+
   Example idea (you must adapt to the actual reference):
 
-  "imagePrompt": "comic-style illustration of {input} in various situations that match the slide topic; consistent color palette, clean background, 4:5 aspect ratio"
+  "imagePrompt": "comic-style illustration of {input} in various situations that match the slide topic; consistent color palette, clean background, 4:5 aspect ratio. NEGATIVE PROMPT: Do not draw anything that looks devious, demon, strange, sinister, evil, disturbing, menacing, threatening, horror-themed, scary, or inappropriate. Keep all imagery positive, friendly, and appropriate for social media."
 
 - Foreground image layout:
 
@@ -291,6 +434,22 @@ Text colors:
   - Set "imageLayout.maxHeightRatio": 0.25–0.5 based on how big the image block is.
 
   - Set "imageLayout.marginTop" and "marginBottom" so that the image stays fully inside the safe area and leaves space for the text.
+
+- Image placement configuration:
+
+  - Configure "imagePlacement" to specify which slide types should show images:
+
+    - "hook": true/false - Whether hook slides should display images
+
+    - "content": true/false - Whether middle/content slides should display images
+
+    - "cta": false - CTA slides should NEVER show images (always set to false)
+
+  - Default: { "hook": false, "content": true, "cta": false } (images only in content slides)
+
+  - If the reference shows images in hook slides, set "hook": true
+
+  - If the reference shows images only in middle slides, set "hook": false, "content": true
 
 ====================================================
 
@@ -594,9 +753,9 @@ You MUST fill this exact structure:
 
   },
 
-  "imagePrompt": "Use {input} as a placeholder.",
+  "imagePrompt": "Use {input} as a placeholder. NEGATIVE PROMPT: Do not draw anything that looks devious, demon, strange, sinister, evil, disturbing, menacing, threatening, horror-themed, scary, or inappropriate. Keep all imagery positive, friendly, and appropriate for social media.",
 
-  "hookImagePrompt": "Use {input} as a placeholder.",
+  "hookImagePrompt": "Use {input} as a placeholder. NEGATIVE PROMPT: Do not draw anything that looks devious, demon, strange, sinister, evil, disturbing, menacing, threatening, horror-themed, scary, or inappropriate. Keep all imagery positive, friendly, and appropriate for social media.",
 
   "footer": {
 
@@ -642,13 +801,33 @@ You MUST fill this exact structure:
 
     "right": 80
 
+  },
+
+  "imagePlacement": {
+
+    "hook": false,
+
+    "content": true,
+
+    "cta": false
+
   }
 
 }
 
 `
 
-    const userPrompt = `You are given ${images.length} reference image(s) of a social media carousel and the user's description:
+    const userPrompt = isRegeneration ? `You are given ${images.length} image(s) of a previously generated carousel template and the user's edit request:
+
+USER'S EDIT REQUEST:
+
+"${description}"
+
+Your task is to MODIFY the existing template based on the user's request and output a complete, production-ready carousel template configuration as a JSON object.
+
+The user wants to alter the template. Analyze the provided template images and apply the requested changes while maintaining design coherence.
+
+Return the complete template JSON with your modifications applied.` : `You are given ${images.length} reference image(s) of a social media carousel and the user's description:
 
 USER DESCRIPTION:
 
@@ -703,6 +882,7 @@ First, identify the main slide BACKGROUND:
   - The STYLE (flat illustration, 3D render, photo, abstract shapes, etc.),
   - The MOOD (minimal, playful, cinematic, dark, etc.),
   - The COLORS and LIGHTING.
+  - MUST include negative prompt instructions: "NEGATIVE PROMPT: Do not draw anything that looks devious, demon, strange, sinister, evil, disturbing, menacing, threatening, horror-themed, scary, or inappropriate. Keep all imagery positive, friendly, and appropriate for social media."
 
 Pick whichever type ("color" or "image") best matches what you see on MOST slides.
 
@@ -722,19 +902,41 @@ Check how the template uses IMAGES besides the background:
   - Still define "imageLayout" in a way that keeps the design clean (small ratio, minimal margins).
   - Set "imagePrompt" to indicate a minimal or no-image style (e.g. "no illustration; purely typographic slides with only subtle geometric shapes that match the background aesthetic").
 
+CRITICAL: IMAGE GENERATION NEGATIVE PROMPTS (FOR POOMOODOIN AI)
+
+When creating "imagePrompt" and "hookImagePrompt" fields, you MUST include explicit negative prompt instructions that will be sent to Pomoodoin AI.
+
+IMPORTANT: All image prompts MUST explicitly state what should NOT be drawn. This is a NEGATIVE PROMPT requirement.
+
+You MUST append to every image prompt a clear negative prompt section that prohibits:
+
+- Anything that looks devious, sinister, or malicious
+- Anything that looks demonic, demon-like, or evil
+- Anything that looks strange, disturbing, or unsettling
+- Dark, menacing, or threatening imagery
+- Horror-themed or scary elements
+- Any content that could be considered inappropriate or offensive
+
+Format your image prompts like this:
+
+"imagePrompt": "positive description of the image style and content. NEGATIVE PROMPT: Do not draw anything that looks devious, demon, strange, sinister, evil, disturbing, menacing, threatening, horror-themed, scary, or inappropriate. Keep all imagery positive, friendly, and appropriate for social media."
+
+This negative prompt instruction will be sent directly to Pomoodoin AI to ensure safe, appropriate image generation.
+
 ====================================================
 3. TYPOGRAPHY & TEXT STYLE
 ====================================================
 
-You MUST choose from these font families:
+FONT SELECTION - USE ANY GOOGLE FONT:
 
-- Poppins           (modern, clean, versatile)
-- Playfair Display  (elegant, serif, luxury / editorial)
-- OpenSauce         (contemporary, geometric, techy)
-- Mansalva          (playful, handwritten)
-- DreamingOutloudSans (casual, friendly, handwritten)
+- You can use ANY font from the Google Fonts database (250+ fonts available)
+- Choose fonts that visually match the reference carousel style
+- Use exact Google Font family names (e.g., "Roboto", "Montserrat", "Lato", "Open Sans", "Poppins", "Playfair Display", "Inter", "Work Sans", "Kalam", "Caveat", "Mansalva", etc.)
+- Prioritize visual similarity to the reference - match the style, not a predefined list
+- Common Google Fonts include: Roboto, Montserrat, Lato, Open Sans, Poppins, Playfair Display, Inter, Work Sans, Raleway, Source Sans Pro, Nunito, Kalam, Caveat, Mansalva, and many more
+- Browse https://fonts.google.com for inspiration, but use the exact family name as it appears on Google Fonts
 
-For each role, pick the closest match you see in the carousel:
+For each role, pick a Google Font that visually matches what you see in the carousel:
 
 - "hook"    → Big, attention-grabbing hook on the first slide.
 - "title"   → Main heading on body slides.
@@ -865,17 +1067,16 @@ Each type should set at least:
 - "gapTitleToContent" where relevant.
 
 ====================================================
-8. AVAILABLE FONTS & CONSISTENCY
+8. FONT SELECTION & CONSISTENCY
 ====================================================
 
 Remember:
 
-- ONLY use these font family names:
-  - "Poppins"
-  - "Playfair Display"
-  - "OpenSauce"
-  - "Mansalva"
-  - "DreamingOutloudSans"
+- Use ANY Google Font family name from the Google Fonts database (250+ fonts available)
+- Choose fonts that visually match the reference carousel style
+- Use exact Google Font family names as they appear on https://fonts.google.com
+- Examples: "Roboto", "Montserrat", "Lato", "Open Sans", "Poppins", "Playfair Display", "Inter", "Work Sans", "Kalam", "Caveat", "Mansalva", etc.
+- Prioritize visual similarity to the reference over any predefined font list
 
 - Try to keep the number of different font families small (1–2 max) unless the design clearly mixes more.
 
@@ -889,37 +1090,37 @@ Return ONLY a single JSON object with this overall structure and keys. DO NOT in
   "templateName": "Descriptive style name (e.g. 'Muted Minimal Tech', 'Bold Gradient Focus')",
   "fonts": {
     "hook": {
-      "family": "One of the allowed fonts",
+      "family": "Google Font family name (e.g., 'Roboto', 'Montserrat', 'Poppins')",
       "weight": "normal | 500 | bold",
       "style": "normal | italic",
       "size": 100
     },
     "title": {
-      "family": "Allowed font",
+      "family": "Google Font family name (e.g., 'Roboto', 'Montserrat', 'Poppins')",
       "weight": "normal | 500 | bold",
       "style": "normal | italic",
       "size": 80
     },
     "content": {
-      "family": "Allowed font",
+      "family": "Google Font family name (e.g., 'Roboto', 'Montserrat', 'Poppins')",
       "weight": "normal | 500 | bold",
       "style": "normal | italic",
       "size": 54
     },
     "hookTopic": {
-      "family": "Allowed font",
+      "family": "Google Font family name (e.g., 'Roboto', 'Montserrat', 'Poppins')",
       "weight": "normal | 500 | bold",
       "style": "normal | italic",
       "size": 28
     },
     "hookSubtitle": {
-      "family": "Allowed font",
+      "family": "Google Font family name (e.g., 'Roboto', 'Montserrat', 'Poppins')",
       "weight": "normal | 500 | bold",
       "style": "normal | italic",
       "size": 42
     },
     "hookCTA": {
-      "family": "Allowed font",
+      "family": "Google Font family name (e.g., 'Roboto', 'Montserrat', 'Poppins')",
       "weight": "normal | 500 | bold",
       "style": "normal | italic",
       "size": 46
@@ -995,8 +1196,8 @@ Return ONLY a single JSON object with this overall structure and keys. DO NOT in
     "marginBottom": 40,
     "marginTop": 40
   },
-  "imagePrompt": "Creative DALL·E prompt describing images matching this template. Use {input} as placeholder.",
-  "hookImagePrompt": "Optional: Specific prompt for hook slide images. Use {input} as placeholder.",
+  "imagePrompt": "Creative DALL·E prompt describing images matching this template. Use {input} as placeholder. NEGATIVE PROMPT: Do not draw anything that looks devious, demon, strange, sinister, evil, disturbing, menacing, threatening, horror-themed, scary, or inappropriate. Keep all imagery positive, friendly, and appropriate for social media.",
+  "hookImagePrompt": "Optional: Specific prompt for hook slide images. Use {input} as placeholder. NEGATIVE PROMPT: Do not draw anything that looks devious, demon, strange, sinister, evil, disturbing, menacing, threatening, horror-themed, scary, or inappropriate. Keep all imagery positive, friendly, and appropriate for social media.",
   "footer": {
     "enabled": true,
     "height": 80,
@@ -1019,6 +1220,11 @@ Return ONLY a single JSON object with this overall structure and keys. DO NOT in
     "bottom": 80,
     "left": 80,
     "right": 80
+  },
+  "imagePlacement": {
+    "hook": false,
+    "content": true,
+    "cta": false
   }
 }
 
@@ -1093,29 +1299,20 @@ Return ONLY this JSON object. No markdown, no comments, no extra text.`
 
     // Build the complete template object based on the template structure
     const templateId = `custom_${Date.now()}_${userId.substring(0, 8)}`
-    
-    // Map font families to their file paths
-    const fontFiles: Record<string, string> = {
-      'Poppins': '/templates/template1/fonts/Poppins-Bold.ttf',
-      'Playfair Display': '/templates/template2/fonts/PlayfairDisplay-BoldItalic.ttf',
-      'OpenSauce': '/templates/template3/fonts/open-sauce.one-medium.ttf',
-      'Mansalva': '/templates/template3/fonts/Mansalva-Regular.ttf',
-      'DreamingOutloudSans': '/templates/template1/fonts/DreamingOutloudSans-Regular.otf'
-    }
 
     const buildFontConfig = (fontConfig: any) => {
-      const file = fontFiles[fontConfig.family] || fontFiles['Poppins']
+      // Font family should be a Google Font family name (e.g., "Roboto", "Montserrat", "Lato")
+      const family = fontConfig.family || 'Roboto'
       const weight = fontConfig.weight || 'normal'
       const style = fontConfig.style || 'normal'
       const size = fontConfig.size || 70
       const lineHeight = size * 1.2
       
       return {
-        family: fontConfig.family,
-        file: file,
+        family: family,
         weight: weight,
         style: style,
-        cssFont: `${weight} ${style !== 'normal' ? style + ' ' : ''}${size}px "${fontConfig.family}", sans-serif`,
+        cssFont: `${weight} ${style !== 'normal' ? style + ' ' : ''}${size}px "${family}", sans-serif`,
         lineHeight: lineHeight,
         size: size
       }
@@ -1188,6 +1385,12 @@ Return ONLY this JSON object. No markdown, no comments, no extra text.`
         bottom: 80,
         left: 80,
         right: 80
+      },
+      // Image placement configuration - default to images only in content slides
+      imagePlacement: templateConfig.imagePlacement || {
+        hook: false,
+        content: true,
+        cta: false
       }
     }
 
@@ -1219,6 +1422,22 @@ Return ONLY this JSON object. No markdown, no comments, no extra text.`
         { error: 'Failed to save template to database', details: dbError.message },
         { status: 500 }
       )
+    }
+
+    // Mark template generation as used (only for initial generation, not regeneration)
+    if (!isRegeneration) {
+      console.log('[TEMPLATES/GENERATE] Marking template generation as used for user...')
+      const { error: updateError } = await supabase
+        .from('user_credits')
+        .update({ template_generation_used: true })
+        .eq('user_id', userId)
+
+      if (updateError) {
+        console.error('[TEMPLATES/GENERATE] Failed to update template_generation_used:', updateError)
+        // Don't fail the request, just log the error - template was saved successfully
+      } else {
+        console.log('[TEMPLATES/GENERATE] Template generation marked as used')
+      }
     }
 
     console.log('[TEMPLATES/GENERATE] Template saved successfully!', {

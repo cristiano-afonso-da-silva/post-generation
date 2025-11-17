@@ -789,6 +789,21 @@ export default function LandingPage() {
             <span aria-hidden="true" style={{ color: '#ffbd59', letterSpacing: '2px' }}>★★★★★</span>
             <span>Trusted by creators with 99 drafts</span>
           </div>
+          <div style={{ marginBottom: '24px' }}>
+            <a 
+              href="https://www.producthunt.com/products/post-my-note?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-post&#0045;my&#0045;note" 
+              target="_blank" 
+              rel="noopener noreferrer"
+            >
+              <img 
+                src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1038248&theme=light&t=1763356795415" 
+                alt="Post My Note - Turn ideas into scroll&#0045;stopping posts&#0046; | Product Hunt" 
+                style={{ width: '250px', height: '54px' }} 
+                width="250" 
+                height="54" 
+              />
+            </a>
+          </div>
           <h1
             style={{
               fontSize: 'clamp(36px, 6vw, 64px)',

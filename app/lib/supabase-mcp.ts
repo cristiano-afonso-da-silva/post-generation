@@ -13,10 +13,10 @@ import { createServerClient } from './supabase'
 export async function getUserCreditsServerSQL(userId: string): Promise<any> {
   const serverClient = createServerClient()
   
-  // OPTIMIZED: Only select fields we need
+  // OPTIMIZED: Include all fields that might be needed (account_handle, website for profile)
   const { data, error } = await serverClient
     .from('user_credits')
-    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, created_at, updated_at')
+    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, account_handle, website, template_generation_used, created_at, updated_at')
     .eq('user_id', userId)
     .single()
   
@@ -25,7 +25,7 @@ export async function getUserCreditsServerSQL(userId: string): Promise<any> {
       // No record found, create one
       return await createInitialCreditRecordServerSQL(userId)
     }
-    console.error('Error fetching user credits:', error)
+    console.error('[getUserCreditsServerSQL] Error fetching user credits:', error)
     return null
   }
   

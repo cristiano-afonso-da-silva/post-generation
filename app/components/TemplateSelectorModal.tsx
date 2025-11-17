@@ -263,7 +263,7 @@ export default function TemplateSelectorModal({
                   key={template.id}
                   onClick={() => handleTemplateClick(template.id)}
                   style={{
-                    border: isSelected ? '1px solid #ffbd59' : '1px solid #e5e5e5',
+                    border: isSelected ? '2px solid #666666' : '2px solid #e5e5e5',
                     borderRadius: '8px',
                     padding: '0',
                     cursor: 'pointer',
@@ -273,12 +273,12 @@ export default function TemplateSelectorModal({
                   }}
                   onMouseEnter={(e) => {
                     if (!isSelected) {
-                      e.currentTarget.style.borderColor = '#ffbd59'
+                      e.currentTarget.style.border = '2px solid #e5e5e5'
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (!isSelected) {
-                      e.currentTarget.style.borderColor = '#e5e5e5'
+                      e.currentTarget.style.border = '2px solid #e5e5e5'
                     }
                   }}
                 >
@@ -292,7 +292,7 @@ export default function TemplateSelectorModal({
                         justifyContent: 'center',
                         padding: '48px',
                         background: 'linear-gradient(135deg, #fafafa 0%, #f0f0f0 100%)',
-                        minHeight: '120px'
+                        minHeight: '240px'
                       }}
                     >
                       <div style={{
@@ -324,7 +324,7 @@ export default function TemplateSelectorModal({
                         overflow: 'hidden',
                         position: 'relative',
                         width: '100%',
-                        paddingBottom: '25%' // Maintain aspect ratio
+                        paddingBottom: '50%' // Maintain aspect ratio - increased height
                       }}
                     >
                       {previewImages.map((imagePath, index) => (

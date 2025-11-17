@@ -51,7 +51,10 @@ export function getCachedGenerations(
       return null
     }
     
-    console.log(`[Cache] Hit for generations list (user: ${userId}, limit: ${limit}, offset: ${offset})`)
+    // Only log in development mode to reduce console spam
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Cache] Hit for generations list (user: ${userId}, limit: ${limit}, offset: ${offset})`)
+    }
     return parsed.data
   } catch (error) {
     console.error('[Cache] Error reading cached generations list:', error)
@@ -68,13 +71,13 @@ export function setCachedGenerations(
   limit: number,
   offset: number
 ): void {
+  const cacheKey = `${CACHE_PREFIX}_list_${userId}_${limit}_${offset}`
+  const cached: CachedData<{ generations: any[]; totalCount: number }> = {
+    data,
+    timestamp: Date.now(),
+    userId
+  }
   try {
-    const cacheKey = `${CACHE_PREFIX}_list_${userId}_${limit}_${offset}`
-    const cached: CachedData<{ generations: any[]; totalCount: number }> = {
-      data,
-      timestamp: Date.now(),
-      userId
-    }
     localStorage.setItem(cacheKey, JSON.stringify(cached))
     console.log(`[Cache] Stored generations list (user: ${userId}, limit: ${limit}, offset: ${offset})`)
   } catch (error) {
@@ -120,7 +123,10 @@ export function getCachedGeneration(id: string, userId: string): any | null {
       return null
     }
     
-    console.log(`[Cache] Hit for generation ${id}`)
+    // Only log in development mode to reduce console spam
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Cache] Hit for generation ${id}`)
+    }
     return parsed.data
   } catch (error) {
     console.error('[Cache] Error reading cached generation:', error)
@@ -132,13 +138,13 @@ export function getCachedGeneration(id: string, userId: string): any | null {
  * Set cached single generation
  */
 export function setCachedGeneration(id: string, userId: string, data: any): void {
+  const cacheKey = `${CACHE_PREFIX}_gen_${id}_${userId}`
+  const cached: CachedData<any> = {
+    data,
+    timestamp: Date.now(),
+    userId
+  }
   try {
-    const cacheKey = `${CACHE_PREFIX}_gen_${id}_${userId}`
-    const cached: CachedData<any> = {
-      data,
-      timestamp: Date.now(),
-      userId
-    }
     localStorage.setItem(cacheKey, JSON.stringify(cached))
     console.log(`[Cache] Stored generation ${id}`)
   } catch (error) {

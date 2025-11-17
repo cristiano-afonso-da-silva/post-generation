@@ -70,12 +70,42 @@ function PostCard({
 }: PostCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
+  const [shouldLoad, setShouldLoad] = useState(false)
+  const imgRef = useRef<HTMLImageElement>(null)
 
   // Reset image state when thumbnailUrl changes
   useEffect(() => {
     setImageLoaded(false)
     setImageError(false)
+    setShouldLoad(false)
   }, [thumbnailUrl])
+
+  // Lazy load: only load image when it's about to be visible
+  useEffect(() => {
+    if (!thumbnailUrl || shouldLoad) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setShouldLoad(true)
+            observer.disconnect()
+          }
+        })
+      },
+      {
+        rootMargin: '50px', // Start loading 50px before it's visible
+      }
+    )
+
+    if (imgRef.current) {
+      observer.observe(imgRef.current)
+    }
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [thumbnailUrl, shouldLoad])
 
   const handleImageLoad = () => {
     setImageLoaded(true)
@@ -127,11 +157,13 @@ function PostCard({
         )}
         {thumbnailUrl ? (
           <img
+            ref={imgRef}
             key={thumbnailUrl}
-            src={thumbnailUrl}
+            src={shouldLoad ? thumbnailUrl : undefined}
             alt={generation.idea_title}
             onLoad={handleImageLoad}
             onError={handleImageError}
+            loading="lazy"
             style={{
               width: '100%',
               height: '100%',
@@ -391,32 +423,43 @@ function PostPageContent() {
   }, [generationId])
 
   // Function to save template and theme to database and update URL
+  // OPTIMIZED: Uses lightweight endpoint that only updates template_id and color_theme_id
   const saveTemplateAndThemeToDatabase = async (newTemplateId: string, newColorThemeId: string) => {
     if (!generationId || !user?.id) return
     
+    const saveStartTime = colorChangeStartTimeRef.current || performance.now()
+    
     try {
-      const response = await fetch('/api/generations/save', {
+      // Use lightweight endpoint that only updates template/theme fields
+      const response = await fetch('/api/generations/update-template-theme', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user.id,
           generationId: generationId,
-          ideaTitle: generation?.idea_title || note?.ideaTitle || '',
-          accountDescription: generation?.account_description || '',
-          slides: generation?.slides || note?.carousels || [],
-          caption: generation?.caption || note?.caption || '',
-          underlineWords: generation?.underline_words || note?.underlineWords || {},
           templateId: newTemplateId,
-          colorThemeId: newColorThemeId,
-          imageUrls: generation?.image_urls || [],
-          thumbnailUrls: generation?.thumbnail_urls || []
+          colorThemeId: newColorThemeId
         })
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to save template and theme')
+        let errorMessage = `Failed to save template and theme (${response.status})`
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || errorMessage
+        } catch (parseError) {
+          // If response is not JSON, use status text
+          errorMessage = response.statusText || errorMessage
+        }
+        throw new Error(errorMessage)
       }
+
+      // Calculate save duration and update UI immediately when database save completes
+      const saveDuration = performance.now() - saveStartTime
+      setLastSaveTime(saveDuration)
+      setIsSaving(false)
+      colorChangeStartTimeRef.current = null
+      console.log(`💾 Database save completed in ${(saveDuration / 1000).toFixed(2)} seconds`)
 
       // Update URL params to reflect the new template and theme (without page reload)
       const newUrl = new URL(window.location.href)
@@ -430,7 +473,16 @@ function PostPageContent() {
       }
     } catch (err: any) {
       console.error('Error saving template and theme to database:', err)
-      setError(err.message || 'Failed to save template and theme changes')
+      // Only show error if it's not a network error (network errors are usually temporary)
+      // Network errors will be retried on next color change
+      if (err.message && !err.message.includes('fetch failed') && !err.message.includes('NetworkError')) {
+        setError(err.message || 'Failed to save template and theme changes')
+      } else {
+        // For network errors, just log and continue - the save will retry on next change
+        console.warn('Network error saving template/theme (will retry on next change):', err.message)
+      }
+      setIsSaving(false)
+      colorChangeStartTimeRef.current = null
     }
   }
 
@@ -513,12 +565,45 @@ function PostPageContent() {
       
       if (generation.image_urls && generation.image_urls.length > 0) {
         // Check if we have cached data URLs for these images
-        const { getCachedImageDataUrl } = require('../lib/imageCache')
+        const { getCachedImageDataUrl, cacheImageUrls } = require('../lib/imageCache')
         const imageUrls = generation.image_urls.map((url: string) => {
           const cached = getCachedImageDataUrl(url)
           return cached || url
         })
+        
+        // Validate that we have all expected images (should match number of carousels)
+        const expectedCount = generation.slides?.length || 0
+        if (imageUrls.length !== expectedCount) {
+          console.warn(`⚠️ Image count mismatch: expected ${expectedCount} images but found ${imageUrls.length} in database. Missing indices: ${Array.from({length: expectedCount}, (_, i) => i).filter(i => !imageUrls[i]).map(i => i + 1).join(', ')}`)
+          // Log which specific images are missing for debugging
+          if (imageUrls.length < expectedCount) {
+            const missingIndices = Array.from({length: expectedCount}, (_, i) => i).filter(i => !imageUrls[i])
+            console.warn(`   Missing image indices: ${missingIndices.map(i => i + 1).join(', ')}`)
+          }
+        }
+        
         localStorage.setItem('postGeneration_canvasImages', JSON.stringify(imageUrls))
+        
+        // Update hash to match current state so getInitialImages can find cached images
+        const currentHash = JSON.stringify({
+          ideaTitle: generation.idea_title,
+          carousels: generation.slides,
+          underlineWords: generation.underline_words || {},
+          templateId: templateId,
+          colorThemeId: colorThemeId
+        })
+        localStorage.setItem('postGeneration_fullContentHash', currentHash)
+        
+        // Convert signed URLs to data URLs in background (if not already cached)
+        const signedUrls = generation.image_urls.filter((url: string) => 
+          url && !url.startsWith('data:image/') && !getCachedImageDataUrl(url)
+        )
+        if (signedUrls.length > 0) {
+          // Convert in background without blocking
+          cacheImageUrls(signedUrls).catch((err: unknown) => 
+            console.error('[post-page] Error caching images in background:', err)
+          )
+        }
       }
     } catch (error) {
       console.error('Error storing in localStorage:', error)
@@ -1352,7 +1437,8 @@ function PostPageContent() {
                           Carousel Style
                         </h4>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-                          <div style={{ minWidth: 0 }}>
+                          {/* Template selector commented out - users cannot change template after generation */}
+                          {/* <div style={{ minWidth: 0 }}>
                             <label style={{ display: 'block', marginBottom: '8px', fontSize: isMobile ? '11px' : '13px', fontWeight: '500', color: '#000000' }}>
                               Template
                             </label>
@@ -1397,7 +1483,7 @@ function PostPageContent() {
                               </span>
                               <span style={{ fontSize: '12px', color: '#666666', flexShrink: 0, marginLeft: '8px' }}>▼</span>
                             </button>
-                          </div>
+                          </div> */}
                           <div style={{ minWidth: 0 }}>
                             <label style={{ display: 'block', marginBottom: '8px', fontSize: isMobile ? '11px' : '13px', fontWeight: '500', color: '#000000' }}>
                               Color Theme
@@ -1446,28 +1532,6 @@ function PostPageContent() {
                                   )
                                 })}
                               </div>
-                              {(isSaving || lastSaveTime !== null) && (
-                                <div style={{
-                                  marginTop: '12px',
-                                  fontSize: isMobile ? '11px' : '12px',
-                                  color: isSaving ? '#666666' : '#10b981',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '6px'
-                                }}>
-                                  {isSaving ? (
-                                    <>
-                                      <Loader2 size={14} className="animate-spin" />
-                                      <span>Saving to database...</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <CheckCircle size={14} />
-                                      <span>Saved in {(lastSaveTime! / 1000).toFixed(2)}s</span>
-                                    </>
-                                  )}
-                                </div>
-                              )}
                             </div>
                           </div>
                         </div>
@@ -1740,13 +1804,8 @@ function PostPageContent() {
                       aiImageStyle="animated"
                       onGenerationComplete={() => {
                         console.log('✅ Generation rendering complete')
-                        if (colorChangeStartTimeRef.current) {
-                          const saveDuration = performance.now() - colorChangeStartTimeRef.current
-                          setLastSaveTime(saveDuration)
-                          setIsSaving(false)
-                          colorChangeStartTimeRef.current = null
-                          console.log(`💾 Database save completed in ${(saveDuration / 1000).toFixed(2)} seconds`)
-                        }
+                        // Note: Database save completion is now handled in saveTemplateAndThemeToDatabase
+                        // This callback is only for carousel generation completion
                       }}
                     />
                   </div>
@@ -1756,8 +1815,8 @@ function PostPageContent() {
           </div>
         </div>
 
-        {/* Template Selector Modal */}
-        <TemplateSelectorModal
+        {/* Template Selector Modal - Commented out: users cannot change template after generation */}
+        {/* <TemplateSelectorModal
           isOpen={showTemplateModal}
           onClose={() => setShowTemplateModal(false)}
           selectedTemplateId={templateId}
@@ -1771,7 +1830,7 @@ function PostPageContent() {
             // Save to database when user changes template
             saveTemplateAndThemeToDatabase(id, newDefaultTheme)
           }}
-        />
+        /> */}
 
         {/* Share to Threads Modal */}
         {showShareModal && generationId && typeof window !== 'undefined' && createPortal(

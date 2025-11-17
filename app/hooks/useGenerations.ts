@@ -30,76 +30,92 @@ const fetcher = async (url: string) => {
 }
 
 // Helper to replace image URLs with cached data URLs
+// OPTIMIZED: Don't replace thumbnails - they use original URLs for faster loading
 function replaceWithCachedImageUrls(generations: any[]): any[] {
   return generations.map(gen => {
     const updated = { ...gen }
     
-    // Replace imageUrls with cached data URLs if available
+    // Only replace full images (imageUrls/image_urls), not thumbnails
+    // Thumbnails use original URLs directly for better performance
     if (gen.imageUrls && Array.isArray(gen.imageUrls)) {
       updated.imageUrls = gen.imageUrls.map((url: string) => {
+        // Skip if already a data URL
+        if (url && url.startsWith('data:image/')) return url
         const cached = getCachedImageDataUrl(url)
         return cached || url
       })
     }
     if (gen.image_urls && Array.isArray(gen.image_urls)) {
       updated.image_urls = gen.image_urls.map((url: string) => {
+        // Skip if already a data URL
+        if (url && url.startsWith('data:image/')) return url
         const cached = getCachedImageDataUrl(url)
         return cached || url
       })
     }
-    if (gen.thumbnail_urls && Array.isArray(gen.thumbnail_urls)) {
-      updated.thumbnail_urls = gen.thumbnail_urls.map((url: string) => {
-        const cached = getCachedImageDataUrl(url)
-        return cached || url
-      })
-    }
+    // Keep thumbnail_urls as original URLs (no conversion needed)
+    // This makes thumbnails load faster and uses less storage
     
     return updated
   })
 }
 
 // Custom fetcher for generations list with localStorage caching
+// OPTIMIZED: Reduced duplicate calls and better caching strategy
 const cachedListFetcher = async (url: string, userId: string, limit: number, offset: number) => {
   // Check cache first
   const cached = getCachedGenerations(userId, limit, offset)
   if (cached) {
-    // Replace image URLs with cached data URLs
+    // Replace image URLs with cached data URLs (only for full images, not thumbnails)
     const cachedWithImages = {
       ...cached,
       generations: replaceWithCachedImageUrls(cached.generations || [])
     }
     
     // Return cached data immediately, but also refresh in background
-    console.log('[useGenerations] Using cached data, refreshing in background')
+    // Only log in development to reduce console spam
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[useGenerations] Using cached data, refreshing in background')
+    }
+    
+    // Background refresh (non-blocking)
     fetch(url)
       .then(res => res.json())
       .then(data => {
         // Cache the fresh data
         if (data.generations && data.totalCount !== undefined) {
           setCachedGenerations(userId, data, limit, offset)
-          // Convert image URLs to data URLs in background
+          // Only cache images for first few generations (optimized)
           convertAndCacheImages(data.generations)
         }
       })
-      .catch(err => console.error('[useGenerations] Background refresh failed:', err))
+      .catch(err => {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[useGenerations] Background refresh failed:', err)
+        }
+      })
     
     return cachedWithImages
   }
   
   // Cache miss - fetch from API
-  console.log('[useGenerations] Cache miss, fetching from API')
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[useGenerations] Cache miss, fetching from API')
+  }
   const data = await fetcher(url)
   
   // Cache the response
   if (data.generations && data.totalCount !== undefined) {
     setCachedGenerations(userId, data, limit, offset)
-    // Convert image URLs to data URLs in background (don't block)
-    convertAndCacheImages(data.generations).catch(err => 
-      console.error('[useGenerations] Error caching images:', err)
-    )
+    // Only cache images for first few generations (optimized, non-blocking)
+    convertAndCacheImages(data.generations).catch(err => {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[useGenerations] Error caching images:', err)
+      }
+    })
   }
   
-  // Replace with cached image URLs if available
+  // Replace with cached image URLs if available (only for full images)
   if (data.generations) {
     data.generations = replaceWithCachedImageUrls(data.generations)
   }
@@ -191,17 +207,33 @@ const cachedGenerationFetcher = async (url: string, id: string, userId: string) 
 }
 
 // Helper to convert and cache images for multiple generations
+// OPTIMIZED: Only cache full images, not thumbnails (thumbnails use original URLs)
+// Only cache images for the first few generations to avoid overwhelming localStorage
 async function convertAndCacheImages(generations: any[]): Promise<void> {
+  // Only process first 3 generations to avoid caching too many images at once
+  const generationsToProcess = generations.slice(0, 3)
   const allImageUrls: string[] = []
   
-  for (const gen of generations) {
+  for (const gen of generationsToProcess) {
+    // Only cache full images, not thumbnails
+    // Thumbnails will use original URLs directly (faster, less storage)
     const imageUrls = gen.imageUrls || gen.image_urls || []
-    const thumbnailUrls = gen.thumbnail_urls || []
-    allImageUrls.push(...imageUrls, ...thumbnailUrls)
+    // Filter out data URLs (already cached) and only cache signed URLs
+    const urlsToCache = imageUrls.filter((url: string) => 
+      url && 
+      typeof url === 'string' && 
+      !url.startsWith('data:image/') && 
+      url.trim().length > 0
+    )
+    allImageUrls.push(...urlsToCache)
   }
   
-  if (allImageUrls.length > 0) {
-    await cacheImageUrls(allImageUrls)
+  // Only cache if we have a reasonable number of images (max 15)
+  if (allImageUrls.length > 0 && allImageUrls.length <= 15) {
+    // Cache in background without blocking
+    cacheImageUrls(allImageUrls).catch(err => 
+      console.error('[useGenerations] Error caching images:', err)
+    )
   }
 }
 
@@ -227,8 +259,10 @@ export function useGenerations(userId: string | undefined, limit: number = 6, of
     {
       revalidateOnFocus: false, // Don't refetch when window regains focus
       revalidateOnReconnect: false, // Don't refetch on reconnect (use cache)
-      dedupingInterval: 5000, // Dedupe requests within 5 seconds
+      dedupingInterval: 10000, // Dedupe requests within 10 seconds (increased to reduce duplicate calls)
       fallbackData: getInitialData(), // Use cached data as fallback
+      // Prevent unnecessary revalidation
+      revalidateIfStale: false,
     }
   )
 

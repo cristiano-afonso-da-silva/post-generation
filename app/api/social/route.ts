@@ -103,20 +103,155 @@ async function callGeminiWithRetry(
 }
 
 const safeJsonParse = (text: string) => {
-  // First attempt: try parsing as-is
-  try {
-    return JSON.parse(text);
-  } catch (e) {
+  // Preprocess: Clean up the response
+  let cleaned = text
     // Remove markdown code blocks
-    let cleaned = text.replace(/^```json\s*|\s*```$/g, '').trim();
+    .replace(/^```json\s*|\s*```$/g, '')
+    .trim();
+  
+  // Fix unterminated strings by finding and closing them
+  // This handles cases where Gemini returns strings with excessive tabs/newlines that break JSON
+  let fixed = '';
+  let inString = false;
+  let escapeNext = false;
+  let stringStart = -1;
+  
+  for (let i = 0; i < cleaned.length; i++) {
+    const char = cleaned[i];
     
-    // Second attempt: try parsing after removing markdown
+    if (escapeNext) {
+      fixed += char;
+      escapeNext = false;
+      continue;
+    }
+    
+    if (char === '\\') {
+      fixed += char;
+      escapeNext = true;
+      continue;
+    }
+    
+    if (char === '"') {
+      if (!inString) {
+        stringStart = i;
+        inString = true;
+      } else {
+        inString = false;
+        stringStart = -1;
+      }
+      fixed += char;
+      continue;
+    }
+    
+    if (inString) {
+      // Inside a string: normalize excessive whitespace
+      if (char === '\t' || char === '\n' || char === '\r') {
+        // Replace tabs/newlines with single space, but avoid multiple spaces in a row
+        if (fixed[fixed.length - 1] !== ' ') {
+          fixed += ' ';
+        }
+      } else if (char === '\u0000') {
+        // Remove null characters
+        continue;
+      } else {
+        fixed += char;
+      }
+    } else {
+      fixed += char;
+    }
+  }
+  
+  // Close any unterminated strings
+  if (inString) {
+    fixed += '"';
+  }
+  
+  // Use the fixed version for all attempts
+  cleaned = fixed;
+  
+  // Additional cleanup: fix common JSON structural issues
+  // First, remove trailing commas (safe to do globally)
+  cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1');
+  
+  // Fix missing commas between properties (only outside strings)
+  let commaFixed = '';
+  let inStr = false;
+  let escapeNextComma = false;
+  let lastChar = '';
+  
+  for (let i = 0; i < cleaned.length; i++) {
+    const char = cleaned[i];
+    
+    if (escapeNextComma) {
+      commaFixed += char;
+      escapeNextComma = false;
+      lastChar = char;
+      continue;
+    }
+    
+    if (char === '\\') {
+      commaFixed += char;
+      escapeNextComma = true;
+      lastChar = char;
+      continue;
+    }
+    
+    if (char === '"') {
+      inStr = !inStr;
+      commaFixed += char;
+      lastChar = char;
+      continue;
+    }
+    
+    if (!inStr) {
+      // Outside strings: fix missing commas
+      // Only fix obvious cases to avoid breaking valid JSON
+      
+      // Pattern 1: } or ] followed by " or { (missing comma between objects/arrays)
+      if ((lastChar === '}' || lastChar === ']') && (char === '"' || char === '{' || char === '[')) {
+        commaFixed += ',';
+      }
+      // Pattern 2: Closing quote followed by opening quote (likely missing comma)
+      // But only if the next non-whitespace is not a colon (which would indicate a key)
+      else if (lastChar === '"' && char === '"') {
+        let j = i + 1;
+        while (j < cleaned.length && /\s/.test(cleaned[j])) j++;
+        if (j < cleaned.length && cleaned[j] !== ':') {
+          // Look back to find what ended before this quote
+          let k = commaFixed.length - 1;
+          while (k >= 0 && /\s/.test(commaFixed[k])) k--;
+          // If we ended with a quote, }, ], or a value token, we likely need a comma
+          if (k >= 0) {
+            const prevChar = commaFixed[k];
+            const prev4 = k >= 4 ? commaFixed.substring(k-4, k+1) : '';
+            const prev5 = k >= 5 ? commaFixed.substring(k-5, k+1) : '';
+            if (prevChar === '"' || prevChar === '}' || prevChar === ']' || 
+                prev4 === 'true' || prev5 === 'false' || prev4 === 'null' ||
+                (prevChar === 'e' && /[0-9]/.test(commaFixed[k-1]))) {
+              commaFixed += ',';
+            }
+          }
+        }
+      }
+    }
+    
+    commaFixed += char;
+    lastChar = char;
+  }
+  
+  cleaned = commaFixed
+    // Fix double commas
+    .replace(/,,+/g, ',')
+    // Remove commas at start of objects/arrays
+    .replace(/([{[])\s*,/g, '$1');
+  
+  // First attempt: try parsing the preprocessed version
+  try {
+    return JSON.parse(cleaned);
+  } catch (e) {
+    // Second attempt: fix control characters and unescaped quotes
+    // This is a more sophisticated approach that handles unterminated strings
     try {
-      return JSON.parse(cleaned);
-    } catch (e2) {
-      // Third attempt: fix control characters and unescaped quotes
-      // This is a more sophisticated approach that handles unterminated strings
-      try {
         let result = '';
         let inString = false;
         let escapeNext = false;
@@ -177,8 +312,8 @@ const safeJsonParse = (text: string) => {
         }
         
         return JSON.parse(result);
-      } catch (e3) {
-        // Fourth attempt: try to find and extract valid JSON from the response
+      } catch (e2) {
+        // Third attempt: try to find and extract valid JSON from the response
         // Look for JSON object boundaries
         const jsonStart = cleaned.indexOf('{');
         const jsonEnd = cleaned.lastIndexOf('}');
@@ -253,8 +388,8 @@ const safeJsonParse = (text: string) => {
             fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
             
             return JSON.parse(fixed);
-          } catch (e4) {
-            // Fifth attempt: more aggressive repair
+          } catch (e3) {
+            // Fourth attempt: more aggressive repair
             try {
               let lastAttempt = cleaned
                 // Remove any trailing commas before closing braces/brackets
@@ -310,7 +445,7 @@ const safeJsonParse = (text: string) => {
               }
               
               return JSON.parse(repaired);
-            } catch (e5) {
+            } catch (e4) {
               // If all attempts fail, throw the original error with context
               console.error('❌ All JSON parsing attempts failed');
               console.error('📄 Original text length:', text.length);
@@ -319,7 +454,7 @@ const safeJsonParse = (text: string) => {
               console.error('📄 Last 500 chars:', cleaned.substring(Math.max(0, cleaned.length - 500)));
               
               // Try to extract error position from the error message
-              const errorMessage = e2 instanceof Error ? e2.message : String(e2);
+              const errorMessage = e4 instanceof Error ? e4.message : String(e4);
               const positionMatch = errorMessage.match(/position (\d+)/);
               if (positionMatch) {
                 const pos = parseInt(positionMatch[1], 10);
@@ -342,7 +477,6 @@ const safeJsonParse = (text: string) => {
         }
       }
     }
-  }
 };
 
 const formatToMarkdown = (note: any, underlineWords: any = {}) => {
@@ -824,23 +958,45 @@ async function extractUnderlineWordsWithGemini(carousels: any[]): Promise<Record
       let imageSearchKeywords = parsed.imageSearch || '';
       
       // If Gemini didn't provide imageSearch, generate basic keywords from content/title
-      if (!imageSearchKeywords) {
-        const sourceText = carousel.kind === 'HOOK' 
-          ? (carousel.title || carousel.content || '')
-          : carousel.content;
+      // CRITICAL: Always ensure imageSearchKeywords exists for MIDDLE slides to enable image fetching
+      if (!imageSearchKeywords || !imageSearchKeywords.trim()) {
+        // For HOOK: use title, subtitle, or content
+        // For MIDDLE: use content first, then title as fallback
+        // For CTA: use title or content
+        let sourceText = '';
+        if (carousel.kind === 'HOOK') {
+          sourceText = carousel.title || carousel.subtitle || carousel.content || '';
+        } else if (carousel.kind === 'MIDDLE') {
+          sourceText = carousel.content || carousel.title || '';
+        } else {
+          // CTA
+          sourceText = carousel.title || carousel.content || '';
+        }
         
-        if (sourceText) {
-          console.warn(`⚠️  Gemini did not provide imageSearch for ${carousel.kind} carousel ${i + 1}, generating fallback...`);
+        if (sourceText && sourceText.trim()) {
+          console.warn(`⚠️  Gemini did not provide imageSearch for ${carousel.kind} carousel ${i + 1}, generating fallback from content...`);
           // Extract first few meaningful words from content/title as fallback
           const words = sourceText.toLowerCase()
             .replace(/[.,!?;:'"]/g, '')
             .split(' ')
-            .filter((w: string) => w.length > 3 && !['that', 'this', 'with', 'from', 'have', 'been', 'they', 'their', 'your', 'youre'].includes(w))
+            .filter((w: string) => w.length > 3 && !['that', 'this', 'with', 'from', 'have', 'been', 'they', 'their', 'your', 'youre', 'what', 'when', 'where', 'which', 'there', 'these', 'those'].includes(w))
             .slice(0, 4)
             .join(' ');
-          imageSearchKeywords = words || (carousel.kind === 'HOOK' ? 'illustration concept' : 'lifestyle product');
+          imageSearchKeywords = words || (carousel.kind === 'HOOK' ? 'illustration concept' : carousel.kind === 'MIDDLE' ? 'lifestyle product' : 'call to action');
           console.log(`   Generated fallback keywords: "${imageSearchKeywords}"`);
+        } else {
+          // Even if sourceText is empty, set a default fallback
+          console.warn(`⚠️  Gemini did not provide imageSearch for ${carousel.kind} carousel ${i + 1}, and no content available. Using default fallback...`);
+          imageSearchKeywords = carousel.kind === 'HOOK' ? 'illustration concept' : carousel.kind === 'MIDDLE' ? 'lifestyle product' : 'call to action';
+          console.log(`   Generated default fallback keywords: "${imageSearchKeywords}"`);
         }
+      }
+      
+      // Final safety check: ensure imageSearchKeywords is never empty for MIDDLE slides
+      if (carousel.kind === 'MIDDLE' && (!imageSearchKeywords || !imageSearchKeywords.trim())) {
+        console.error(`❌ CRITICAL: imageSearchKeywords is still empty for MIDDLE carousel ${i + 1} after fallback generation!`);
+        imageSearchKeywords = 'lifestyle product'; // Force a default
+        console.log(`   Forced default keywords: "${imageSearchKeywords}"`);
       }
       
       results[i] = {
@@ -855,7 +1011,39 @@ async function extractUnderlineWordsWithGemini(carousels: any[]): Promise<Record
       
     } catch (error: any) {
       console.error(`❌ Error extracting emphasis for carousel ${i + 1}:`, error.message);
-      results[i] = { underline: '', highlight: '', imageSearch: '', imageUrl: null, originalImageUrl: null };
+      // Generate fallback imageSearchKeywords even on error to ensure images can be fetched
+      let fallbackKeywords = '';
+      if (carousel.kind === 'HOOK') {
+        const sourceText = carousel.title || carousel.subtitle || carousel.content || '';
+        if (sourceText) {
+          const words = sourceText.toLowerCase()
+            .replace(/[.,!?;:'"]/g, '')
+            .split(' ')
+            .filter((w: string) => w.length > 3)
+            .slice(0, 4)
+            .join(' ');
+          fallbackKeywords = words || 'illustration concept';
+        } else {
+          fallbackKeywords = 'illustration concept';
+        }
+      } else if (carousel.kind === 'MIDDLE') {
+        const sourceText = carousel.content || carousel.title || '';
+        if (sourceText) {
+          const words = sourceText.toLowerCase()
+            .replace(/[.,!?;:'"]/g, '')
+            .split(' ')
+            .filter((w: string) => w.length > 3)
+            .slice(0, 4)
+            .join(' ');
+          fallbackKeywords = words || 'lifestyle product';
+        } else {
+          fallbackKeywords = 'lifestyle product';
+        }
+      } else {
+        fallbackKeywords = 'call to action';
+      }
+      results[i] = { underline: '', highlight: '', imageSearch: fallbackKeywords, imageUrl: null, originalImageUrl: null };
+      console.log(`   Generated fallback imageSearchKeywords on error: "${fallbackKeywords}"`);
     }
   }
   
@@ -863,137 +1051,101 @@ async function extractUnderlineWordsWithGemini(carousels: any[]): Promise<Record
 }
 
 async function extractUnderlineWords(carousels: any[], includeImages: boolean = true, useAIImages: boolean = false, aiImageStyle: AIImageStyle = 'animated', templateId?: string) {
-  const imageSource = useAIImages ? 'Pollinations.AI (AI-generated)' : 'Pexels (stock photos)';
-  console.log(`\n🎨 Extracting emphasis words and ${includeImages ? `🖼️ images from ${imageSource} (enabled)` : '📝 NO images (disabled)'}`);
+  console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+  console.log(`🎨 EXTRACT UNDERLINE WORDS${includeImages ? ' & IMAGES' : ''}`);
+  console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+  console.log(`📊 Parameters: includeImages=${includeImages}, useAIImages=${useAIImages}`);
+  console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
   
-  // Get emphasis extraction using Gemini
+  // Step 1: Extract underline/highlight words (always needed)
   const results: Record<number, any> = await extractUnderlineWordsWithGemini(carousels);
   
-  // Handle image fetching (provider-agnostic)
+  // Step 2: Fetch images ONLY if includeImages is true
+  if (!includeImages) {
+    // Text-only mode: just return underline words without images
+    return results;
+  }
+  
+  // Image mode: fetch images for eligible carousels
   const usedPexelsIds = new Set<number>();
   const usedPollinationsIds = new Set<string>();
-  
-  // Get template to check hook image settings
   const template = templateId ? getCarouselTemplate(templateId) : null;
-  const hookUsesImage = template?.hookLayout?.useImage || false;
+  const defaultImagePlacement = { hook: false, content: true, cta: false };
+  const imagePlacement = template?.imagePlacement || defaultImagePlacement;
 
   for (let i = 0; i < carousels.length; i++) {
     const carousel = carousels[i];
-    const imageSearchKeywords = results[i]?.imageSearch || '';
     
-    // For MIDDLE carousels, fetch image if enabled and we have search keywords
-    // For HOOK carousels, fetch image if template has useImage enabled and we have search keywords
-    const shouldFetchImage = includeImages && 
-      imageSearchKeywords && 
-      imageSearchKeywords.trim() &&
-      ((carousel.kind === 'MIDDLE') || (carousel.kind === 'HOOK' && hookUsesImage));
+    // Ensure results[i] exists
+    if (!results[i]) {
+      results[i] = {
+        underline: '',
+        highlight: '',
+        imageSearch: '',
+        imageUrl: null,
+        originalImageUrl: null
+      };
+    }
     
-    if (shouldFetchImage) {
-      const carouselType = carousel.kind === 'HOOK' ? 'HOOK' : 'MIDDLE';
-      console.log(`\n🖼️  ${carouselType} CAROUSEL ${i + 1}: Attempting to fetch image...`);
-      console.log(`   Keywords: "${imageSearchKeywords}"`);
-      console.log(`   includeImages flag: ${includeImages}`);
-      console.log(`   useAIImages flag: ${useAIImages}`);
-      console.log(`   carousel.kind: ${carousel.kind}`);
-      console.log(`   imageSearchKeywords.trim(): "${imageSearchKeywords.trim()}"`);
-      
+    const imageSearchKeywords = results[i].imageSearch || '';
+    
+    // Determine if this slide type should have images
+    const slideType = carousel.kind === 'HOOK' ? 'hook' : carousel.kind === 'MIDDLE' ? 'content' : 'cta';
+    const templateAllowsImage = slideType === 'hook' ? imagePlacement.hook : 
+                                 slideType === 'content' ? imagePlacement.content : false;
+    
+    // Debug logging for template 4
+    if (templateId === 'template4') {
+      console.log(`🔍 Template 4 - Carousel ${i + 1} (${carousel.kind}):`);
+      console.log(`   imageSearchKeywords: "${imageSearchKeywords}"`);
+      console.log(`   slideType: ${slideType}`);
+      console.log(`   templateAllowsImage: ${templateAllowsImage}`);
+      console.log(`   imagePlacement:`, imagePlacement);
+    }
+    
+    // Simple check: fetch image if keywords exist and template allows it
+    if (imageSearchKeywords?.trim() && templateAllowsImage) {
       try {
         if (useAIImages) {
-          // Use Pollinations.AI to generate an image based on the description
-          console.log(`   Using Pollinations.AI for AI-generated image`);
-          
-          // Get template if templateId is provided
+          // Build AI prompt from template or default
           let aiPrompt: string;
           if (templateId && template) {
-            // For HOOK slides, use hookImagePrompt if available, otherwise fall back to imagePrompt
             if (carousel.kind === 'HOOK' && template.hookImagePrompt) {
               aiPrompt = template.hookImagePrompt.replace('{input}', imageSearchKeywords);
-              console.log(`   Using template hookImagePrompt: "${template.hookImagePrompt}"`);
-              console.log(`   Replaced {input} with: "${imageSearchKeywords}"`);
             } else if (template.imagePrompt) {
-              // Use template's imagePrompt, replacing {input} with imageSearchKeywords
               aiPrompt = template.imagePrompt.replace('{input}', imageSearchKeywords);
-              console.log(`   Using template imagePrompt: "${template.imagePrompt}"`);
-              console.log(`   Replaced {input} with: "${imageSearchKeywords}"`);
             } else {
-              // Fallback to default buildAIImagePrompt if template has no imagePrompt
               aiPrompt = buildAIImagePrompt(imageSearchKeywords, aiImageStyle);
-              console.log(`   Template has no imagePrompt, using default style: ${aiImageStyle}`);
             }
           } else {
-            // No templateId provided, use default buildAIImagePrompt
             aiPrompt = buildAIImagePrompt(imageSearchKeywords, aiImageStyle);
-            console.log(`   No templateId provided, using default style: ${aiImageStyle}`);
           }
           
           const imageResult = await generatePollinationsImage(aiPrompt, usedPollinationsIds);
-          
-          // Store the Pollinations URL - it will be routed through proxy in CarouselImageGenerator
-          // to avoid CORS issues when loading images with crossOrigin='anonymous'
           results[i].imageUrl = imageResult?.url || null;
           results[i].originalImageUrl = imageResult?.url || null;
-          
-          if (imageResult?.id) {
-            usedPollinationsIds.add(imageResult.id);
-          }
-          if (imageResult?.url) {
-            console.log(`✅ SUCCESS: AI-generated image added to ${carouselType} carousel ${i + 1}`);
-            console.log(`   Image URL: ${imageResult.url}`);
-            console.log(`   ℹ️  Will be routed through proxy to avoid CORS issues`);
-          } else {
-            console.error(`❌ FAILED: No image URL returned from Pollinations.AI for ${carouselType} carousel ${i + 1}`);
-            console.error(`   This could mean: API error or network issue`);
-            results[i].imageUrl = null;
-            results[i].originalImageUrl = null;
-          }
+          if (imageResult?.id) usedPollinationsIds.add(imageResult.id);
         } else {
-          // Use Pexels to search for stock photos
-          console.log(`   Using Pexels for stock photo search`);
-          
           const imageResult = await searchPexelsImage(imageSearchKeywords, usedPexelsIds);
           results[i].originalImageUrl = imageResult?.url || null;
           results[i].imageUrl = imageResult?.url || null;
-          if (imageResult?.id) {
-            usedPexelsIds.add(imageResult.id);
-          }
-          if (imageResult?.url) {
-            console.log(`✅ SUCCESS: Stock image added to ${carouselType} carousel ${i + 1}`);
-            console.log(`   Image URL: ${imageResult.url}`);
-          } else {
-            console.error(`❌ FAILED: No image URL returned from Pexels for ${carouselType} carousel ${i + 1}`);
-            console.error(`   Pexels API returned:`, imageResult);
-            console.error(`   This could mean: API key issue, rate limit, or no matching images`);
-            results[i].imageUrl = null;
-            results[i].originalImageUrl = null;
-          }
+          if (imageResult?.id) usedPexelsIds.add(imageResult.id);
         }
-      } catch (imageError: any) {
-        console.error(`❌ EXCEPTION during image fetch for ${carouselType} carousel ${i + 1}:`);
-        console.error(`   Error:`, imageError);
-        console.error(`   Error message:`, imageError?.message);
-        console.error(`   Stack:`, imageError?.stack);
+      } catch (error: any) {
+        console.error(`Error fetching image for carousel ${i + 1}:`, error.message);
         results[i].imageUrl = null;
         results[i].originalImageUrl = null;
       }
     } else {
-      // Log why image fetch was skipped
-      if (carousel.kind === 'MIDDLE' || (carousel.kind === 'HOOK' && hookUsesImage)) {
-        if (!includeImages) {
-          console.log(`\n📝 MIDDLE CAROUSEL ${i + 1}: Images disabled by user (includeImages=${includeImages}) - skipping image fetch`);
-        } else if (!imageSearchKeywords || !imageSearchKeywords.trim()) {
-          console.log(`\n⚠️  MIDDLE CAROUSEL ${i + 1}: NO imageSearch keywords!`);
-          console.log(`   includeImages: ${includeImages}`);
-          console.log(`   imageSearchKeywords: "${imageSearchKeywords}"`);
-          console.log(`   This should not happen with the fallback in place.`);
-        } else {
-          console.log(`\n⚠️  MIDDLE CAROUSEL ${i + 1}: Unexpected condition - image fetch skipped`);
-          console.log(`   includeImages: ${includeImages}`);
-          console.log(`   carousel.kind: ${carousel.kind}`);
-          console.log(`   imageSearchKeywords: "${imageSearchKeywords}"`);
-        }
-      }
+      // No image for this carousel - ensure image fields are set
+      results[i].imageUrl = results[i].imageUrl || null;
+      results[i].originalImageUrl = results[i].originalImageUrl || null;
     }
   }
+  
+  // Log summary
+  const imagesFetched = Object.values(results).filter((r: any) => r.imageUrl || r.originalImageUrl).length;
+  console.log(`✅ Extracted underline words and fetched ${imagesFetched} images`);
   
   return results;
 }
@@ -1124,29 +1276,39 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
   const startTime = Date.now();
   
   try {
-    console.log(`🚀 Generating note for: "${ideaTitle}"`);
-    console.log(`🖼️ generateNote: includeImages parameter =`, includeImages);
-    console.log(`🎨 generateNote: useAIImages parameter =`, useAIImages);
-    console.log(`🎭 generateNote: aiImageStyle parameter =`, aiImageStyle);
-    console.log(`📋 generateNote: templateId parameter =`, templateId);
+    console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`🚀 GENERATE NOTE FUNCTION`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`📝 ideaTitle: "${ideaTitle}"`);
+    console.log(`📄 accountDescription: "${accountDescription?.substring(0, 100)}${accountDescription && accountDescription.length > 100 ? '...' : ''}"`);
+    console.log(`🖼️ includeImages: ${includeImages}`);
+    console.log(`🎨 useAIImages: ${useAIImages}`);
+    console.log(`🎭 aiImageStyle: ${aiImageStyle}`);
+    console.log(`📋 templateId: ${templateId || 'none'}`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
     
     // Get note data from Gemini
+    console.log(`📡 Step 1: Calling generateNoteWithGemini()...`);
     const noteResult = await generateNoteWithGemini(ideaTitle, accountDescription, templateId);
     
     if (!noteResult.success) {
+      console.error(`❌ generateNoteWithGemini failed:`, noteResult.error);
       return noteResult;
     }
     
     const data = noteResult.data;
     
     if (!data) {
+      console.error(`❌ No data returned from note generation`);
       return {
         success: false,
         error: 'No data returned from note generation',
       };
     }
     
-    console.log(`🖼️ generateNote: Calling extractUnderlineWords with includeImages =`, includeImages, 'useAIImages =', useAIImages, 'aiImageStyle =', aiImageStyle, 'templateId =', templateId);
+    console.log(`✅ Step 1 complete: Generated ${data.slides?.length || 0} carousels`);
+    
+    // Step 2: Extract underline words (and fetch images if includeImages is true)
     const underlineWords = await extractUnderlineWords(data.slides, includeImages, useAIImages, aiImageStyle, templateId);
     
     // Calculate stats before formatting
@@ -1166,6 +1328,18 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
     };
     
     const formatted = formatToMarkdown(noteWithStats, underlineWords);
+    
+    // Count images in underlineWords
+    const imagesInUnderlineWords = Object.values(underlineWords).filter((uw: any) => uw.imageUrl || uw.originalImageUrl).length;
+    
+    console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`✅ GENERATE NOTE COMPLETE`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`📊 Summary:`);
+    console.log(`   Total slides: ${data.slides.length}`);
+    console.log(`   Images in underlineWords: ${imagesInUnderlineWords}/${data.slides.length}`);
+    console.log(`   Generation time: ${Date.now() - startTime}ms`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
     
     return {
       success: true,
@@ -1189,7 +1363,10 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
       }
     };
   } catch (error: any) {
-    console.error('Error generating note:', error);
+    console.error(`\n❌ EXCEPTION in generateNote:`);
+    console.error(`   Error:`, error);
+    console.error(`   Error message:`, error.message);
+    console.error(`   Error stack:`, error.stack);
     return {
       success: false,
       error: error.message || 'Failed to generate note',
@@ -1246,9 +1423,20 @@ export async function POST(request: NextRequest) {
       const shouldIncludeImages = includeImages !== undefined ? includeImages : true;
       const shouldUseAIImages = useAIImages !== undefined ? useAIImages : false;
       const resolvedAIStyle: AIImageStyle = shouldUseAIImages && (aiImageStyle === 'surreal' || aiImageStyle === 'animated') ? aiImageStyle : 'animated';
-      console.log('🖼️ Backend: Received includeImages =', includeImages, '→ Using shouldIncludeImages =', shouldIncludeImages);
-      console.log('🎨 Backend: Received useAIImages =', useAIImages, '→ Using shouldUseAIImages =', shouldUseAIImages);
-      console.log('🎭 Backend: Using AI image style =', resolvedAIStyle);
+      
+      console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('📥 API ROUTE: /api/social - action=note');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('📝 ideaTitle:', ideaTitle);
+      console.log('📄 accountDescription:', accountDescription?.substring(0, 100) + '...');
+      console.log('🖼️ includeImages (raw):', includeImages);
+      console.log('🖼️ includeImages (resolved):', shouldIncludeImages);
+      console.log('🎨 useAIImages (raw):', useAIImages);
+      console.log('🎨 useAIImages (resolved):', shouldUseAIImages);
+      console.log('🎭 aiImageStyle (raw):', aiImageStyle);
+      console.log('🎭 aiImageStyle (resolved):', resolvedAIStyle);
+      console.log('📋 templateId:', templateId);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
       
       const result = await generateNote(ideaTitle.trim(), accountDescription?.trim() || '', shouldIncludeImages, shouldUseAIImages, resolvedAIStyle, templateId);
       return NextResponse.json(result);
@@ -1262,6 +1450,7 @@ export async function POST(request: NextRequest) {
       console.log('🖼️ Backend: Received includeImages for refreshSlides =', includeImages, '→ Using shouldIncludeImages =', shouldIncludeImages);
       console.log('🎨 Backend: Received useAIImages for refreshSlides =', useAIImages, '→ Using shouldUseAIImages =', shouldUseAIImages);
       console.log('🎭 Backend: Using AI image style for refreshSlides =', resolvedAIStyle);
+      console.log('📋 Backend: Received templateId for refreshSlides =', templateId);
 
       if (!Array.isArray(carouselsInput) || carouselsInput.length === 0) {
         return NextResponse.json(
@@ -1278,8 +1467,8 @@ export async function POST(request: NextRequest) {
       })).map(({ index: _, ...rest }) => rest);
 
       try {
-        console.log('🖼️ refreshSlides: Calling extractUnderlineWords with shouldIncludeImages =', shouldIncludeImages, 'shouldUseAIImages =', shouldUseAIImages, 'aiImageStyle =', resolvedAIStyle);
-        const underlineWords = await extractUnderlineWords(sanitizedCarousels, shouldIncludeImages, shouldUseAIImages, resolvedAIStyle);
+        console.log('🖼️ refreshSlides: Calling extractUnderlineWords with shouldIncludeImages =', shouldIncludeImages, 'shouldUseAIImages =', shouldUseAIImages, 'aiImageStyle =', resolvedAIStyle, 'templateId =', templateId);
+        const underlineWords = await extractUnderlineWords(sanitizedCarousels, shouldIncludeImages, shouldUseAIImages, resolvedAIStyle, templateId);
 
         return NextResponse.json({
           success: true,

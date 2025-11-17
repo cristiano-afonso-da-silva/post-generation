@@ -167,16 +167,32 @@ export async function POST(request: NextRequest) {
       console.log(`⚡ Starting parallel upload of ${images.length} images from API route...`)
       
       // Delete old images if updating (to replace with new ones)
+      // FIXED: Use known file pattern instead of storage.list() to avoid egress
       if (isUpdate) {
-        const { data: oldFiles } = await supabase.storage
-          .from('carousel-images')
-          .list(`${userId}/${generation.id}`)
+        // Try to delete up to 10 old slides (most carousels have 3-5 slides)
+        // We know the pattern: slide-0.png, slide-1.png, etc.
+        const maxOldSlides = 10
+        const filesToDelete: string[] = []
         
-        if (oldFiles && oldFiles.length > 0) {
-          const filesToDelete = oldFiles.map(file => `${userId}/${generation.id}/${file.name}`)
+        // Check which files exist by trying to create signed URLs
+        // If URL creation succeeds, file exists and should be deleted
+        for (let i = 0; i < maxOldSlides; i++) {
+          const filePath = `${userId}/${generation.id}/slide-${i}.png`
+          const { error } = await supabase.storage
+            .from('carousel-images')
+            .createSignedUrl(filePath, 86400)
+          
+          if (!error) {
+            // File exists, add to deletion list
+            filesToDelete.push(filePath)
+          }
+        }
+        
+        if (filesToDelete.length > 0) {
           await supabase.storage
             .from('carousel-images')
             .remove(filesToDelete)
+          console.log(`🗑️ Deleted ${filesToDelete.length} old image files`)
         }
       }
 

@@ -8,3 +8,5 @@ ADD COLUMN IF NOT EXISTS website TEXT;
 -- Note: Both columns are nullable (optional fields)
 -- RLS policies already exist on generations table, so no additional policies needed
 
+
+

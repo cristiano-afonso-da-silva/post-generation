@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { updateUserProfile, getUserCreditsServer } from '@/app/lib/supabase'
+import { updateUserProfile } from '@/app/lib/supabase'
+import { getUserCreditsServerSQL } from '@/app/lib/supabase-mcp'
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,9 +13,11 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const userCredits = await getUserCreditsServer(userId)
+    // Use the same MCP-compatible function as credits check
+    const userCredits = await getUserCreditsServerSQL(userId)
 
     if (!userCredits) {
+      console.error('[USER/PROFILE] Failed to fetch user credits for userId:', userId)
       return NextResponse.json(
         { error: 'Failed to fetch profile' },
         { status: 500 }
@@ -25,9 +28,10 @@ export async function GET(request: NextRequest) {
       success: true,
       accountHandle: userCredits.account_handle || null,
       website: userCredits.website || null,
+      creditsRemaining: userCredits.credits_remaining || 0,
     })
   } catch (error: any) {
-    console.error('Error fetching user profile:', error)
+    console.error('[USER/PROFILE] Error fetching user profile:', error)
     return NextResponse.json(
       { error: error.message || 'Failed to fetch profile' },
       { status: 500 }

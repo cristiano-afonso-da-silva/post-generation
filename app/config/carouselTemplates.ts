@@ -8,8 +8,7 @@ export interface CarouselTemplate {
   name: string
   fonts: {
     hook: {
-      family: string
-      file: string
+      family: string  // Google Font family name (e.g., "Poppins", "Roboto", "Montserrat")
       weight: string
       style: string
       cssFont: string
@@ -17,8 +16,7 @@ export interface CarouselTemplate {
       size: number
     }
     hookTopic?: {
-      family: string
-      file: string
+      family: string  // Google Font family name
       weight: string
       style: string
       cssFont: string
@@ -26,8 +24,7 @@ export interface CarouselTemplate {
       size: number
     }
     hookSubtitle?: {
-      family: string
-      file: string
+      family: string  // Google Font family name
       weight: string
       style: string
       cssFont: string
@@ -35,8 +32,7 @@ export interface CarouselTemplate {
       size: number
     }
     hookCTA?: {
-      family: string
-      file: string
+      family: string  // Google Font family name
       weight: string
       style: string
       cssFont: string
@@ -44,8 +40,7 @@ export interface CarouselTemplate {
       size: number
     }
     title: {
-      family: string
-      file: string
+      family: string  // Google Font family name
       weight: string
       style: string
       cssFont: string
@@ -53,8 +48,7 @@ export interface CarouselTemplate {
       size: number
     }
     content: {
-      family: string
-      file: string
+      family: string  // Google Font family name
       weight: string
       style: string
       cssFont: string
@@ -144,6 +138,13 @@ export interface CarouselTemplate {
     marginTop?: number                         // for bottom images
   }
   
+  // Image placement configuration (which slide types should show images)
+  imagePlacement?: {
+    hook: boolean      // Show images in hook slides
+    content: boolean   // Show images in content/middle slides  
+    cta: boolean      // Show images in CTA slides (should always be false)
+  }
+  
   // Footer configuration
   footer?: {
     enabled: boolean
@@ -212,7 +213,6 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     fonts: {
       hook: {
         family: 'Poppins',
-        file: '/templates/template1/fonts/Poppins-Bold.ttf',
         weight: 'bold',
         style: 'normal',
         cssFont: 'bold 130px Poppins, sans-serif',
@@ -221,7 +221,6 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
       },
       title: {
         family: 'Poppins',
-        file: '/templates/template1/fonts/Poppins-Bold.ttf',
         weight: 'bold',
         style: 'normal',
         cssFont: 'bold 75px Poppins, sans-serif',
@@ -229,11 +228,10 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
         size: 75
       },
       content: {
-        family: 'DreamingOutloudSans',
-        file: '/templates/template1/fonts/DreamingOutloudSans-Regular.otf',
+        family: 'Kalam',
         weight: 'normal',
         style: 'normal',
-        cssFont: '55px DreamingOutloudSans, sans-serif',
+        cssFont: '55px Kalam, sans-serif',
         lineHeight: 70,
         size: 55
       }
@@ -287,6 +285,11 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
         includeMiddleTitles: true
       }
     },
+    imagePlacement: {
+      hook: false,
+      content: true,
+      cta: false
+    },
     defaultColorThemeId: 'gold-green'
   },
   {
@@ -295,7 +298,6 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     fonts: {
       hook: {
         family: 'Playfair Display',
-        file: '/templates/template2/fonts/PlayfairDisplay-BoldItalic.ttf',
         weight: 'bold',
         style: 'italic',
         cssFont: 'bold italic 130px "Playfair Display", serif',
@@ -304,7 +306,6 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
       },
       title: {
         family: 'Playfair Display',
-        file: '/templates/template2/fonts/PlayfairDisplay-BoldItalic.ttf',
         weight: 'bold',
         style: 'italic',
         cssFont: 'bold italic 90px "Playfair Display", serif',
@@ -313,7 +314,6 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
       },
       content: {
         family: 'Playfair Display',
-        file: '/templates/template2/fonts/PlayfairDisplay-Regular.ttf',
         weight: 'normal',
         style: 'normal',
         cssFont: '56px "Playfair Display", serif',
@@ -370,6 +370,11 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
         includeMiddleTitles: true
       }
     },
+    imagePlacement: {
+      hook: false,
+      content: true,
+      cta: false
+    },
     defaultColorThemeId: 'gold-green'
   },
   {
@@ -377,35 +382,31 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     name: 'Template 3 (Modern)',
     fonts: {
       hookTopic: {
-        family: 'OpenSauce',
-        file: '/templates/template3/fonts/open-sauce.one-medium.ttf',
+        family: 'Inter',
         weight: '500',
         style: 'normal',
-        cssFont: '500 28px OpenSauce, sans-serif',
+        cssFont: '500 28px Inter, sans-serif',
         lineHeight: 36,
         size: 28
       },
       hook: {
-        family: 'OpenSauce',
-        file: '/templates/template3/fonts/open-sauce.one-medium.ttf',
+        family: 'Inter',
         weight: '500',
         style: 'normal',
-        cssFont: '500 120px OpenSauce, sans-serif',
+        cssFont: '500 120px Inter, sans-serif',
         lineHeight: 140,
         size: 120
       },
       hookSubtitle: {
-        family: 'OpenSauce',
-        file: '/templates/template3/fonts/open-sauce.one-medium.ttf',
+        family: 'Inter',
         weight: '500',
         style: 'normal',
-        cssFont: '500 42px OpenSauce, sans-serif',
+        cssFont: '500 42px Inter, sans-serif',
         lineHeight: 54,
         size: 42
       },
       hookCTA: {
         family: 'Mansalva',
-        file: '/templates/template3/fonts/Mansalva-Regular.ttf',
         weight: 'normal',
         style: 'normal',
         cssFont: '48px Mansalva, cursive',
@@ -413,20 +414,18 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
         size: 48
       },
       title: {
-        family: 'OpenSauce',
-        file: '/templates/template3/fonts/open-sauce.one-medium.ttf',
+        family: 'Inter',
         weight: '500',
         style: 'normal',
-        cssFont: '500 75px OpenSauce, sans-serif',
+        cssFont: '500 75px Inter, sans-serif',
         lineHeight: 90,
         size: 75
       },
       content: {
-        family: 'OpenSauce',
-        file: '/templates/template3/fonts/open-sauce.one-medium.ttf',
+        family: 'Inter',
         weight: '500',
         style: 'normal',
-        cssFont: '500 52px OpenSauce, sans-serif',
+        cssFont: '500 52px Inter, sans-serif',
         lineHeight: 68,
         size: 52
       }
@@ -511,6 +510,11 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
         includeMiddleTitles: true
       }
     },
+    imagePlacement: {
+      hook: false,
+      content: true,
+      cta: false
+    },
     defaultColorThemeId: 'gold-green'
   },
   // NEW: Template 4 – Dark Retention-style
@@ -520,31 +524,28 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     fonts: {
       // Smaller hook title for Template 4
       hook: {
-        family: 'OpenSauce',
-        file: '/templates/template3/fonts/open-sauce.one-medium.ttf',
+        family: 'Inter',
         weight: '500',
         style: 'normal',
-        cssFont: '500 70px OpenSauce, sans-serif',
+        cssFont: '500 70px Inter, sans-serif',
         lineHeight: 84,
         size: 70
       },
       // Used for slide titles (e.g. "You're Speaking In Jargon.")
       title: {
-        family: 'OpenSauce',
-        file: '/templates/template3/fonts/open-sauce.one-medium.ttf',
+        family: 'Inter',
         weight: '500',
         style: 'normal',
-        cssFont: '500 88px OpenSauce, sans-serif',
+        cssFont: '500 88px Inter, sans-serif',
         lineHeight: 104,
         size: 88
       },
       // Used for the explanation paragraph under the title
       content: {
-        family: 'OpenSauce',
-        file: '/templates/template3/fonts/open-sauce.one-medium.ttf',
+        family: 'Inter',
         weight: '500',
         style: 'normal',
-        cssFont: '500 50px OpenSauce, sans-serif',
+        cssFont: '500 50px Inter, sans-serif',
         lineHeight: 70,
         size: 50
       }
@@ -616,6 +617,11 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
         includeMiddleTitles: false  // Template 4 doesn't need titles on middle slides
       }
     },
+    imagePlacement: {
+      hook: true,
+      content: true,
+      cta: false
+    },
     defaultColorThemeId: 'transparent'
   },
   {
@@ -623,17 +629,15 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     name: 'Template 5 (Serif Minimal)',
     fonts: {
       hook: {
-        family: 'DreamingOutloudSans',
-        file: '/templates/template5/fonts/DreamingOutloudSans-Regular.otf',
+        family: 'Permanent Marker',
         weight: 'normal',
         style: 'normal',
-        cssFont: '100px DreamingOutloudSans, sans-serif',
+        cssFont: '100px "Permanent Marker", cursive',
         lineHeight: 120,
         size: 100
       },
       title: {
         family: 'Playfair Display',
-        file: '/templates/template5/fonts/PlayfairDisplay-Bold.ttf',
         weight: 'bold',
         style: 'normal',
         cssFont: 'bold 64px "Playfair Display", serif',
@@ -642,7 +646,6 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
       },
       content: {
         family: 'Playfair Display',
-        file: '/templates/template5/fonts/PlayfairDisplay-Regular.ttf',
         weight: 'normal',
         style: 'normal',
         cssFont: '44px "Playfair Display", serif',
@@ -740,6 +743,128 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
         includeMiddleTitles: true
       }
     },
+    imagePlacement: {
+      hook: false,
+      content: true,
+      cta: false
+    },
+    defaultColorThemeId: 'transparent'
+  },
+  {
+    id: 'template6',
+    name: 'Template 6 (Premium Grid)',
+    fonts: {
+      hook: {
+        family: 'Inter',
+        weight: '600',
+        style: 'normal',
+        cssFont: '600 88px Inter, sans-serif',
+        lineHeight: 104,
+        size: 88
+      },
+      title: {
+        family: 'Inter',
+        weight: '600',
+        style: 'normal',
+        cssFont: '600 54px Inter, sans-serif',
+        lineHeight: 66,
+        size: 54
+      },
+      content: {
+        family: 'Inter',
+        weight: '400',
+        style: 'normal',
+        cssFont: '400 48px Inter, sans-serif',
+        lineHeight: 66,
+        size: 48
+      }
+    },
+    background: {
+      type: 'image',
+      src: '/templates/template6/bg1.jpg'
+    },
+    hookBackground: {
+      type: 'image',
+      src: '/templates/template6/bg1.jpg',
+      opacity: 1
+    },
+    styles: {
+      letterSpacing: {
+        hook: 0.2,
+        title: 0.2,
+        content: 0
+      },
+      textAlign: {
+        hook: 'center',
+        title: 'left',
+        content: 'left'
+      }
+    },
+    hookLayout: {
+      showTopic: false,
+      showSubtitle: false,
+      showCTA: false,
+      useImage: false
+    },
+    textColor: '#085C36',
+    imagePrompt: 'premium professional photography of {input}, high quality, vibrant colors, clean composition, 16:9 aspect ratio',
+    layout: {
+      canvasWidth: 1080,
+      canvasHeight: 1350,
+      contentMaxWidth: 820,
+      verticalAlign: 'center',
+      hookPadding: { top: 540, right: 160, bottom: 0, left: 160 },
+      titlePadding: { top: 320, right: 160, bottom: 0, left: 160 },
+      contentPadding: { top: 420, right: 160, bottom: 0, left: 160 },
+      gapTitleToContent: 40
+    },
+    imageLayout: {
+      position: 'top',
+      maxHeightRatio: 0.35,
+      marginBottom: 40
+    },
+    footer: {
+      enabled: false
+    },
+    roleColors: {
+      hook: '#085C36',
+      title: '#085C36',
+      content: '#085C36'
+    },
+    perSlideType: {
+      hook: { contentMaxWidth: 720, gapTitleToContent: 20 },
+      body: { contentMaxWidth: 820 },
+      outro: { contentMaxWidth: 820 }
+    },
+    safeArea: {
+      enabled: true,
+      top: 140,
+      bottom: 140,
+      left: 120,
+      right: 120
+    },
+    writingStyle: {
+      tone: 'confident, calm and conversational, polished but friendly',
+      lengthConstraints: {
+        hookTitle: { min: 3, max: 6 },
+        middleTitle: { min: 1, max: 4 },
+        middleContent: { min: 24, max: 50 },
+        caption: { min: 80, max: 140 }
+      },
+      structure: {
+        sentenceStyle: 'mixed',
+        paragraphStyle: 'multi',
+        hookStyle: 'statement',
+        contentFlow:
+          'Intro hook slide with a short central phrase, followed by numbered slides each with a heading and one paragraph of explanation, then a final slide with a concise wrap-up line placed towards the bottom-left.',
+        includeMiddleTitles: true
+      }
+    },
+    imagePlacement: {
+      hook: false,
+      content: true,
+      cta: false
+    },
     defaultColorThemeId: 'transparent'
   }
   // Add more templates here in the future
@@ -823,6 +948,20 @@ export async function fetchCustomTemplates(userId: string): Promise<CarouselTemp
 // Helper to get cached custom templates
 export function getCachedCustomTemplates(): CarouselTemplate[] {
   return customTemplatesCache
+}
+
+// Helper to add a template to the cache (useful when generating new templates)
+export function addTemplateToCache(template: CarouselTemplate): void {
+  // Check if template already exists in cache
+  const existingIndex = customTemplatesCache.findIndex(t => t.id === template.id)
+  if (existingIndex >= 0) {
+    // Update existing template
+    customTemplatesCache[existingIndex] = template
+  } else {
+    // Add new template to cache
+    customTemplatesCache.push(template)
+  }
+  cacheInitialized = true
 }
 
 // Helper to initialize cache (call this on app load)

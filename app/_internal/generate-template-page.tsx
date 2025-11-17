@@ -1,8 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { Upload, X, Sparkle, Check } from 'lucide-react'
+import { Upload, X, Sparkle, Check, AlertCircle } from 'lucide-react'
+import CarouselImageGenerator from '../components/CarouselImageGenerator'
+import { CarouselTemplate, addTemplateToCache } from '../config/carouselTemplates'
+import { getUserCredits } from '../lib/supabase'
 
 interface UploadedImage {
   file: File
@@ -17,6 +20,46 @@ export default function GenerateTemplatePage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [generatedTemplateName, setGeneratedTemplateName] = useState('')
+  const [generatedTemplate, setGeneratedTemplate] = useState<CarouselTemplate | null>(null)
+  const [previewImages, setPreviewImages] = useState<string[]>([])
+  const [hasGenerated, setHasGenerated] = useState(false)
+  const [hasUsedFeature, setHasUsedFeature] = useState<boolean | null>(null)
+  const [isCheckingUsage, setIsCheckingUsage] = useState(true)
+  const [isFreeUser, setIsFreeUser] = useState(false)
+  const carouselGeneratorRef = useRef<any>(null)
+
+  // Check if user has already used the feature
+  useEffect(() => {
+    const checkUsage = async () => {
+      if (!user?.id) {
+        setIsCheckingUsage(false)
+        return
+      }
+
+      try {
+        const credits = await getUserCredits(user.id)
+        if (credits) {
+          setHasUsedFeature(credits.template_generation_used === true)
+          // Check if user is on free plan (plan-10 or no active subscription)
+          const isFree = credits.current_plan === 'plan-10' || 
+                        credits.subscription_status !== 'active' ||
+                        !credits.subscription_status
+          setIsFreeUser(isFree)
+        } else {
+          setHasUsedFeature(false)
+          setIsFreeUser(true) // Default to free if no credits record
+        }
+      } catch (err) {
+        console.error('Error checking template generation usage:', err)
+        setHasUsedFeature(false) // Default to allowing if check fails
+        setIsFreeUser(true) // Default to free if check fails
+      } finally {
+        setIsCheckingUsage(false)
+      }
+    }
+
+    checkUsage()
+  }, [user?.id])
 
   // Warn user before leaving page during generation
   useEffect(() => {
@@ -62,16 +105,48 @@ export default function GenerateTemplatePage() {
     setImages(newImages)
   }
 
+  const generatePreviewImages = async (template: CarouselTemplate) => {
+    // Create placeholder carousel data for preview
+    const placeholderCarousels = [
+      {
+        title: 'Sample Hook Text',
+        content: '',
+        kind: 'HOOK' as const,
+        topic: 'Sample Topic',
+        subtitle: 'Sample Subtitle',
+        cta: 'Swipe to learn more'
+      },
+      {
+        title: 'Sample Title',
+        content: 'This is sample content text that demonstrates how the template will look with actual content. The layout, fonts, and spacing are all shown here.',
+        kind: 'MIDDLE' as const
+      },
+      {
+        title: 'Sample Outro',
+        content: 'This is the final slide with a call to action or summary content.',
+        kind: 'CTA' as const
+      }
+    ]
+
+    // Use CarouselImageGenerator to render preview
+    // We'll trigger generation by setting up the component
+    // For now, we'll generate preview images on the client side
+    // This will be handled by the CarouselImageGenerator component
+    console.log('[GENERATE-TEMPLATE-PAGE] Generating preview images for template:', template.id)
+  }
+
   const handleGenerate = async () => {
     console.log('[GENERATE-TEMPLATE-PAGE] Generate button clicked')
     
-    if (images.length === 0) {
+    const isRegeneration = hasGenerated && generatedTemplate !== null
+    
+    if (!isRegeneration && images.length === 0) {
       setError('Please upload at least 1 image')
       return
     }
 
     if (!description.trim()) {
-      setError('Please provide a description for your template')
+      setError(isRegeneration ? 'Please describe what you want to change' : 'Please provide a description for your template')
       return
     }
 
@@ -102,16 +177,20 @@ export default function GenerateTemplatePage() {
       console.log('[GENERATE-TEMPLATE-PAGE] Images converted:', imageBase64Array.length)
 
       // Prepare request payload
+      const isRegeneration = hasGenerated && generatedTemplate !== null
       const requestPayload = {
-        images: imageBase64Array,
+        images: isRegeneration ? previewImages : imageBase64Array,
         description: description.trim(),
-        userId: user?.id
+        userId: user?.id,
+        isRegeneration: isRegeneration,
+        existingTemplate: isRegeneration ? generatedTemplate : undefined
       }
       
       console.log('[GENERATE-TEMPLATE-PAGE] Sending request to API:', {
         imageCount: requestPayload.images.length,
         descriptionLength: requestPayload.description.length,
         userId: requestPayload.userId,
+        isRegeneration: isRegeneration,
         url: '/api/templates/generate'
       })
 
@@ -133,25 +212,41 @@ export default function GenerateTemplatePage() {
       if (!response.ok) {
         const errorData = await response.json()
         console.error('[GENERATE-TEMPLATE-PAGE] API error:', errorData)
+        
+        // If user has reached the limit, update local state
+        if (errorData.code === 'TEMPLATE_GENERATION_LIMIT_REACHED') {
+          setHasUsedFeature(true)
+        }
+        
         throw new Error(errorData.error || errorData.details || 'Failed to generate template')
       }
 
       const data = await response.json()
       console.log('[GENERATE-TEMPLATE-PAGE] Success:', {
         templateId: data.templateId,
-        templateName: data.templateName
+        templateName: data.templateName,
+        hasPreviewImages: !!data.previewImages
       })
       
-      setGeneratedTemplateName(data.templateName)
-      setSuccess(true)
+      // Add template to cache so CarouselImageGenerator can find it
+      if (data.template) {
+        addTemplateToCache(data.template)
+        console.log('[GENERATE-TEMPLATE-PAGE] Template added to cache:', data.templateId)
+      }
       
-      // Clear form after 3 seconds
-      setTimeout(() => {
-        setImages([])
-        setDescription('')
-        setSuccess(false)
-        setGeneratedTemplateName('')
-      }, 3000)
+      setGeneratedTemplateName(data.templateName)
+      setGeneratedTemplate(data.template)
+      setSuccess(true)
+      setHasGenerated(true)
+      setHasUsedFeature(true) // Mark as used after successful generation
+      
+      // Generate preview images if provided
+      if (data.previewImages && data.previewImages.length > 0) {
+        setPreviewImages(data.previewImages)
+      } else {
+        // Generate preview images using CarouselImageGenerator
+        generatePreviewImages(data.template)
+      }
 
     } catch (err: any) {
       console.error('[GENERATE-TEMPLATE-PAGE] Error generating template:', {
@@ -188,22 +283,47 @@ export default function GenerateTemplatePage() {
           lineHeight: '1.5',
         }}>
           Upload 1–3 images and add a short description. Our AI will scan your images and build a template that matches your style.
+          {isFreeUser && !hasUsedFeature && (
+            <> <strong>Free users get one template generation.</strong></>
+          )}
         </p>
+        {hasUsedFeature === true && (
+          <div style={{
+            marginTop: '16px',
+            padding: '16px',
+            background: '#f5f5f5',
+            border: '1px solid #d0d0d0',
+            borderRadius: '8px',
+            color: '#666666',
+            fontSize: '14px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}>
+            <AlertCircle size={18} />
+            <span>
+              <strong>Template Generation Limit Reached</strong>
+              <br />
+              This feature is limited to one use per account. You've already used your available template generation.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Image Upload Section */}
-      <div style={{
-        marginBottom: '32px',
-      }}>
-        <label style={{
-          display: 'block',
-          fontSize: '16px',
-          fontWeight: '600',
-          color: '#000000',
-          marginBottom: '12px',
+      {!hasUsedFeature && (
+        <div style={{
+          marginBottom: '32px',
         }}>
-          Upload Images (1-3 images)
-        </label>
+          <label style={{
+            display: 'block',
+            fontSize: '16px',
+            fontWeight: '600',
+            color: '#000000',
+            marginBottom: '12px',
+          }}>
+            Upload Images (1-3 images)
+          </label>
         
         <div style={{
           display: 'grid',
@@ -298,21 +418,129 @@ export default function GenerateTemplatePage() {
             </label>
           )}
         </div>
-      </div>
+        </div>
+      )}
+
+      {/* Generated Template Preview Section */}
+      {hasGenerated && generatedTemplate && (
+        <div style={{
+          marginBottom: '32px',
+          padding: '24px',
+          background: '#f9f9f9',
+          borderRadius: '12px',
+          border: '1px solid #e5e5e5',
+        }}>
+          <h2 style={{
+            fontSize: '20px',
+            fontWeight: '600',
+            color: '#000000',
+            marginBottom: '16px',
+          }}>
+            Generated Template
+          </h2>
+          <p style={{
+            fontSize: '14px',
+            color: '#666666',
+            marginBottom: '16px',
+          }}>
+            Preview of your template with sample content:
+          </p>
+          <div style={{
+            display: 'flex',
+            gap: '16px',
+            overflowX: 'auto',
+            paddingBottom: '8px',
+          }}>
+            {previewImages.length > 0 ? (
+              previewImages.map((img, index) => (
+                <div key={index} style={{
+                  minWidth: '300px',
+                  aspectRatio: '4/5',
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                  border: '2px solid #e5e5e5',
+                  background: '#ffffff',
+                }}>
+                  <img 
+                    src={img} 
+                    alt={`Preview slide ${index + 1}`}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'contain',
+                    }}
+                  />
+                </div>
+              ))
+            ) : generatedTemplate ? (
+              <div style={{ width: '100%', minHeight: '400px' }}>
+                <CarouselImageGenerator
+                  ref={carouselGeneratorRef}
+                  carousels={[
+                    {
+                      title: 'Sample Hook Text',
+                      content: '',
+                      kind: 'HOOK',
+                      topic: 'Sample Topic',
+                      subtitle: 'Sample Subtitle',
+                      cta: 'Swipe to learn more'
+                    },
+                    {
+                      title: 'Sample Title',
+                      content: 'This is sample content text that demonstrates how the template will look with actual content. The layout, fonts, and spacing are all shown here.',
+                      kind: 'MIDDLE'
+                    },
+                    {
+                      title: 'Sample Outro',
+                      content: 'This is the final slide with a call to action or summary content.',
+                      kind: 'CTA'
+                    }
+                  ]}
+                  ideaTitle="Sample Hook Text"
+                  ideaIndex={null}
+                  underlineWords={{}}
+                  templateId={generatedTemplate.id}
+                  colorThemeId={generatedTemplate.defaultColorThemeId || 'purple-black'}
+                  accountDescription=""
+                  accountName=""
+                  website=""
+                  caption=""
+                  includeImages={false}
+                  useAIImages={false}
+                  aiImageStyle="animated"
+                  onGenerationComplete={() => {
+                    // Extract images from CarouselImageGenerator after generation
+                    setTimeout(() => {
+                      if (carouselGeneratorRef.current) {
+                        const images = carouselGeneratorRef.current.getImages?.() || []
+                        if (images.length > 0) {
+                          console.log('[GENERATE-TEMPLATE-PAGE] Extracted preview images:', images.length)
+                          setPreviewImages(images)
+                        }
+                      }
+                    }, 500) // Small delay to ensure images are ready
+                  }}
+                />
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
 
       {/* Description Section */}
-      <div style={{
-        marginBottom: '32px',
-      }}>
-        <label style={{
-          display: 'block',
-          fontSize: '16px',
-          fontWeight: '600',
-          color: '#000000',
-          marginBottom: '12px',
+      {!hasUsedFeature && (
+        <div style={{
+          marginBottom: '32px',
         }}>
-          Description
-        </label>
+          <label style={{
+            display: 'block',
+            fontSize: '16px',
+            fontWeight: '600',
+            color: '#000000',
+            marginBottom: '12px',
+          }}>
+            {hasGenerated ? 'Edit Description' : 'Description'}
+          </label>
         <div style={{
           width: '100%',
           background: '#f5f5f5',
@@ -323,7 +551,10 @@ export default function GenerateTemplatePage() {
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Describe the style, mood, and aesthetic you want for your template. For example: 'Modern and minimalist with clean lines, bright colors, and lots of white space' or 'Elegant and sophisticated with serif fonts and muted tones'"
+            placeholder={hasGenerated 
+              ? "Describe what you want to change or improve in the template. For example: 'Make the fonts bolder', 'Use darker colors', 'Add more spacing between elements'"
+              : "Describe the style, mood, and aesthetic you want for your template. For example: 'Modern and minimalist with clean lines, bright colors, and lots of white space' or 'Elegant and sophisticated with serif fonts and muted tones'"
+            }
             style={{
               width: '100%',
               minHeight: '150px',
@@ -346,7 +577,8 @@ export default function GenerateTemplatePage() {
             }}
           />
         </div>
-      </div>
+        </div>
+      )}
 
       {/* Error Message */}
       {error && (
@@ -413,46 +645,53 @@ export default function GenerateTemplatePage() {
       </div>
 
       {/* Generate Button */}
-      <button
-        onClick={handleGenerate}
-        disabled={isGenerating || images.length === 0 || !description.trim()}
-        style={{
-          padding: '16px 32px',
-          fontSize: '16px',
-          fontWeight: '600',
-          color: '#ffffff',
-          background: isGenerating || images.length === 0 || !description.trim() ? '#cccccc' : '#000000',
-          border: 'none',
-          borderRadius: '12px',
-          cursor: isGenerating || images.length === 0 || !description.trim() ? 'not-allowed' : 'pointer',
-          transition: 'all 0.2s ease',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-        }}
-        onMouseEnter={(e) => {
-          if (!isGenerating && images.length > 0 && description.trim()) {
-            e.currentTarget.style.background = '#333333'
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!isGenerating && images.length > 0 && description.trim()) {
-            e.currentTarget.style.background = '#000000'
-          }
-        }}
-      >
-        {isGenerating ? (
-          <>
-            <div className="loader-circle" />
-            Generating Template...
-          </>
-        ) : (
-          <>
-            <Sparkle size={20} />
-            Generate Template
-          </>
-        )}
-      </button>
+      {!hasUsedFeature && (
+        <button
+          onClick={handleGenerate}
+          disabled={isGenerating || isCheckingUsage || (!hasGenerated && images.length === 0) || !description.trim()}
+          style={{
+            padding: '16px 32px',
+            fontSize: '16px',
+            fontWeight: '600',
+            color: '#ffffff',
+            background: isGenerating || isCheckingUsage || (!hasGenerated && images.length === 0) || !description.trim() ? '#cccccc' : '#000000',
+            border: 'none',
+            borderRadius: '12px',
+            cursor: isGenerating || isCheckingUsage || (!hasGenerated && images.length === 0) || !description.trim() ? 'not-allowed' : 'pointer',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+          onMouseEnter={(e) => {
+            if (!isGenerating && !isCheckingUsage && (hasGenerated || images.length > 0) && description.trim()) {
+              e.currentTarget.style.background = '#333333'
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!isGenerating && !isCheckingUsage && (hasGenerated || images.length > 0) && description.trim()) {
+              e.currentTarget.style.background = '#000000'
+            }
+          }}
+        >
+          {isGenerating ? (
+            <>
+              <div className="loader-circle" />
+              {hasGenerated ? 'Regenerating Template...' : 'Generating Template...'}
+            </>
+          ) : isCheckingUsage ? (
+            <>
+              <div className="loader-circle" />
+              Checking...
+            </>
+          ) : (
+            <>
+              <Sparkle size={20} />
+              {hasGenerated ? 'Regenerate Template' : 'Generate Template'}
+            </>
+          )}
+        </button>
+      )}
 
       <style jsx>{`
         .loader-circle {
