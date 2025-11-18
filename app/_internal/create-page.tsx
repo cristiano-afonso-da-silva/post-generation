@@ -17,6 +17,75 @@ import ModeSelectorDropdown from '../components/ModeSelectorModal'
 
 const API_URL = ''
 
+// Helper: Batch write to localStorage
+const saveToLocalStorage = (data: {
+  note?: any
+  accountDescription?: string
+  templateId?: string
+  colorThemeId?: string
+  userId?: string
+  generationId?: string
+  ideaTitle?: string
+  fromHistory?: boolean
+  canvasImages?: string[]
+  accountName?: string
+  website?: string
+  includeImages?: string
+  useAIImages?: string
+  aiImageStyle?: string
+  fullContentHash?: string
+}) => {
+  try {
+    if (data.note !== undefined) {
+      localStorage.setItem('postGeneration_note', JSON.stringify(data.note))
+    }
+    if (data.accountDescription !== undefined) {
+      localStorage.setItem('postGeneration_accountDescription', data.accountDescription)
+    }
+    if (data.templateId !== undefined) {
+      localStorage.setItem('postGeneration_templateId', data.templateId)
+    }
+    if (data.colorThemeId !== undefined) {
+      localStorage.setItem('postGeneration_colorThemeId', data.colorThemeId)
+    }
+    if (data.userId !== undefined) {
+      localStorage.setItem('postGeneration_userId', data.userId)
+    }
+    if (data.generationId !== undefined) {
+      localStorage.setItem('postGeneration_generationId', data.generationId)
+    }
+    if (data.ideaTitle !== undefined) {
+      localStorage.setItem('postGeneration_ideaTitle', data.ideaTitle)
+    }
+    if (data.fromHistory !== undefined) {
+      localStorage.setItem('postGeneration_fromHistory', data.fromHistory ? 'true' : 'false')
+    }
+    if (data.canvasImages !== undefined) {
+      localStorage.setItem('postGeneration_canvasImages', JSON.stringify(data.canvasImages))
+    }
+    if (data.accountName !== undefined) {
+      localStorage.setItem('postGeneration_accountName', data.accountName)
+    }
+    if (data.website !== undefined) {
+      localStorage.setItem('postGeneration_website', data.website)
+    }
+    if (data.includeImages !== undefined) {
+      localStorage.setItem('postGeneration_includeImages', data.includeImages)
+    }
+    if (data.useAIImages !== undefined) {
+      localStorage.setItem('postGeneration_useAIImages', data.useAIImages)
+    }
+    if (data.aiImageStyle !== undefined) {
+      localStorage.setItem('postGeneration_aiImageStyle', data.aiImageStyle)
+    }
+    if (data.fullContentHash !== undefined) {
+      localStorage.setItem('postGeneration_fullContentHash', data.fullContentHash)
+    }
+  } catch (error) {
+    console.error('Error saving to localStorage:', error)
+  }
+}
+
 interface Note {
   ideaTitle: string
   carousels: Array<{
@@ -157,7 +226,34 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
   const isTextOnlyTemplate = (templateId: string): boolean => {
     try {
       const template = getCarouselTemplate(templateId)
-      return template.imageLayout?.maxHeightRatio === 0
+      // A template is text-only if:
+      // 1. imageLayout.maxHeightRatio is explicitly 0, OR
+      // 2. imageLayout is missing AND imagePlacement.content is false/missing
+      const maxHeightRatio = template.imageLayout?.maxHeightRatio
+      const imagePlacement = template.imagePlacement || { hook: false, content: true, cta: false }
+      
+      // Debug logging for Template 5
+      if (templateId === 'template5') {
+        console.log('🔍 Template 5 image support check:', {
+          templateId,
+          maxHeightRatio,
+          imagePlacement,
+          isTextOnly: maxHeightRatio === 0 || (maxHeightRatio == null && !imagePlacement.content)
+        })
+      }
+      
+      // If maxHeightRatio is explicitly 0, it's text-only
+      if (maxHeightRatio === 0) {
+        return true
+      }
+      
+      // If maxHeightRatio is undefined/null and content images are disabled, it's text-only
+      if (maxHeightRatio == null && !imagePlacement.content) {
+        return true
+      }
+      
+      // Otherwise, it supports images
+      return false
     } catch (error) {
       console.error('Error checking if template is text-only:', error)
       return false
@@ -267,19 +363,11 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
                 // Update state and localStorage from database
                 if (data.accountHandle) {
                   setAccountName(data.accountHandle)
-                  try {
-                    localStorage.setItem('postGeneration_accountName', data.accountHandle)
-                  } catch (error) {
-                    console.error('Error saving account name to localStorage:', error)
-                  }
+                  saveToLocalStorage({ accountName: data.accountHandle })
                 }
                 if (data.website) {
                   setWebsite(data.website)
-                  try {
-                    localStorage.setItem('postGeneration_website', data.website)
-                  } catch (error) {
-                    console.error('Error saving website to localStorage:', error)
-                  }
+                  saveToLocalStorage({ website: data.website })
                 }
               }
             }
@@ -334,30 +422,16 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
     }
   }, [authLoading, user, ideas.length, note, loadingIdeas, loadingNote])
 
-  // Clear canvas images cache when color theme changes to force regeneration
+  // Track color theme changes (don't clear cache immediately - let hash-based invalidation handle it)
+  // This prevents egress when users reload page after theme change
   useEffect(() => {
-    if (prevColorThemeIdRef.current !== colorThemeId) {
-      try {
-        localStorage.removeItem('postGeneration_canvasImages')
-        console.log('🎨 Color theme changed, clearing canvas cache')
-      } catch (error) {
-        console.error('Error clearing canvas cache:', error)
-      }
-      prevColorThemeIdRef.current = colorThemeId
-    }
+    prevColorThemeIdRef.current = colorThemeId
   }, [colorThemeId])
 
-  // Clear canvas images cache when template changes to force regeneration
+  // Track template changes (don't clear cache immediately - let hash-based invalidation handle it)
+  // This prevents egress when users reload page after template change
   useEffect(() => {
-    if (prevTemplateIdRef.current !== templateId) {
-      try {
-        localStorage.removeItem('postGeneration_canvasImages')
-        console.log('📐 Template changed, clearing canvas cache')
-      } catch (error) {
-        console.error('Error clearing canvas cache:', error)
-      }
-      prevTemplateIdRef.current = templateId
-    }
+    prevTemplateIdRef.current = templateId
   }, [templateId])
 
   // Rotate rendering messages every 10 seconds when in rendering phase (only for image modes)
@@ -409,14 +483,10 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
     setAccountName(savedAccountName)
     setWebsite(savedWebsite)
     
-    // Store minimal data in localStorage for CarouselImageGenerator
+    // Store minimal data in localStorage for CarouselImageGenerator (batch write)
     try {
-      localStorage.setItem('postGeneration_generationId', generation.id)
-      localStorage.setItem('postGeneration_userId', user.id)
-      localStorage.setItem('postGeneration_ideaTitle', generation.idea_title)
-      localStorage.setItem('postGeneration_fromHistory', 'true')
-      
       // Store images if available - use data URLs from cache if available
+      let canvasImages: string[] | undefined
       if (generation.image_urls && generation.image_urls.length > 0) {
         // Check if we have cached data URLs for these images
         const { getCachedImageDataUrl, cacheImageUrls } = require('../lib/imageCache')
@@ -424,7 +494,7 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
           const cached = getCachedImageDataUrl(url)
           return cached || url
         })
-        localStorage.setItem('postGeneration_canvasImages', JSON.stringify(imageUrls))
+        canvasImages = imageUrls
         
         // Convert signed URLs to data URLs in background (if not already cached)
         const signedUrls = generation.image_urls.filter((url: string) => 
@@ -437,6 +507,14 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
           )
         }
       }
+      
+      saveToLocalStorage({
+        generationId: generation.id,
+        userId: user.id,
+        ideaTitle: generation.idea_title,
+        fromHistory: true,
+        canvasImages: canvasImages
+      })
     } catch (error) {
       console.error('Error storing in localStorage:', error)
     }
@@ -600,17 +678,19 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
             console.error('Failed to refresh credits:', creditError)
           }
           
-          // Store data temporarily for CarouselImageGenerator
+          // Store data temporarily for CarouselImageGenerator (batch write)
           try {
-            localStorage.removeItem('postGeneration_generationId')
+            // Don't delete generationId here - it will be set later by saveToDatabase
+            // Keep it if it exists (for regeneration scenarios)
+            // Only remove contentHash as it will be updated when images are saved
             localStorage.removeItem('postGeneration_contentHash')
-            localStorage.setItem('postGeneration_note', JSON.stringify(noteData))
-            localStorage.setItem('postGeneration_accountDescription', accountDescription.trim())
-            localStorage.setItem('postGeneration_templateId', templateId)
-            localStorage.setItem('postGeneration_colorThemeId', colorThemeId)
-            if (user?.id) {
-              localStorage.setItem('postGeneration_userId', user.id)
-            }
+            saveToLocalStorage({
+              note: noteData,
+              accountDescription: accountDescription.trim(),
+              templateId: templateId,
+              colorThemeId: colorThemeId,
+              userId: user?.id
+            })
           } catch (error) {
             console.error('Error saving to localStorage:', error)
           }
@@ -1095,14 +1175,12 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
                           setUseAIImages(mode.useAIImages)
                           setAiImageStyle(mode.aiImageStyle)
                           
-                          // Persist to localStorage
-                          try {
-                            localStorage.setItem('postGeneration_includeImages', String(mode.includeImages))
-                            localStorage.setItem('postGeneration_useAIImages', String(mode.useAIImages))
-                            localStorage.setItem('postGeneration_aiImageStyle', mode.aiImageStyle)
-                          } catch (error) {
-                            console.error('Error saving mode to localStorage:', error)
-                          }
+                          // Persist to localStorage (batch write)
+                          saveToLocalStorage({
+                            includeImages: String(mode.includeImages),
+                            useAIImages: String(mode.useAIImages),
+                            aiImageStyle: mode.aiImageStyle
+                          })
                         }}
                         buttonRef={modeButtonRef}
                       />
@@ -1166,11 +1244,7 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
                   value={accountName}
                   onChange={(e) => {
                     setAccountName(e.target.value)
-                    try {
-                      localStorage.setItem('postGeneration_accountName', e.target.value)
-                    } catch (error) {
-                      console.error('Error saving account name:', error)
-                    }
+                    saveToLocalStorage({ accountName: e.target.value })
                   }}
                   placeholder="@yourhandle"
                   style={{
@@ -1208,11 +1282,7 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
                   value={website}
                   onChange={(e) => {
                     setWebsite(e.target.value)
-                    try {
-                      localStorage.setItem('postGeneration_website', e.target.value)
-                    } catch (error) {
-                      console.error('Error saving website:', error)
-                    }
+                    saveToLocalStorage({ website: e.target.value })
                   }}
                   placeholder="yourwebsite.com"
                   style={{
@@ -1370,7 +1440,7 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
               textAlign: 'center',
               width: '100%',
             }}>
-              {includeImages ? '~2min' : '~1min'}
+              {includeImages ? '~3min' : '~1min'}
             </div>
             
             {/* Step Progress Indicators - Only show during generation, hide when note is set for new generations */}
@@ -1619,19 +1689,13 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
               console.log('🔄 Template is text-only, reverting to Text Only mode')
               setIncludeImages(false)
               setUseAIImages(false)
-              try {
-                localStorage.setItem('postGeneration_includeImages', 'false')
-                localStorage.setItem('postGeneration_useAIImages', 'false')
-              } catch (error) {
-                console.error('Error saving mode to localStorage:', error)
-              }
+              saveToLocalStorage({
+                includeImages: 'false',
+                useAIImages: 'false'
+              })
             }
             
-            try {
-              localStorage.setItem('postGeneration_templateId', id)
-            } catch (error) {
-              console.error('Error saving template to localStorage:', error)
-            }
+            saveToLocalStorage({ templateId: id })
           }}
         />
       )}

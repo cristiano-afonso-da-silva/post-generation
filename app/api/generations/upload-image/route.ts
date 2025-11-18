@@ -24,14 +24,15 @@ export async function POST(request: NextRequest) {
     const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '')
     const buffer = Buffer.from(base64Data, 'base64')
     
-    const filePath = `${userId}/${generationId}/slide-${imageIndex}.png`
+    const filePath = `${userId}/${generationId}/slide-${imageIndex}.webp`
     
     // Upload to Supabase Storage
     // OPTIMIZED: Increased cacheControl to 7 days (604800 seconds) since images are immutable
+    // Using WebP format for 25-35% smaller file size and reduced egress costs
     const { error: uploadError } = await supabase.storage
       .from('carousel-images')
       .upload(filePath, buffer, {
-        contentType: 'image/png',
+        contentType: 'image/webp',
         upsert: true,
         cacheControl: '604800' // 7 days - images are immutable once created
       })

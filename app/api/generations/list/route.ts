@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
                 }
                 
                 // Otherwise, regenerate for this index
-                const filePath = `${userId}/${gen.id}/slide-${index}.png`
+                const filePath = `${userId}/${gen.id}/slide-${index}.webp`
                 const { data, error: urlError } = await supabase.storage
                   .from('carousel-images')
                   .createSignedUrl(filePath, 86400)
@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
         } else if (userId) {
           // Cached URLs are completely missing - try to reconstruct from known pattern
           // FIXED: Avoid storage.list() which causes egress - instead try common file paths
-          // We know images follow the pattern: slide-0.png, slide-1.png, etc.
+          // We know images follow the pattern: slide-0.webp, slide-1.webp, etc.
           // Try up to 10 slides (most carousels have 3-5 slides)
           console.log(`⚠️ Generation ${gen.id}: No cached URLs, attempting to reconstruct from known pattern`)
           
@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
           const pathPromises: Promise<string | null>[] = []
           
           for (let i = 0; i < maxSlides; i++) {
-            const filePath = `${userId}/${gen.id}/slide-${i}.png`
+            const filePath = `${userId}/${gen.id}/slide-${i}.webp`
             pathPromises.push(
               supabase.storage
                 .from('carousel-images')

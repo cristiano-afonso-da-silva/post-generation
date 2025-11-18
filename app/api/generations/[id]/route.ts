@@ -65,13 +65,13 @@ export async function GET(
           }
           
           // Otherwise, regenerate for this index
-          const filePath = `${userId}/${params.id}/slide-${index}.png`
+          const filePath = `${userId}/${params.id}/slide-${index}.webp`
           const { data, error } = await supabase.storage
             .from('carousel-images')
             .createSignedUrl(filePath, 86400) // 24 hour expiry
           
           if (error) {
-            console.error(`Error creating signed URL for slide-${index}.png:`, error)
+            console.error(`Error creating signed URL for slide-${index}.webp:`, error)
             // Fallback to public URL if signed URL fails
             const { data: publicData } = supabase.storage
               .from('carousel-images')
@@ -85,7 +85,7 @@ export async function GET(
     } else {
       // Cached URLs are completely missing - try to reconstruct from known pattern
       // FIXED: Avoid storage.list() which causes egress - instead try common file paths
-      // We know images follow the pattern: slide-0.png, slide-1.png, etc.
+      // We know images follow the pattern: slide-0.webp, slide-1.webp, etc.
       // Try up to 10 slides (most carousels have 3-5 slides)
       console.log(`⚠️ Generation ${params.id}: No cached URLs, attempting to reconstruct from known pattern`)
       
@@ -93,7 +93,7 @@ export async function GET(
       const pathPromises: Promise<string | null>[] = []
       
       for (let i = 0; i < maxSlides; i++) {
-        const filePath = `${userId}/${params.id}/slide-${i}.png`
+        const filePath = `${userId}/${params.id}/slide-${i}.webp`
         pathPromises.push(
           supabase.storage
             .from('carousel-images')

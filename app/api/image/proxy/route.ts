@@ -37,41 +37,56 @@ export async function GET(request: NextRequest) {
     console.log('📡 Fetching remote image:', remoteUrl.toString())
     // Use 'force-cache' to leverage Next.js caching and reduce egress
     // Images are cached for the revalidate period (24 hours)
-    const response = await fetch(remoteUrl.toString(), {
-      cache: 'force-cache',
-      next: { revalidate: 86400 }
-    })
+    // Add timeout to prevent indefinite waiting (45 seconds)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 45000) // 45 second timeout
     
-    console.log('📡 Remote response status:', response.status)
-    console.log('   Content-Type:', response.headers.get('content-type'))
+    try {
+      const response = await fetch(remoteUrl.toString(), {
+        cache: 'force-cache',
+        next: { revalidate: 86400 },
+        signal: controller.signal
+      })
+      clearTimeout(timeoutId)
+    
+      console.log('📡 Remote response status:', response.status)
+      console.log('   Content-Type:', response.headers.get('content-type'))
 
-    if (!response.ok || !response.body) {
-      console.error('❌ Failed to fetch remote image, status:', response.status)
-      return NextResponse.json({ error: 'Failed to fetch remote image' }, { status: response.status })
+      if (!response.ok || !response.body) {
+        console.error('❌ Failed to fetch remote image, status:', response.status)
+        return NextResponse.json({ error: 'Failed to fetch remote image' }, { status: response.status })
+      }
+
+      const headers = new Headers(response.headers)
+      headers.set('Access-Control-Allow-Origin', '*')
+      // Cache for 24 hours on client and CDN to reduce repeated requests and egress
+      // s-maxage: CDN cache duration (24 hours)
+      // max-age: Browser cache duration (24 hours)
+      // stale-while-revalidate: Serve stale content while revalidating (7 days)
+      headers.set('Cache-Control', 'public, s-maxage=86400, max-age=86400, stale-while-revalidate=604800')
+      
+      // Preserve ETag if present for better cache validation
+      const etag = response.headers.get('etag')
+      if (etag) {
+        headers.set('ETag', etag)
+      }
+      
+      headers.delete('set-cookie')
+      
+      console.log('✅ Proxying image successfully (cached)')
+
+      return new Response(response.body, {
+        status: response.status,
+        headers,
+      })
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId)
+      if (fetchError.name === 'AbortError') {
+        console.error('❌ Image proxy timeout after 45s')
+        return NextResponse.json({ error: 'Request timeout' }, { status: 504 })
+      }
+      throw fetchError
     }
-
-    const headers = new Headers(response.headers)
-    headers.set('Access-Control-Allow-Origin', '*')
-    // Cache for 24 hours on client and CDN to reduce repeated requests and egress
-    // s-maxage: CDN cache duration (24 hours)
-    // max-age: Browser cache duration (24 hours)
-    // stale-while-revalidate: Serve stale content while revalidating (7 days)
-    headers.set('Cache-Control', 'public, s-maxage=86400, max-age=86400, stale-while-revalidate=604800')
-    
-    // Preserve ETag if present for better cache validation
-    const etag = response.headers.get('etag')
-    if (etag) {
-      headers.set('ETag', etag)
-    }
-    
-    headers.delete('set-cookie')
-    
-    console.log('✅ Proxying image successfully (cached)')
-
-    return new Response(response.body, {
-      status: response.status,
-      headers,
-    })
   } catch (error: any) {
     console.error('❌ Image proxy error:', error)
     console.error('   Error message:', error?.message)

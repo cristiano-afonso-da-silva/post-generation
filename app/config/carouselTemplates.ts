@@ -575,7 +575,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
       useImage: true  // Hook slide should display an image above title/content
     },
     textColor: '#FFFFFF',  // White text for black background
-    imagePrompt: 'a white line drawing {input}, with #000000 black background',  // Template-specific image style for middle slides
+    imagePrompt: 'a white line drawing {input}, with #000000 black background, high contrast, detailed',  // Template-specific image style for middle slides
     hookImagePrompt: 'a white line drawing illustration of {input}, vintage woodcut style, black background #000000, high contrast, detailed',  // Template-specific image style for hook slide
     layout: {
       contentMaxWidth: 820,  // Narrow centered column like Retentioned
@@ -678,6 +678,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
       useImage: false
     },
     textColor: '#000000',
+    imagePrompt: 'a #C53030 line drawing {input}, with transparent background, high contrast, detailed',  // Template-specific image style for middle slides
     roleColors: {
       hook: '#C53030',
       title: '#C53030',
@@ -686,7 +687,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     },
     layout: {
       contentMaxWidth: 820,
-      verticalAlign: 'top',
+      verticalAlign: 'bottom',  // Changed to 'center' like Template 1 for image positioning
       hookPadding: { top: 260, right: 140, bottom: 0, left: 140 },
       titlePadding: { top: 220, right: 140, bottom: 0, left: 140 },
       contentPadding: { top: 320, right: 140, bottom: 0, left: 140 },
@@ -694,8 +695,8 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     },
     imageLayout: {
       position: 'top',
-      maxHeightRatio: 0,
-      marginBottom: 0
+      maxHeightRatio: 0.3,  // Enabled images: 40% of canvas height (same as Template 1)
+      marginBottom: 80  // 40px gap below image (same as Template 1)
     },
     footer: {
       enabled: true,
@@ -866,7 +867,151 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
       cta: false
     },
     defaultColorThemeId: 'transparent'
+  },
+  {
+    id: 'template7',
+    name: 'Template 7 (Glow Center)',
+    fonts: {
+      // Used for the main hook text on the first slide
+      hook: {
+        family: 'Inter',
+        weight: '700',
+        style: 'normal',
+        cssFont: '700 120px Inter, sans-serif',
+        lineHeight: 140,
+        size: 120
+      },
+      // Optional subtitle under the hook title (script-like serif)
+      hookSubtitle: {
+        family: 'Playfair Display',
+        weight: 'normal',
+        style: 'italic',
+        cssFont: 'italic 52px "Playfair Display", serif',
+        lineHeight: 70,
+        size: 52
+      },
+      title: {
+        // Used for middle slide titles (same serif italic look)
+        family: 'Playfair Display',
+        weight: 'normal',
+        style: 'italic',
+        cssFont: 'italic 52px "Playfair Display", serif',
+        lineHeight: 70,
+        size: 52
+      },
+      content: {
+        // Used for short supporting line under the title
+        family: 'Inter',
+        weight: '500',
+        style: 'normal',
+        cssFont: '500 40px Inter, sans-serif',
+        lineHeight: 56,
+        size: 40
+      }
+    },
+    background: {
+      type: 'color',
+      value: '#F6F7F3' // soft off-white paper
+    },
+    styles: {
+      letterSpacing: {
+        hook: 0,
+        hookSubtitle: 0,
+        title: 0,
+        content: 0,
+        cta: 0
+      },
+      textAlign: {
+        hook: 'center',
+        hookSubtitle: 'center',
+        title: 'center',
+        content: 'center',
+        cta: 'center'
+      }
+    },
+    hookLayout: {
+      showTopic: false,
+      showSubtitle: true,
+      showCTA: false,
+      useImage: true // hook slide has icon + glow as well
+    },
+    textColor: '#000000',
+    // Icon style for middle slides – theme color will be used for the glow circle,
+    // this prompt just focuses on the central illustration.
+    imagePrompt:
+      'simple flat vector illustration of {input}, clean lines, minimal shading, soft pastel accent color, centered on a light background, modern icon style',
+    hookImagePrompt:
+      'flat vector illustration of {input}, clean lines, soft pastel accent color, centered, modern icon style, works on a light background',
+    layout: {
+      canvasWidth: 1080,
+      canvasHeight: 1350,
+      contentMaxWidth: 720,
+      verticalAlign: 'center',
+      hookPadding: { top: 260, right: 120, bottom: 260, left: 120 },
+      titlePadding: { top: 520, right: 120, bottom: 0, left: 120 },
+      contentPadding: { top: 620, right: 120, bottom: 0, left: 120 },
+      gapTitleToContent: 24
+    },
+    imageLayout: {
+      // Icon sits in the middle of the glow, with text just above or below
+      position: 'center',
+      maxHeightRatio: 0.26,
+      marginBottom: 24
+    },
+    footer: {
+      enabled: false
+    },
+    roleColors: {
+      // Text stays dark; glow color comes from the color theme’s primary color
+      hook: '#000000',
+      title: '#000000',
+      content: '#000000',
+      cta: '#000000'
+    },
+    perSlideType: {
+      hook: {
+        contentMaxWidth: 720,
+        gapTitleToContent: 18
+      },
+      body: {
+        contentMaxWidth: 720
+      },
+      outro: {
+        contentMaxWidth: 720
+      }
+    },
+    safeArea: {
+      enabled: true,
+      top: 120,
+      bottom: 180,
+      left: 80,
+      right: 80
+    },
+    writingStyle: {
+      tone: 'simple, positive and encouraging, clear and easy to digest',
+      lengthConstraints: {
+        hookTitle: { min: 2, max: 5 },        // short hook like “5 Habits”
+        middleTitle: { min: 3, max: 7 },      // one short phrase
+        middleContent: { min: 6, max: 20 },   // 1–2 short lines
+        caption: { min: 60, max: 120 }
+      },
+      structure: {
+        sentenceStyle: 'short',
+        paragraphStyle: 'single',
+        hookStyle: 'statement',
+        contentFlow:
+          'One central hook slide followed by several icon + title + short support-line slides. Keep wording tight, scannable and straightforward. Maximum 10 words.',
+        includeMiddleTitles: true
+      }
+    },
+    imagePlacement: {
+      hook: true,
+      content: true,
+      cta: false
+    },
+    defaultColorThemeId: 'glowGreen' // theme primary color used for the radial glow circle
   }
+  
   // Add more templates here in the future
 ]
 

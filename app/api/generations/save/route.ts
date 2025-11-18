@@ -170,14 +170,14 @@ export async function POST(request: NextRequest) {
       // FIXED: Use known file pattern instead of storage.list() to avoid egress
       if (isUpdate) {
         // Try to delete up to 10 old slides (most carousels have 3-5 slides)
-        // We know the pattern: slide-0.png, slide-1.png, etc.
+        // We know the pattern: slide-0.webp, slide-1.webp, etc.
         const maxOldSlides = 10
         const filesToDelete: string[] = []
         
         // Check which files exist by trying to create signed URLs
         // If URL creation succeeds, file exists and should be deleted
         for (let i = 0; i < maxOldSlides; i++) {
-          const filePath = `${userId}/${generation.id}/slide-${i}.png`
+          const filePath = `${userId}/${generation.id}/slide-${i}.webp`
           const { error } = await supabase.storage
             .from('carousel-images')
             .createSignedUrl(filePath, 86400)
@@ -202,13 +202,14 @@ export async function POST(request: NextRequest) {
         const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '')
         const buffer = Buffer.from(base64Data, 'base64')
         
-        const filePath = `${userId}/${generation.id}/slide-${i}.png`
+        const filePath = `${userId}/${generation.id}/slide-${i}.webp`
         
         // OPTIMIZED: Increased cacheControl to 7 days (604800 seconds) since images are immutable
+        // Using WebP format for 25-35% smaller file size and reduced egress costs
         const { error: uploadError } = await supabase.storage
           .from('carousel-images')
           .upload(filePath, buffer, {
-            contentType: 'image/png',
+            contentType: 'image/webp',
             upsert: true,
             cacheControl: '604800' // 7 days - images are immutable once created
           })

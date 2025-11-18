@@ -120,92 +120,133 @@ export interface CarouselImageGeneratorHandle {
   regenerateAndSave: (updatedUnderlineWords?: Record<number, { underline: string; highlight: string; imageUrl?: string | null; originalImageUrl?: string | null }>) => Promise<void>
 }
 
-// Initialize images from localStorage before rendering
-const getInitialImages = (carousels: Carousel[], ideaTitle: string, underlineWords: Record<number, any>, templateId: string, colorThemeId: string): string[] => {
+// Helper: Create content hash for cache matching
+const createContentHash = (ideaTitle: string, carousels: Carousel[], underlineWords: Record<number, any>, templateId: string, colorThemeId: string): string => {
+  return JSON.stringify({ ideaTitle, carousels, underlineWords, templateId, colorThemeId })
+}
+
+// Helper: Check if cache is valid
+const isCacheValid = (carousels: Carousel[], ideaTitle: string, underlineWords: Record<number, any>, templateId: string, colorThemeId: string): { valid: boolean; images?: string[] } => {
   try {
-    // Check if cache should be skipped (e.g., when color theme changes)
+    // Check if cache should be skipped
     const skipCache = localStorage.getItem('postGeneration_skipCache') === 'true'
     if (skipCache) {
-      console.log('⏭️ Skip cache flag detected - forcing regeneration')
-      return []
+      return { valid: false }
     }
     
-    // If there's no generationId in localStorage, we're on a fresh /app page - don't load from cache
-    const storedGenerationId = localStorage.getItem('postGeneration_generationId')
-    if (!storedGenerationId) {
-      console.log('🆕 Fresh page detected (no generationId) - skipping localStorage cache')
-      return []
-    }
-    
+    const currentHash = createContentHash(ideaTitle, carousels, underlineWords, templateId, colorThemeId)
     const savedImages = localStorage.getItem('postGeneration_canvasImages')
-    const savedFullContentHash = localStorage.getItem('postGeneration_fullContentHash')
-    const savedContentHash = localStorage.getItem('postGeneration_contentHash')
-    const savedHash = savedFullContentHash || savedContentHash
-    const fromHistory = localStorage.getItem('postGeneration_fromHistory') === 'true'
+    const savedHash = localStorage.getItem('postGeneration_fullContentHash')
     
-    // Create deterministic hash with consistent property order
-    const currentFullContentHash = JSON.stringify({ 
-      ideaTitle, 
-      carousels, 
-      underlineWords, 
-      templateId, 
-      colorThemeId
-    })
-    
-    // Only log cache check in development mode to reduce console spam
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 Cache check:', {
-        hasSavedImages: !!savedImages,
-        savedHash,
-        currentHash: currentFullContentHash,
-        hashMatch: savedHash === currentFullContentHash,
-        colorThemeId
-      })
+    if (!savedImages) {
+      return { valid: false }
     }
     
-    if (savedImages) {
+    // FIXED: Always check hash match (even on post page)
+    // This ensures theme/template changes trigger regeneration
+    // Hash includes templateId and colorThemeId, so any change invalidates cache
+    if (!savedHash || savedHash !== currentHash) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 Cache invalid - hash mismatch:', {
+          savedHash: savedHash?.substring(0, 50) + '...',
+          currentHash: currentHash.substring(0, 50) + '...',
+          templateId,
+          colorThemeId
+        })
+      }
+      return { valid: false } // Hash mismatch = cache invalid, must regenerate
+    }
+    
+    // Hash matches - load images from cache
+    try {
       const imageDataUrls = JSON.parse(savedImages)
-      
-      // Check if we need to convert signed URLs to data URLs from cache
       const { getCachedImageDataUrl } = require('../lib/imageCache')
       const convertedUrls = imageDataUrls.map((url: string) => {
-        // If it's already a data URL, use it
-        if (url && typeof url === 'string' && url.startsWith('data:image/')) {
+        if (url && typeof url === 'string' && (url.startsWith('data:image/webp') || url.startsWith('data:image/png'))) {
           return url
         }
-        // Otherwise, check if we have a cached data URL for this signed URL
         const cached = getCachedImageDataUrl(url)
         return cached || url
       })
-      
-      // Verify all images are present and valid (either data URLs or valid URLs)
       const allValid = convertedUrls.every((img: string) => 
-        img && typeof img === 'string' && (img.startsWith('data:image/') || img.startsWith('http'))
+        img && typeof img === 'string' && (img.startsWith('data:image/webp') || img.startsWith('data:image/png') || img.startsWith('http'))
       )
-      
-      // Check if we have the right number of images
       if (convertedUrls.length === carousels.length && allValid) {
-        // On post page, always use cached images
-        if (fromHistory) {
-          return convertedUrls
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Cache valid - hash matches, loading from cache')
         }
-        
-        // Otherwise, only use if hash matches
-        if (savedHash && savedHash === currentFullContentHash) {
-          return convertedUrls
-        }
-      } else {
-        console.warn('⚠️ Cached images incomplete or invalid, will regenerate', {
-          convertedUrlsLength: convertedUrls.length,
-          carouselsLength: carousels.length,
-          allValid
-        })
+        return { valid: true, images: convertedUrls }
       }
-    } else if (savedHash && savedHash !== currentFullContentHash) {
-      console.log('🔄 Hash mismatch - cache invalid, will regenerate')
+    } catch (error) {
+      console.error('Error parsing cached images:', error)
+    }
+    
+    return { valid: false }
+  } catch (error) {
+    console.error('Error checking cache:', error)
+    return { valid: false }
+  }
+}
+
+// Helper: Batch write to localStorage
+const saveToLocalStorage = (data: {
+  note?: any
+  canvasImages?: string[]
+  fullContentHash?: string
+  contentHash?: string
+  generationId?: string
+  ideaTitle?: string
+  templateId?: string
+  colorThemeId?: string
+  accountDescription?: string
+  userId?: string
+  fromHistory?: boolean
+}) => {
+  try {
+    if (data.note !== undefined) {
+      localStorage.setItem('postGeneration_note', JSON.stringify(data.note))
+    }
+    if (data.canvasImages !== undefined) {
+      localStorage.setItem('postGeneration_canvasImages', JSON.stringify(data.canvasImages))
+    }
+    if (data.fullContentHash !== undefined) {
+      localStorage.setItem('postGeneration_fullContentHash', data.fullContentHash)
+    }
+    if (data.contentHash !== undefined) {
+      localStorage.setItem('postGeneration_contentHash', data.contentHash)
+    }
+    if (data.generationId !== undefined) {
+      localStorage.setItem('postGeneration_generationId', data.generationId)
+    }
+    if (data.ideaTitle !== undefined) {
+      localStorage.setItem('postGeneration_ideaTitle', data.ideaTitle)
+    }
+    if (data.templateId !== undefined) {
+      localStorage.setItem('postGeneration_templateId', data.templateId)
+    }
+    if (data.colorThemeId !== undefined) {
+      localStorage.setItem('postGeneration_colorThemeId', data.colorThemeId)
+    }
+    if (data.accountDescription !== undefined) {
+      localStorage.setItem('postGeneration_accountDescription', data.accountDescription)
+    }
+    if (data.userId !== undefined) {
+      localStorage.setItem('postGeneration_userId', data.userId)
+    }
+    if (data.fromHistory !== undefined) {
+      localStorage.setItem('postGeneration_fromHistory', data.fromHistory ? 'true' : 'false')
     }
   } catch (error) {
-    console.error('Error loading images from localStorage:', error)
+    console.error('Error saving to localStorage:', error)
+  }
+}
+
+// Initialize images from localStorage before rendering (simplified - uses isCacheValid helper)
+const getInitialImages = (carousels: Carousel[], ideaTitle: string, underlineWords: Record<number, any>, templateId: string, colorThemeId: string): string[] => {
+  const cacheCheck = isCacheValid(carousels, ideaTitle, underlineWords, templateId, colorThemeId)
+  if (cacheCheck.valid && cacheCheck.images) {
+    console.log('✅ Loading images from localStorage cache')
+    return cacheCheck.images
   }
   return []
 }
@@ -778,7 +819,28 @@ function CarouselImageGeneratorComponent({
     }
   }, [ideaTitle, carousels, underlineWords, templateId, colorThemeId, user?.id])
 
-  const generateAllCarousels = useCallback(async (overrideTemplateId?: string, overrideColorId?: string, skipFontLoading = false) => {
+  // Helper: Determine if generation should happen
+  const shouldGenerate = useCallback((skipCacheCheck = false): boolean => {
+    if (skipCacheCheck) {
+      return true // Force generation (e.g., theme change)
+    }
+    
+    // Check cache first
+    const cacheCheck = isCacheValid(orderedCarousels, ideaTitle, orderedUnderlineWords, templateId, colorThemeId)
+    if (cacheCheck.valid && cacheCheck.images) {
+      console.log('✅ Cache valid, skipping generation')
+      return false
+    }
+    
+    // Check if we have carousels but no images
+    if (orderedCarousels.length > 0 && carouselImages.length === 0) {
+      return true
+    }
+    
+    return false
+  }, [orderedCarousels, ideaTitle, orderedUnderlineWords, templateId, colorThemeId, carouselImages.length])
+
+  const generateAllCarousels = useCallback(async (overrideTemplateId?: string, overrideColorId?: string, skipFontLoading = false, forceRegenerate = false) => {
     const renderStartTime = performance.now()
     console.log('🎨 [RENDERING START] CarouselImageGenerator.generateAllCarousels() called')
     console.log('   ⏱️ Timestamp:', new Date().toISOString())
@@ -789,6 +851,18 @@ function CarouselImageGeneratorComponent({
     console.log('   📝 Idea Title:', ideaTitle)
     if (skipFontLoading) {
       console.log('   ⏭️ Skipping font loading (optimization for color-only change)')
+    }
+    
+    // Early exit: Check cache if not forcing regeneration
+    if (!forceRegenerate) {
+      const cacheCheck = isCacheValid(orderedCarousels, ideaTitle, orderedUnderlineWords, overrideTemplateId ?? templateId, overrideColorId ?? colorThemeId)
+      if (cacheCheck.valid && cacheCheck.images) {
+        console.log('✅ Cache valid, loading from cache instead of regenerating')
+        setCarouselImages(cacheCheck.images)
+        setOrderedCarouselImages(cacheCheck.images)
+        setGenerating(false)
+        return // Exit early, don't regenerate
+      }
     }
     
     setGenerating(true)
@@ -910,6 +984,11 @@ function CarouselImageGeneratorComponent({
       // Generate carousel - this will continue even in background tabs
       await generateCarouselImage(i, currentTemplate, currentColorTheme, skipFontLoading)
       
+      // Wait for canvas to finish rendering all images before converting to blob
+      // This ensures images are fully drawn on the canvas before we extract it
+      await new Promise(resolve => requestAnimationFrame(resolve))
+      await new Promise(resolve => requestAnimationFrame(resolve)) // Wait for 2 frames to ensure rendering is complete
+      
       const carouselEndTime = performance.now()
       const carouselDuration = carouselEndTime - carouselStartTime
       console.log(`   ✅ [CAROUSEL ${i + 1}/${orderedCarousels.length}] Generated in ${carouselDuration.toFixed(2)}ms`)
@@ -930,13 +1009,34 @@ function CarouselImageGeneratorComponent({
       if (canvas) {
         try {
           const dataUrlStartTime = performance.now()
-          const dataUrl = canvas.toDataURL('image/png')
+          // Generate WebP directly from canvas for better compression and reduced egress
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            canvas.toBlob(
+              (blob) => {
+                if (blob) {
+                  const reader = new FileReader()
+                  reader.onloadend = () => {
+                    const webpDataUrl = reader.result as string
+                    resolve(webpDataUrl)
+                  }
+                  reader.onerror = () => reject(new Error('Failed to read WebP blob'))
+                  reader.readAsDataURL(blob)
+                } else {
+                  // Fallback to PNG if WebP not supported
+                  const pngDataUrl = canvas.toDataURL('image/png')
+                  resolve(pngDataUrl)
+                }
+              },
+              'image/webp',
+              0.85 // Quality: 0.85 provides good balance between size and quality
+            )
+          })
           const dataUrlDuration = performance.now() - dataUrlStartTime
           
-          // Validate data URL is not empty and is a valid image
-          if (dataUrl && dataUrl.startsWith('data:image/') && dataUrl.length > 100) {
+          // Validate data URL is not empty and is a valid image (WebP or PNG fallback)
+          if (dataUrl && (dataUrl.startsWith('data:image/webp') || dataUrl.startsWith('data:image/png')) && dataUrl.length > 100) {
             imageDataUrls[i] = dataUrl
-            console.log(`      📸 Canvas toDataURL took: ${dataUrlDuration.toFixed(2)}ms`)
+            console.log(`      📸 Canvas to WebP took: ${dataUrlDuration.toFixed(2)}ms`)
           } else {
             console.error(`   ❌ Invalid data URL for carousel ${i + 1} (length: ${dataUrl?.length || 0})`)
             throw new Error(`Invalid data URL generated for carousel ${i + 1}`)
@@ -1007,35 +1107,25 @@ function CarouselImageGeneratorComponent({
     setOrderedCarouselImages(imageDataUrls)
     console.log('   ⏱️ setCarouselImages() call took:', (performance.now() - setStateStartTime).toFixed(2), 'ms')
     
-    // Create full content hash (includes template/theme) for image matching - deterministic order
-    const fullContentHash = JSON.stringify({ 
-      ideaTitle, 
-      carousels: orderedCarousels, 
-      underlineWords: orderedUnderlineWords, 
-      templateId: currentTemplateId, 
-      colorThemeId: currentColorId
-    })
-    // Create content hash (only ideaTitle + carousels) for generation update detection
+    // Save to localStorage immediately (non-blocking, uses batch helper)
+    const fullContentHash = createContentHash(ideaTitle, orderedCarousels, orderedUnderlineWords, currentTemplateId, currentColorId)
     const contentHash = JSON.stringify({ ideaTitle, carousels: orderedCarousels })
     
-    // Save all images to localStorage with content hashes
     try {
-      const imagesJson = JSON.stringify(imageDataUrls)
-      const imagesSizeMB = (new Blob([imagesJson]).size / (1024 * 1024)).toFixed(2)
+      const imagesSizeMB = (new Blob([JSON.stringify(imageDataUrls)]).size / (1024 * 1024)).toFixed(2)
       console.log(`💾 Attempting to save ${imagesSizeMB}MB of image data to localStorage...`)
       
-      localStorage.setItem('postGeneration_canvasImages', imagesJson)
-      // Always update fullContentHash (includes design settings)
-      localStorage.setItem('postGeneration_fullContentHash', fullContentHash)
-      // Only update contentHash if generation_id doesn't exist (new generation)
-      // If generation_id exists, keep the existing contentHash to allow updates
-      if (!localStorage.getItem('postGeneration_generationId')) {
-        localStorage.setItem('postGeneration_contentHash', contentHash)
-      }
-      // Store user ID to ensure localStorage is user-specific
-      if (user?.id) {
-        localStorage.setItem('postGeneration_userId', user.id)
-      }
+      // Use batch helper for all localStorage writes
+      saveToLocalStorage({
+        canvasImages: imageDataUrls,
+        fullContentHash: fullContentHash,
+        contentHash: !localStorage.getItem('postGeneration_generationId') ? contentHash : undefined,
+        ideaTitle: ideaTitle,
+        templateId: currentTemplateId,
+        colorThemeId: currentColorId,
+        userId: user?.id
+      })
+      
       console.log(`✅ Successfully saved ${imagesSizeMB}MB to localStorage`)
     } catch (error: any) {
       if (error.name === 'QuotaExceededError' || error.code === 22) {
@@ -1045,13 +1135,11 @@ function CarouselImageGeneratorComponent({
         
         // Try to save just the hash (for validation) without the images
         try {
-          localStorage.setItem('postGeneration_fullContentHash', fullContentHash)
-          if (!localStorage.getItem('postGeneration_generationId')) {
-            localStorage.setItem('postGeneration_contentHash', contentHash)
-          }
-          if (user?.id) {
-            localStorage.setItem('postGeneration_userId', user.id)
-          }
+          saveToLocalStorage({
+            fullContentHash: fullContentHash,
+            contentHash: !localStorage.getItem('postGeneration_generationId') ? contentHash : undefined,
+            userId: user?.id
+          })
           console.log('✅ Saved content hashes (without images) to localStorage')
         } catch (hashError) {
           console.error('❌ Could not save even content hashes:', hashError)
@@ -1102,20 +1190,25 @@ function CarouselImageGeneratorComponent({
     const beforeSaveTime = performance.now()
     console.log('   ⏱️ Rendering complete, total time:', (beforeSaveTime - renderStartTime).toFixed(2), 'ms')
     
-    // Always save to database after rendering
+    // Save to database (non-blocking - start immediately, but await before onGenerationComplete)
     let savedGenerationId: string | undefined
     if (user?.id) {
       const saveStartTime = performance.now()
-      console.log('💾 [SAVE] Saving generation to Supabase...')
-      try {
-        savedGenerationId = await saveToDatabase(imageDataUrls)
+      console.log('💾 [SAVE] Saving generation to Supabase (non-blocking)...')
+      // Start save in background, but we'll await it before calling onGenerationComplete
+      const savePromise = saveToDatabase(imageDataUrls).then((id) => {
         const saveEndTime = performance.now()
         console.log('✅ [SAVE] Generation saved successfully')
         console.log('   ⏱️ Save duration:', (saveEndTime - saveStartTime).toFixed(2), 'ms')
-        console.log('   📝 Saved generationId:', savedGenerationId)
-      } catch (err) {
+        console.log('   📝 Saved generationId:', id)
+        return id
+      }).catch((err) => {
         console.error('❌ [SAVE ERROR] Failed to save:', err)
-      }
+        return undefined
+      })
+      
+      // Await save before continuing (needed for generationId in onGenerationComplete)
+      savedGenerationId = await savePromise
     }
     
     const finalTime = performance.now()
@@ -1167,106 +1260,164 @@ function CarouselImageGeneratorComponent({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carousels, ideaTitle, underlineWords, templateId, colorThemeId, user?.id])
 
-  // Generate carousels if not loaded from storage (ONLY on initial mount, not on design changes)
+  // Unified generation effect: handles initial generation and design changes
   useEffect(() => {
-    // Skip if design change effect will handle it
+    console.log('🔄 [UNIFIED EFFECT] Running...', {
+      fromHistory: localStorage.getItem('postGeneration_fromHistory') === 'true',
+      hasGenerationId: !!localStorage.getItem('postGeneration_generationId'),
+      templateId,
+      colorThemeId,
+      carouselImagesLength: carouselImages.length,
+      orderedCarouselsLength: orderedCarousels.length,
+      isInitialMount: isInitialMount.current
+    })
+    
     const fromHistory = localStorage.getItem('postGeneration_fromHistory') === 'true'
     const hasGenerationId = localStorage.getItem('postGeneration_generationId')
-    
-    // If viewing existing post, skip
-    if (fromHistory && hasGenerationId) {
-      isInitialMount.current = false
-      return
-    }
     
     // Clear stale fromHistory flag
     if (fromHistory && !hasGenerationId) {
       localStorage.removeItem('postGeneration_fromHistory')
     }
     
-    // Only generate if we have carousels but no images AND it's initial mount
-    if (isInitialMount.current && orderedCarousels.length > 0 && orderedCarouselImages.length === 0) {
-      isInitialMount.current = false
-      generateAllCarousels().then(() => {
-        prevDesignSettings.current = { templateId, colorThemeId }
-      }).catch((err) => {
-        console.error('❌ [EFFECT] generateAllCarousels failed:', err)
-      })
-    } else if (orderedCarouselImages.length > 0) {
-      isInitialMount.current = false
-    }
-  }, [orderedCarousels.length, orderedCarouselImages.length, generateAllCarousels])
-
-  // Regenerate when design settings change (template or color theme)
-  useEffect(() => {
+    // Check for design changes FIRST (before early return)
     const prev = prevDesignSettings.current
     const templateChanged = prev.templateId !== templateId
     const themeChanged = prev.colorThemeId !== colorThemeId
     const designChanged = templateChanged || themeChanged
     
-    // If no change, just update the ref on initial mount and return
-    if (!designChanged) {
-      if (isInitialMount.current) {
-        prevDesignSettings.current = { templateId, colorThemeId }
+    console.log('🔍 [DESIGN CHECK]', {
+      prevTemplate: prev.templateId,
+      currentTemplate: templateId,
+      prevTheme: prev.colorThemeId,
+      currentTheme: colorThemeId,
+      templateChanged,
+      themeChanged,
+      designChanged
+    })
+    
+    // On post page: handle carefully - check design changes and cache
+    if (fromHistory && hasGenerationId) {
+      console.log('📄 [POST PAGE] Detected post page load')
+      
+      // If design changed, MUST regenerate (don't skip)
+      if (designChanged) {
+        console.log('🎨 [POST PAGE] Design changed - will regenerate')
+        // Fall through to regeneration logic below
+      } else if (carouselImages.length > 0 && carouselImages.length === orderedCarousels.length) {
+        // Images already loaded and no design change - skip
+        console.log('✅ [POST PAGE] Images already loaded, skipping regeneration')
+        isInitialMount.current = false
+        if (!designChanged) {
+          prevDesignSettings.current = { templateId, colorThemeId }
+        }
+        return
+      } else {
+        // No images loaded - check cache
+        console.log('🔍 [POST PAGE] No images loaded, checking cache...')
+        const cacheCheck = isCacheValid(orderedCarousels, ideaTitle, orderedUnderlineWords, templateId, colorThemeId)
+        if (cacheCheck.valid && cacheCheck.images) {
+          console.log('✅ [POST PAGE] Cache valid, loading images from cache')
+          setCarouselImages(cacheCheck.images)
+          setOrderedCarouselImages(cacheCheck.images)
+          isInitialMount.current = false
+          prevDesignSettings.current = { templateId, colorThemeId }
+          return
+        } else {
+          console.log('🔄 [POST PAGE] Cache invalid or missing, will regenerate')
+          // Cache invalid - fall through to regeneration
+        }
+      }
+    }
+    
+    // Update prevDesignSettings on initial mount if no change
+    if (!designChanged && isInitialMount.current) {
+      prevDesignSettings.current = { templateId, colorThemeId }
+    }
+    
+    // Determine if we should generate
+    const shouldGen = designChanged || (isInitialMount.current && orderedCarousels.length > 0 && carouselImages.length === 0)
+    
+    console.log('🤔 [SHOULD GENERATE]', {
+      designChanged,
+      isInitialMount: isInitialMount.current,
+      hasCarousels: orderedCarousels.length > 0,
+      hasImages: carouselImages.length > 0,
+      shouldGen
+    })
+    
+    if (!shouldGen) {
+      if (carouselImages.length > 0) {
+        isInitialMount.current = false
       }
       return
     }
-
-    // Design changed - regenerate
-    const currentTemplateId = templateId
-    const currentColorId = colorThemeId
     
-    // Optimization: If only color theme changed (template unchanged), skip font loading
-    // Fonts are already loaded and cached, so we can skip the ~5 second font loading step
-    const skipFontLoading = !templateChanged && themeChanged
-
-    // Clear old images to show loading state
-    setCarouselImages([])
-    setOrderedCarouselImages([])
-    previousImagesRef.current = []
-
-    // Preserve credit deduction status
-    const wasDeducted = hasDeductedCredit.current
-    hasDeductedCredit.current = true
-
-    // Update hash
-    try {
-      localStorage.setItem(
-        'postGeneration_fullContentHash',
-        JSON.stringify({
-          ideaTitle,
-          carousels,
-          underlineWords,
-          templateId: currentTemplateId,
-          colorThemeId: currentColorId
-        })
-      )
-      if (user?.id) {
-        localStorage.setItem('postGeneration_userId', user.id)
-      }
-    } catch (error) {
-      // Ignore localStorage errors
-    }
-
-    // Regenerate
-    const run = async () => {
-      try {
-        await new Promise(resolve => setTimeout(resolve, 0))
-        await generateAllCarousels(currentTemplateId, currentColorId, skipFontLoading)
-        prevDesignSettings.current = { templateId: currentTemplateId, colorThemeId: currentColorId }
-        if (isInitialMount.current) {
-          isInitialMount.current = false
+    // Design changed - regenerate with new theme/template
+    if (designChanged) {
+      console.log('🎨 [REGENERATION] Design changed - starting regeneration...', {
+        templateChanged,
+        themeChanged,
+        newTemplate: templateId,
+        newTheme: colorThemeId
+      })
+      
+      const currentTemplateId = templateId
+      const currentColorId = colorThemeId
+      const skipFontLoading = !templateChanged && themeChanged
+      
+      // Clear old images to show loading state
+      setCarouselImages([])
+      setOrderedCarouselImages([])
+      previousImagesRef.current = []
+      
+      // Preserve credit deduction status
+      const wasDeducted = hasDeductedCredit.current
+      hasDeductedCredit.current = true
+      
+      // Update hash using batch helper
+      const fullContentHash = createContentHash(ideaTitle, orderedCarousels, orderedUnderlineWords, currentTemplateId, currentColorId)
+      saveToLocalStorage({
+        fullContentHash: fullContentHash,
+        userId: user?.id
+      })
+      
+      console.log('💾 [REGENERATION] Hash updated:', fullContentHash.substring(0, 50) + '...')
+      
+      // Regenerate with force flag
+      const run = async () => {
+        try {
+          console.log('🚀 [REGENERATION] Starting generateAllCarousels...')
+          await new Promise(resolve => setTimeout(resolve, 0))
+          await generateAllCarousels(currentTemplateId, currentColorId, skipFontLoading, true)
+          console.log('✅ [REGENERATION] Complete')
+          prevDesignSettings.current = { templateId: currentTemplateId, colorThemeId: currentColorId }
+          if (isInitialMount.current) {
+            isInitialMount.current = false
+          }
+        } catch (error) {
+          console.error('❌ [REGENERATION] Failed:', error)
+          setGenerating(false)
+        } finally {
+          hasDeductedCredit.current = wasDeducted
         }
-      } catch (error) {
-        console.error('❌ Regeneration failed:', error)
-        setGenerating(false)
-      } finally {
-        hasDeductedCredit.current = wasDeducted
       }
+      run()
+      return
     }
-    run()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templateId, colorThemeId])
+    
+    // Initial generation - check cache first
+    if (isInitialMount.current && orderedCarousels.length > 0) {
+      console.log('🆕 [INITIAL GENERATION] Starting initial generation...')
+      isInitialMount.current = false
+      generateAllCarousels().then(() => {
+        console.log('✅ [INITIAL GENERATION] Complete')
+        prevDesignSettings.current = { templateId, colorThemeId }
+      }).catch((err) => {
+        console.error('❌ [INITIAL GENERATION] Failed:', err)
+      })
+    }
+  }, [orderedCarousels.length, carouselImages.length, templateId, colorThemeId, generateAllCarousels, ideaTitle, orderedUnderlineWords, user?.id])
   
   // Regenerate when underlineWords gains image URLs (e.g., after initial generation with images)
   // This handles the case where images are generated after the initial carousel generation
@@ -1309,8 +1460,8 @@ function CarouselImageGeneratorComponent({
       // Update ref to use new underlineWords
       underlineWordsForGenerationRef.current = underlineWords
       
-      // Trigger regeneration
-      generateAllCarousels().catch((err) => {
+      // Trigger regeneration with force flag
+      generateAllCarousels(undefined, undefined, false, true).catch((err) => {
         console.error('❌ Failed to regenerate carousels with new images:', err)
       })
     }
@@ -1385,7 +1536,7 @@ function CarouselImageGeneratorComponent({
     prevCarouselsContent.current = JSON.stringify(carousels)
   }, [ideaTitle, generating])
 
-  const loadImage = (src: string, timeout = 30000): Promise<HTMLImageElement> => {
+  const loadImage = (src: string, timeout = 45000): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
       const img = new Image()
       // Set crossOrigin for all images to allow canvas drawing
@@ -2849,7 +3000,8 @@ function CarouselImageGeneratorComponent({
       let rawImageUrl = emphasisData.imageUrl || emphasisData.originalImageUrl || null
       
       // Check if template explicitly disables images via maxHeightRatio: 0
-      // Template 5 uses this to disable images (template6 now supports images with maxHeightRatio: 0.35)
+      // Templates with maxHeightRatio: 0 are text-only (no images)
+      // Template 5 supports images (maxHeightRatio: 0.3), Template 6 supports images (maxHeightRatio: 0.35)
       const templateDisablesImages = template.imageLayout?.maxHeightRatio === 0
       
       // Route pollinations.ai images through proxy to avoid CORS issues
@@ -3507,9 +3659,57 @@ function CarouselImageGeneratorComponent({
     console.log(`      ✅ Carousel ${index + 1} complete! Total time: ${carouselImageDuration.toFixed(2)}ms`)
   }  // Close generateCarouselImage function
 
-  const downloadCarousel = (index: number) => {
-    const imageDataUrl = orderedCarouselImages[index]
+  /**
+   * Convert WebP data URL to PNG data URL for user downloads
+   * Users expect PNG format when downloading images
+   */
+  const convertWebPDataUrlToPng = async (webpDataUrl: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      // If it's already PNG, return as-is
+      if (webpDataUrl.startsWith('data:image/png')) {
+        resolve(webpDataUrl)
+        return
+      }
+
+      // If it's not WebP, return as-is (fallback for other formats)
+      if (!webpDataUrl.startsWith('data:image/webp')) {
+        resolve(webpDataUrl)
+        return
+      }
+
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.width
+        canvas.height = img.height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'))
+          return
+        }
+        ctx.drawImage(img, 0, 0)
+        // Convert to PNG data URL
+        const pngDataUrl = canvas.toDataURL('image/png')
+        resolve(pngDataUrl)
+      }
+      img.onerror = () => reject(new Error('Failed to load WebP image'))
+      img.src = webpDataUrl
+    })
+  }
+
+  const downloadCarousel = async (index: number) => {
+    let imageDataUrl = orderedCarouselImages[index]
     if (!imageDataUrl) return
+
+    // Convert WebP to PNG for download if needed
+    if (imageDataUrl.startsWith('data:image/webp')) {
+      try {
+        imageDataUrl = await convertWebPDataUrlToPng(imageDataUrl)
+      } catch (error) {
+        console.error('Error converting WebP to PNG for download:', error)
+        // Continue with original if conversion fails
+      }
+    }
 
     const link = document.createElement('a')
     const carousel = orderedCarousels[index]
@@ -3528,20 +3728,21 @@ function CarouselImageGeneratorComponent({
   const downloadAllCarousels = async () => {
     const isMobile = isMobileDevice()
     
-    // On mobile devices, download images individually to save to photo album
-    if (isMobile) {
-      try {
-        // Download each image individually with a small delay between downloads
-        // This allows mobile browsers to save each image to the photo album
-        for (let i = 0; i < orderedCarousels.length; i++) {
-          const imageDataUrl = orderedCarouselImages[i]
-          if (!imageDataUrl) continue
-          
-          // Use setTimeout to stagger downloads and avoid browser blocking
-          setTimeout(() => {
-            downloadCarousel(i)
-          }, i * 300) // 300ms delay between each download
-        }
+      // On mobile devices, download images individually to save to photo album
+      if (isMobile) {
+        try {
+          // Download each image individually with a small delay between downloads
+          // This allows mobile browsers to save each image to the photo album
+          for (let i = 0; i < orderedCarousels.length; i++) {
+            const imageDataUrl = orderedCarouselImages[i]
+            if (!imageDataUrl) continue
+            
+            // Use setTimeout to stagger downloads and avoid browser blocking
+            // downloadCarousel is now async, so we need to handle it properly
+            setTimeout(async () => {
+              await downloadCarousel(i)
+            }, i * 300) // 300ms delay between each download
+          }
       } catch (error) {
         console.error('Error downloading images on mobile:', error)
       }
@@ -3554,8 +3755,18 @@ function CarouselImageGeneratorComponent({
       
       // Process all carousels and add them to the zip
       for (let i = 0; i < orderedCarousels.length; i++) {
-        const imageDataUrl = orderedCarouselImages[i]
+        let imageDataUrl = orderedCarouselImages[i]
         if (!imageDataUrl) continue
+        
+        // Convert WebP to PNG for download if needed
+        if (imageDataUrl.startsWith('data:image/webp')) {
+          try {
+            imageDataUrl = await convertWebPDataUrlToPng(imageDataUrl)
+          } catch (error) {
+            console.error(`Error converting WebP to PNG for carousel ${i + 1}:`, error)
+            // Continue with original if conversion fails
+          }
+        }
         
         const carousel = orderedCarousels[i]
         const fileName = `carousel-${i + 1}-${carousel.kind.toLowerCase()}.png`

@@ -11,11 +11,13 @@ export interface UploadImagesResult {
 
 /**
  * Converts a base64 data URL to a Blob
+ * Supports both WebP and PNG formats
  */
 function dataURLtoBlob(dataURL: string): Blob {
   const arr = dataURL.split(',')
   const mimeMatch = arr[0].match(/:(.*?);/)
-  const mime = mimeMatch ? mimeMatch[1] : 'image/png'
+  // Default to WebP, fallback to PNG if not specified
+  const mime = mimeMatch ? mimeMatch[1] : 'image/webp'
   const bstr = atob(arr[1])
   let n = bstr.length
   const u8arr = new Uint8Array(n)
@@ -63,17 +65,17 @@ export async function uploadImagesToStorage(
       // Convert base64 to Blob
       const blob = dataURLtoBlob(imageDataUrl)
       
-      const filePath = `${userId}/${generationId}/slide-${i}.png`
+      const filePath = `${userId}/${generationId}/slide-${i}.webp`
       
       console.log(`📤 Uploading ${filePath}...`)
       
       // Upload to Supabase Storage
       // OPTIMIZED: Increased cacheControl to 7 days (604800 seconds) since images are immutable
-      // This enables better CDN caching and reduces egress costs
+      // Using WebP format for 25-35% smaller file size and reduced egress costs
       const { error: uploadError } = await supabase.storage
         .from('carousel-images')
         .upload(filePath, blob, {
-          contentType: 'image/png',
+          contentType: 'image/webp',
           upsert: true,
           cacheControl: '604800' // 7 days - images are immutable once created
         })
@@ -164,13 +166,13 @@ export async function checkImagesExist(
   }
   
   // If database doesn't have URLs, try known file paths (no storage.list() - avoids egress)
-  // We know images follow the pattern: slide-0.png, slide-1.png, etc.
+  // We know images follow the pattern: slide-0.webp, slide-1.webp, etc.
   console.log(`⚠️ No cached URLs in database, checking known file paths for ${expectedCount} images`)
   
   const pathPromises: Promise<string | null>[] = []
   
   for (let i = 0; i < expectedCount; i++) {
-    const filePath = `${userId}/${generationId}/slide-${i}.png`
+    const filePath = `${userId}/${generationId}/slide-${i}.webp`
     pathPromises.push(
       supabase.storage
         .from('carousel-images')
@@ -219,7 +221,7 @@ export async function deleteOldImages(
   
   // FIXED: Avoid storage.list() which causes egress
   // Try to delete up to 10 old slides (most carousels have 3-5 slides)
-  // We know the pattern: slide-0.png, slide-1.png, etc.
+  // We know the pattern: slide-0.webp, slide-1.webp, etc.
   const maxOldSlides = 10
   const filesToDelete: string[] = []
   
@@ -227,7 +229,7 @@ export async function deleteOldImages(
   // If URL creation succeeds, file exists and should be deleted
   // Note: 400 errors are expected for non-existent files, we ignore them
   for (let i = 0; i < maxOldSlides; i++) {
-    const filePath = `${userId}/${generationId}/slide-${i}.png`
+    const filePath = `${userId}/${generationId}/slide-${i}.webp`
     try {
       const { error } = await supabase.storage
         .from('carousel-images')

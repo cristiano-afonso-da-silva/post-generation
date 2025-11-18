@@ -289,11 +289,12 @@ Return JSON with:
 /**
  * Prompt for extracting emphasis words and image keywords from MIDDLE carousel
  */
-export const MIDDLE_EMPHASIS_PROMPT = (title: string, content: string) => `
+export const MIDDLE_EMPHASIS_PROMPT = (title: string | undefined, content: string) => {
+  const titleSection = title ? `Title: "${title}"\n` : '';
+  return `
 Analyze this middle carousel content and extract emphasis words and image search keywords:
 
-Title: "${title}"
-Content: "${content}"
+${titleSection}Content: "${content}"
 
 CRITICAL INSTRUCTIONS:
 1. UNDERLINE: Extract 2-4 short phrases (2-4 words each) that are KEY CONCEPTS
@@ -320,6 +321,7 @@ REQUIRED JSON FORMAT (ALL FIELDS MUST BE PRESENT):
 
 The imageSearch field is MANDATORY. Always provide visual search terms.
 `.trim();
+};
 
 // ════════════════════════════════════════════════════════════════════════════
 // AI IMAGE GENERATION PROMPTS
@@ -380,7 +382,8 @@ export const getEmphasisPrompt = (
     return CTA_EMPHASIS_PROMPT(content);
   }
   
-  if (kind === 'MIDDLE' && title && content) {
+  if (kind === 'MIDDLE' && content) {
+    // Allow MIDDLE slides with just content (title is optional, e.g., Template 4)
     return MIDDLE_EMPHASIS_PROMPT(title, content);
   }
   
@@ -402,7 +405,7 @@ export const validatePromptParams = {
   emphasis: (kind: string, title?: string, content?: string): boolean => {
     if (kind === 'HOOK') return !!title;
     if (kind === 'CTA') return !!content;
-    if (kind === 'MIDDLE') return !!(title && content);
+    if (kind === 'MIDDLE') return !!content; // Title is optional for MIDDLE slides (e.g., Template 4)
     return false;
   }
 };

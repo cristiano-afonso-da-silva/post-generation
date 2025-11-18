@@ -12,3 +12,6 @@ ON public.user_credits(user_id, template_generation_used);
 -- Once set to TRUE, they cannot use the Generate Template feature again
 
 
+
+
+

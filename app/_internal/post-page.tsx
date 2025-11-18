@@ -502,7 +502,14 @@ function PostPageContent() {
     }
     
     setNote(noteData)
-    setEditedCarousels(generation.slides.map((slide: any) => ({ ...slide })))
+    // Sync HOOK carousel title with ideaTitle when initializing
+    const syncedCarousels = generation.slides.map((slide: any, index: number) => {
+      if (index === 0 && noteData.carousels[0]?.kind === 'HOOK') {
+        return { ...slide, title: noteData.ideaTitle }
+      }
+      return { ...slide }
+    })
+    setEditedCarousels(syncedCarousels)
     setEditedCaption(generation.caption || '')
     
     // Load accountName and website from generation data or localStorage
@@ -613,7 +620,14 @@ function PostPageContent() {
   // Sync editable carousels with note
   useEffect(() => {
     if (note) {
-      setEditedCarousels(note.carousels.map(carousel => ({ ...carousel })))
+      // Sync HOOK carousel title with ideaTitle
+      const syncedCarousels = note.carousels.map((carousel, index) => {
+        if (index === 0 && carousel.kind === 'HOOK') {
+          return { ...carousel, title: note.ideaTitle }
+        }
+        return { ...carousel }
+      })
+      setEditedCarousels(syncedCarousels)
       setEditedCaption(note.caption || '')
       setCarouselsDirty(false)
       setExpandedCarouselIndexes([])
@@ -630,6 +644,17 @@ function PostPageContent() {
   }
 
   const handleCarouselFieldChange = (index: number, field: 'title' | 'content', value: string) => {
+    // If this is the HOOK carousel and we're changing the title, also update ideaTitle
+    if (field === 'title' && note && note.carousels[index]?.kind === 'HOOK') {
+      setNote(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          ideaTitle: value
+        }
+      })
+    }
+    
     setEditedCarousels(prev => {
       if (!prev[index]) return prev
       const next = [...prev]
@@ -644,7 +669,14 @@ function PostPageContent() {
 
   const resetEditedCarousels = () => {
     if (note) {
-      setEditedCarousels(note.carousels.map(carousel => ({ ...carousel })))
+      // Sync HOOK carousel title with ideaTitle when resetting
+      const syncedCarousels = note.carousels.map((carousel, index) => {
+        if (index === 0 && carousel.kind === 'HOOK') {
+          return { ...carousel, title: note.ideaTitle }
+        }
+        return { ...carousel }
+      })
+      setEditedCarousels(syncedCarousels)
     }
     setCarouselsDirty(false)
   }
@@ -705,7 +737,14 @@ function PostPageContent() {
         }
 
         setNote(updatedNote)
-        setEditedCarousels(sanitizedCarousels.map(carousel => ({ ...carousel })))
+        // Sync HOOK carousel title with ideaTitle after saving
+        const syncedCarousels = sanitizedCarousels.map((carousel, index) => {
+          if (index === 0 && carousel.kind === 'HOOK') {
+            return { ...carousel, title: note.ideaTitle }
+          }
+          return { ...carousel }
+        })
+        setEditedCarousels(syncedCarousels)
         setCarouselsDirty(false)
 
         try {
@@ -1591,7 +1630,7 @@ function PostPageContent() {
                                         </label>
                                         <input
                                           className="input"
-                                          value={carousel.title ?? ''}
+                                          value={kind === 'HOOK' && note ? (note.ideaTitle ?? '') : (carousel.title ?? '')}
                                           onChange={(e) => handleCarouselFieldChange(index, 'title', e.target.value)}
                                           placeholder="Enter carousel title"
                                           style={{ width: '100%', fontSize: isMobile ? '13px' : undefined }}

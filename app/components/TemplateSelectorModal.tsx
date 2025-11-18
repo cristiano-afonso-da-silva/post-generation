@@ -24,7 +24,24 @@ interface TemplateOption {
 function isTextOnlyTemplate(templateId: string): boolean {
   try {
     const template = getCarouselTemplate(templateId)
-    return template.imageLayout?.maxHeightRatio === 0
+    // A template is text-only if:
+    // 1. imageLayout.maxHeightRatio is explicitly 0, OR
+    // 2. imageLayout is missing AND imagePlacement.content is false/missing
+    const maxHeightRatio = template.imageLayout?.maxHeightRatio
+    const imagePlacement = template.imagePlacement || { hook: false, content: true, cta: false }
+    
+    // If maxHeightRatio is explicitly 0, it's text-only
+    if (maxHeightRatio === 0) {
+      return true
+    }
+    
+    // If maxHeightRatio is undefined/null and content images are disabled, it's text-only
+    if (maxHeightRatio == null && !imagePlacement.content) {
+      return true
+    }
+    
+    // Otherwise, it supports images
+    return false
   } catch (error) {
     console.error('Error checking if template is text-only:', error)
     return false
