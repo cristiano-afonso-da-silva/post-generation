@@ -14,11 +14,12 @@ import dynamic from 'next/dynamic'
 const CreateNewPage = dynamic(() => import('../_internal/create-page'), { ssr: false })
 const PostPage = dynamic(() => import('../_internal/post-page'), { ssr: false })
 const GenerateTemplatePage = dynamic(() => import('../_internal/generate-template-page'), { ssr: false })
+const ExtremeGenerateTemplatePage = dynamic(() => import('../_internal/extreme-generate-template-page'), { ssr: false })
 
 function DashboardView() {
   const searchParams = useSearchParams()
-  const view = (searchParams.get('view') as 'create' | 'post' | 'generate-template') || 'create'
-  const [activeView, setActiveView] = useState<'create' | 'post' | 'generate-template'>(view)
+  const view = (searchParams.get('view') as 'create' | 'post' | 'generate-template' | 'extreme-generate-template') || 'create'
+  const [activeView, setActiveView] = useState<'create' | 'post' | 'generate-template' | 'extreme-generate-template'>(view)
   const [selectedGenerationId, setSelectedGenerationId] = useState<string | null>(null)
   const { user, loading } = useAuth()
   const router = useRouter()
@@ -60,7 +61,7 @@ function DashboardView() {
     }
   }, [view, searchParams])
 
-  const handleViewChange = (newView: 'create' | 'post' | 'generate-template') => {
+  const handleViewChange = (newView: 'create' | 'post' | 'generate-template' | 'extreme-generate-template') => {
     // Check if navigating away from create with unsaved work
     if (
       activeView === 'create' &&
@@ -236,6 +237,11 @@ function DashboardView() {
         {activeView === 'generate-template' && (
           <div style={{ height: '100%', overflow: 'auto' }}>
             <GenerateTemplatePage />
+          </div>
+        )}
+        {activeView === 'extreme-generate-template' && (
+          <div style={{ height: '100%', overflow: 'auto' }}>
+            <ExtremeGenerateTemplatePage />
           </div>
         )}
       </div>
