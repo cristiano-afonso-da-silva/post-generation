@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { CarouselTemplate } from '../config/carouselTemplates'
+import { useAuth } from '../context/AuthContext'
+import { useRouter } from 'next/navigation'
 
 type SlideKind = 'HOOK' | 'MIDDLE' | 'CTA'
 
@@ -117,6 +119,10 @@ const DEFAULT_TEMPLATE: CarouselTemplate = {
 export default function DebugPage() {
   const [templateSource, setTemplateSource] = useState<string>(JSON.stringify(DEFAULT_TEMPLATE, null, 2))
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const { user, signOut } = useAuth()
+  const router = useRouter()
 
   const { parsedTemplate, error } = useMemo(() => {
     try {
@@ -126,6 +132,65 @@ export default function DebugPage() {
       return { parsedTemplate: null, error: err.message || 'Invalid JSON' }
     }
   }, [templateSource])
+
+  const handleDeleteAccount = async () => {
+    if (!user) {
+      setDeleteError('You must be logged in to delete your account')
+      return
+    }
+
+    // Confirm deletion
+    const confirmed = window.confirm(
+      '⚠️ WARNING: This will permanently delete your account and all your data.\n\n' +
+      'This includes:\n' +
+      '- All your generations\n' +
+      '- Your profile and credits\n' +
+      '- All custom templates\n' +
+      '- Threads connections\n\n' +
+      'This action CANNOT be undone. Are you absolutely sure?'
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    // Double confirmation
+    const doubleConfirmed = window.confirm(
+      'This is your last chance. Are you 100% sure you want to delete your account?'
+    )
+
+    if (!doubleConfirmed) {
+      return
+    }
+
+    setIsDeleting(true)
+    setDeleteError(null)
+
+    try {
+      const response = await fetch('/api/user/delete-account', {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId: user.id }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete account')
+      }
+
+      // Sign out and redirect to home page
+      await signOut()
+      router.push('/')
+    } catch (error: any) {
+      console.error('Error deleting account:', error)
+      setDeleteError(error.message || 'Failed to delete account. Please try again.')
+      setIsDeleting(false)
+    }
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: '#f7f7f8', padding: '40px 32px' }}>
@@ -142,6 +207,54 @@ export default function DebugPage() {
             fonts, or layout logic—you will see the output immediately without going through the full generation flow.
           </p>
         </header>
+
+        {/* Delete Account Section */}
+        {user && (
+          <section style={{
+            background: '#ffffff',
+            borderRadius: '16px',
+            border: '1px solid #ececec',
+            padding: '24px',
+            marginBottom: '32px'
+          }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px', color: '#DC2626' }}>
+              ⚠️ Danger Zone
+            </h2>
+            <p style={{ fontSize: '14px', color: '#666666', marginBottom: '16px' }}>
+              Permanently delete your account and all associated data. This action cannot be undone.
+            </p>
+            <button
+              onClick={handleDeleteAccount}
+              disabled={isDeleting}
+              style={{
+                padding: '12px 24px',
+                borderRadius: '10px',
+                border: '1px solid #DC2626',
+                background: isDeleting ? '#FCA5A5' : '#DC2626',
+                color: '#ffffff',
+                fontWeight: 600,
+                cursor: isDeleting ? 'not-allowed' : 'pointer',
+                fontSize: '14px',
+                transition: 'all 0.2s'
+              }}
+            >
+              {isDeleting ? 'Deleting Account...' : 'Delete My Account'}
+            </button>
+            {deleteError && (
+              <div style={{
+                marginTop: '12px',
+                padding: '10px 12px',
+                borderRadius: '10px',
+                background: '#FEF2F2',
+                color: '#B91C1C',
+                fontSize: '13px',
+                border: '1px solid #FCA5A5'
+              }}>
+                Error: {deleteError}
+              </div>
+            )}
+          </section>
+        )}
 
         <section style={{
           display: 'grid',

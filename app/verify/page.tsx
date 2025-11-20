@@ -26,7 +26,21 @@ export default function VerifyPage() {
 
   useEffect(() => {
     if (!loading && user && user.email_confirmed_at) {
-      router.push('/dashboard')
+      // Check if onboarding is completed
+      const onboardingData = localStorage.getItem('onboarding_data')
+      if (onboardingData) {
+        try {
+          const data = JSON.parse(onboardingData)
+          if (data.completed) {
+            router.push('/dashboard')
+            return
+          }
+        } catch (e) {
+          // If parse fails, redirect to onboarding
+        }
+      }
+      // If no onboarding data or not completed, redirect to onboarding
+      router.push('/onboarding')
     }
   }, [user, loading, router])
 
@@ -48,7 +62,17 @@ export default function VerifyPage() {
       if (data.user) {
         setSuccess('Email verified! Redirecting...')
         sessionStorage.removeItem('verificationEmail')
-        setTimeout(() => router.push('/dashboard'), 2000)
+        // Check if onboarding is completed
+        const onboardingData = localStorage.getItem('onboarding_data')
+        const redirectPath = onboardingData ? (() => {
+          try {
+            const data = JSON.parse(onboardingData)
+            return data.completed ? '/dashboard' : '/onboarding'
+          } catch (e) {
+            return '/onboarding'
+          }
+        })() : '/onboarding'
+        setTimeout(() => router.push(redirectPath), 2000)
       }
     } catch (error: any) {
       setError(error.message || 'Invalid verification code')

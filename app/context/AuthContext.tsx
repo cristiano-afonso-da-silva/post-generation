@@ -77,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem('postGeneration_ideaTitle')
       localStorage.removeItem('postGeneration_userId')
       localStorage.removeItem('postGeneration_backgroundId')
+      localStorage.removeItem('onboarding_data')
       
       // Clear generation caches (data and images)
       if (userId) {

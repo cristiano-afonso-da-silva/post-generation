@@ -3604,31 +3604,16 @@ function CarouselImageGeneratorComponent({
     // Render footer if enabled
     if (template.footer?.enabled && template.footer.height) {
       const footerHeight = template.footer.height
-      // Position footer - ensure it stays within safe area boundaries
-      // For template 4, safeMarginBottom is 250 + footerHeight, so footer should be well within bounds
-      // Calculate max Y position based on safe area
-      const maxFooterY = height - safeMarginBottom + footerHeight
-      // Position footer at bottom, but ensure it doesn't exceed safe area
-      const footerY = template.id === 'template4' 
-        ? Math.min(height - footerHeight, maxFooterY)  // For template 4, ensure within safe area
-        : height - footerHeight  // For other templates, position at bottom
+      const paddingX = template.footer.paddingX || 48
+      const paddingY = template.footer.paddingY || paddingX
       
-      // Draw separator line
-      if (template.footer.lineThickness && template.footer.lineColor) {
-        ctx.strokeStyle = template.footer.lineColor
-        ctx.lineWidth = template.footer.lineThickness
-        ctx.beginPath()
-        const paddingX = template.footer.paddingX || 48
-        ctx.moveTo(paddingX, footerY)
-        ctx.lineTo(width - paddingX, footerY)
-        ctx.stroke()
-      }
+      // Position footer at the very bottom of canvas
+      const footerY = height - footerHeight
       
-      // Draw footer text (left and right)
+      // Draw footer text (left and right) - positioned at bottom of footer
       const footerFontRole = template.footer.fontRole || 'content'
       const footerFont = template.fonts[footerFontRole]
       if (footerFont) {
-        // Use fontSize override if provided, otherwise use fontRole's default size
         const footerFontSize = template.footer.fontSize || footerFont.size
         const footerCssFont = footerFont.cssFont.replace(/(\d+\.?\d*)px/, `${footerFontSize}px`)
         
@@ -3636,16 +3621,16 @@ function CarouselImageGeneratorComponent({
         ctx.fillStyle = getTextColor(footerFontRole as 'hook' | 'title' | 'content' | 'cta')
         ctx.textAlign = 'left'
         
-        const paddingX = template.footer.paddingX || 48
-        const footerTextY = footerY + (footerHeight / 2) + (footerFontSize / 2)
+        // Position text at bottom of footer with paddingY from bottom
+        const footerTextY = footerY + footerHeight - paddingY
         
-        // Left text (account name) - use user input or template default
+        // Left text (account name)
         const leftText = accountName || template.footer.leftText || ''
         if (leftText) {
           ctx.fillText(leftText, paddingX, footerTextY)
         }
         
-        // Right text (website) - use user input or template default
+        // Right text (website/handle)
         const rightText = website || template.footer.rightText || ''
         if (rightText) {
           ctx.textAlign = 'right'

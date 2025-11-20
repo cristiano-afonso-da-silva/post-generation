@@ -2,13 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import {
   IDEAS_PROMPT,
+  ONBOARDING_IDEA_PROMPT,
   NOTE_PROMPT,
   getEmphasisPrompt,
   buildAIImagePrompt,
-  type AIImageStyle
+  type AIImageStyle,
+  type UserVoice,
+  type TemplateLayout
 } from '../../config/prompts';
 import { GEMINI_MODEL } from '../../config/aiConfig';
-import { getCarouselTemplate } from '../../config/carouselTemplates';
+import { getCarouselTemplate, extractTemplateLayout } from '../../config/carouselTemplates';
 // ════════════════════════════════════════════════════════════════════════════
 // API Configuration
 // ════════════════════════════════════════════════════════════════════════════
@@ -676,6 +679,17 @@ const IDEAS_SCHEMA = {
   required: ['ideas']
 };
 
+const ONBOARDING_IDEA_SCHEMA = {
+  type: SchemaType.OBJECT,
+  properties: {
+    idea: {
+      type: SchemaType.STRING,
+      description: "Single personalized post idea title (6-10 words)"
+    }
+  },
+  required: ['idea']
+};
+
 const UNDERLINE_SCHEMA = {
   type: SchemaType.OBJECT,
   properties: {
@@ -918,6 +932,63 @@ async function generateIdeas(accountDescription: string) {
   return generateIdeasWithGemini(accountDescription);
 }
 
+async function generateOnboardingIdeaWithGemini(
+  projectDescription: string,
+  topics: string[],
+  vibe: string
+) {
+  const startTime = Date.now();
+  
+  try {
+    const model = getModel();
+    const result = await callGeminiWithRetry(model, {
+      contents: [{
+        role: 'user',
+        parts: [{ text: ONBOARDING_IDEA_PROMPT(projectDescription, topics, vibe) }]
+      }],
+      generationConfig: {
+        temperature: 0.9,
+        maxOutputTokens: 200,
+        responseMimeType: 'application/json',
+        responseSchema: ONBOARDING_IDEA_SCHEMA
+      }
+    });
+    
+    const responseText = result.response.text();
+    const data = safeJsonParse(responseText);
+    
+    if (!data.idea || typeof data.idea !== 'string' || data.idea.trim().length === 0) {
+      throw new Error('Invalid idea format from Gemini');
+    }
+    
+    return {
+      success: true,
+      action: 'onboarding-idea',
+      data: {
+        idea: data.idea.trim()
+      },
+      meta: {
+        generationTime: `${Date.now() - startTime}ms`,
+        model: GEMINI_MODEL,
+      }
+    };
+  } catch (error: any) {
+    console.error('Error generating onboarding idea with Gemini:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to generate onboarding idea',
+    };
+  }
+}
+
+async function generateOnboardingIdea(
+  projectDescription: string,
+  topics: string[],
+  vibe: string
+) {
+  return generateOnboardingIdeaWithGemini(projectDescription, topics, vibe);
+}
+
 // buildAIImagePrompt is now imported from app/config/prompts.ts
 
 async function extractUnderlineWordsWithGemini(carousels: any[]): Promise<Record<number, any>> {
@@ -1150,29 +1221,55 @@ async function extractUnderlineWords(carousels: any[], includeImages: boolean = 
   return results;
 }
 
-async function generateNoteWithGemini(ideaTitle: string, accountDescription: string, templateId?: string) {
+async function generateNoteWithGemini(
+  ideaTitle: string, 
+  accountDescription: string, 
+  userVoice?: UserVoice,  // NEW: User's voice preferences (optional for now)
+  templateId?: string
+) {
   const startTime = Date.now();
   
   try {
-    // Get template and extract writing style
-    let writingStyle = undefined
+    // Get template and extract ONLY layout constraints (NO tone)
+    let templateLayout: TemplateLayout | undefined = undefined
     if (templateId) {
       try {
         const template = getCarouselTemplate(templateId)
-        writingStyle = template.writingStyle
-        if (writingStyle) {
-          console.log(`📝 Using writing style from template: ${templateId}`)
-        }
+        templateLayout = extractTemplateLayout(template)
+        console.log(`📏 Using template layout from: ${templateId}`)
       } catch (error) {
-        console.warn(`⚠️  Failed to load template ${templateId}, using default writing style:`, error)
+        console.warn(`⚠️  Failed to load template ${templateId}, using default layout:`, error)
       }
+    }
+    
+    // Use provided userVoice or default
+    // TODO: In the future, extract user voice from user profile or account description
+    const finalUserVoice: UserVoice = userVoice || {
+      tone: 'friendly and conversational, authentic to the user\'s voice',
+      sentenceStyle: 'medium length, clear and natural',
+      preferWords: [],
+      avoidWords: [],
+      examples: ''
+    }
+    
+    if (userVoice) {
+      console.log(`🎯 Using user's voice: tone="${userVoice.tone}", style="${userVoice.sentenceStyle}"`)
+    } else {
+      console.log(`🎯 Using default user voice`)
     }
     
     const model = getModel();
     const result = await callGeminiWithRetry(model, {
       contents: [{
         role: 'user',
-        parts: [{ text: NOTE_PROMPT(ideaTitle, accountDescription, writingStyle) }]
+        parts: [{ 
+          text: NOTE_PROMPT(
+            ideaTitle, 
+            accountDescription, 
+            finalUserVoice,  // User voice (TOP PRIORITY)
+            templateLayout   // Template layout (length/structure only)
+          ) 
+        }]
       }],
       generationConfig: {
         temperature: 0.8,
@@ -1272,7 +1369,7 @@ async function generateNoteWithGemini(ideaTitle: string, accountDescription: str
   }
 }
 
-async function generateNote(ideaTitle: string, accountDescription: string, includeImages: boolean = true, useAIImages: boolean = false, aiImageStyle: AIImageStyle = 'animated', templateId?: string) {
+async function generateNote(ideaTitle: string, accountDescription: string, includeImages: boolean = true, useAIImages: boolean = false, aiImageStyle: AIImageStyle = 'animated', templateId?: string, userVoice?: UserVoice) {
   const startTime = Date.now();
   
   try {
@@ -1289,7 +1386,7 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
     
     // Get note data from Gemini
     console.log(`📡 Step 1: Calling generateNoteWithGemini()...`);
-    const noteResult = await generateNoteWithGemini(ideaTitle, accountDescription, templateId);
+    const noteResult = await generateNoteWithGemini(ideaTitle, accountDescription, userVoice, templateId);
     
     if (!noteResult.success) {
       console.error(`❌ generateNoteWithGemini failed:`, noteResult.error);
@@ -1390,7 +1487,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { action, accountDescription, ideaTitle, includeImages, useAIImages, aiImageStyle, templateId } = body;
+    const { action, accountDescription, ideaTitle, includeImages, useAIImages, aiImageStyle, templateId, userVoice } = body;
     
     if (!action) {
       return NextResponse.json(
@@ -1408,6 +1505,38 @@ export async function POST(request: NextRequest) {
       }
       
       const result = await generateIdeas(accountDescription.trim());
+      return NextResponse.json(result);
+    }
+    
+    if (action === 'onboarding-idea') {
+      const { projectDescription, topics, vibe } = body;
+      
+      if (!projectDescription || typeof projectDescription !== 'string' || projectDescription.trim().length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'Missing or invalid projectDescription' },
+          { status: 400 }
+        );
+      }
+      
+      if (!Array.isArray(topics) || topics.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'Missing or invalid topics array' },
+          { status: 400 }
+        );
+      }
+      
+      if (!vibe || typeof vibe !== 'string' || vibe.trim().length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'Missing or invalid vibe' },
+          { status: 400 }
+        );
+      }
+      
+      const result = await generateOnboardingIdea(
+        projectDescription.trim(),
+        topics,
+        vibe.trim()
+      );
       return NextResponse.json(result);
     }
     
@@ -1438,7 +1567,7 @@ export async function POST(request: NextRequest) {
       console.log('📋 templateId:', templateId);
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
       
-      const result = await generateNote(ideaTitle.trim(), accountDescription?.trim() || '', shouldIncludeImages, shouldUseAIImages, resolvedAIStyle, templateId);
+      const result = await generateNote(ideaTitle.trim(), accountDescription?.trim() || '', shouldIncludeImages, shouldUseAIImages, resolvedAIStyle, templateId, userVoice);
       return NextResponse.json(result);
     }
 

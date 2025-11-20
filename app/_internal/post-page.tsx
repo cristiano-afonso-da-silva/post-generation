@@ -14,6 +14,7 @@ import { getTemplateOptions, getCarouselTemplate } from '../config/carouselTempl
 import TemplateSelectorModal from '../components/TemplateSelectorModal'
 import { createPortal } from 'react-dom'
 import JSZip from 'jszip'
+import { getCachedImageDataUrl, convertUrlToDataUrl } from '../lib/imageCache'
 
 const API_URL = ''
 
@@ -68,56 +69,201 @@ function PostCard({
   getStatusText,
   getButtonText
 }: PostCardProps) {
-  const [imageLoaded, setImageLoaded] = useState(false)
-  const [imageError, setImageError] = useState(false)
-  const [shouldLoad, setShouldLoad] = useState(false)
+  // SIMPLIFIED: Single state for image status
+  const [imageStatus, setImageStatus] = useState<'loading' | 'loaded' | 'error'>('loading')
+  const [currentImageSrc, setCurrentImageSrc] = useState<string | null>(null)
+  const [currentUrlIndex, setCurrentUrlIndex] = useState(0)
   const imgRef = useRef<HTMLImageElement>(null)
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const statusRef = useRef<'loading' | 'loaded' | 'error'>('loading')
 
-  // Reset image state when thumbnailUrl changes
-  useEffect(() => {
-    setImageLoaded(false)
-    setImageError(false)
-    setShouldLoad(false)
-  }, [thumbnailUrl])
-
-  // Lazy load: only load image when it's about to be visible
-  useEffect(() => {
-    if (!thumbnailUrl || shouldLoad) return
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setShouldLoad(true)
-            observer.disconnect()
-          }
-        })
-      },
-      {
-        rootMargin: '50px', // Start loading 50px before it's visible
-      }
-    )
-
-    if (imgRef.current) {
-      observer.observe(imgRef.current)
+  // Get all available URLs for fallback (prioritize imageUrls, then thumbnail_urls)
+  const imageUrls = generation.imageUrls || generation.image_urls || []
+  const thumbnailUrls = generation.thumbnail_urls || []
+  
+  // Build allUrls array - prioritize thumbnailUrl if provided, then imageUrls, then thumbnail_urls
+  const allUrls: string[] = []
+  
+  // If thumbnailUrl is provided and valid, add it first (highest priority)
+  if (thumbnailUrl && typeof thumbnailUrl === 'string' && thumbnailUrl.trim().length > 0) {
+    allUrls.push(thumbnailUrl)
+  }
+  
+  // Add imageUrls (skip if already added as thumbnailUrl)
+  imageUrls.forEach((url: string) => {
+    if (url && typeof url === 'string' && url.trim().length > 0 && !allUrls.includes(url)) {
+      allUrls.push(url)
     }
+  })
+  
+  // Add thumbnailUrls (skip if already added)
+  thumbnailUrls.forEach((url: string) => {
+    if (url && typeof url === 'string' && url.trim().length > 0 && !allUrls.includes(url)) {
+      allUrls.push(url)
+    }
+  })
+
+  // Sync status ref with state
+  useEffect(() => {
+    statusRef.current = imageStatus
+  }, [imageStatus])
+
+  // Load image with cache-first strategy to minimize egress
+  useEffect(() => {
+    // If currentImageSrc is already set and it's a data URL, skip processing
+    if (currentImageSrc && currentImageSrc.startsWith('data:image/')) {
+      return
+    }
+
+    if (allUrls.length === 0) {
+      setImageStatus('error')
+      return
+    }
+
+    // Clear any existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+
+    const loadImage = async (url: string, urlIndex: number) => {
+      // STEP 1: If already a data URL, use it directly (NO PROCESSING NEEDED!)
+      if (url.startsWith('data:image/')) {
+        if (currentUrlIndex === urlIndex && statusRef.current === 'loading') {
+          setCurrentImageSrc(url)
+          setImageStatus('loading') // Will be set to 'loaded' by onLoad
+        }
+        return
+      }
+
+      // STEP 2: Check localStorage cache (NO EGRESS!)
+      const cached = getCachedImageDataUrl(url)
+      if (cached) {
+        if (currentUrlIndex === urlIndex && statusRef.current === 'loading') {
+          setCurrentImageSrc(cached)
+          setImageStatus('loading') // Will be set to 'loaded' by onLoad
+        }
+        return
+      }
+
+      // STEP 3: Not cached - convert to data URL (causes egress once, then cached)
+      // This fetches from Supabase and caches in localStorage
+      try {
+        const dataUrl = await convertUrlToDataUrl(url)
+        if (dataUrl) {
+          // Only update if we're still on the same URL index
+          if (currentUrlIndex === urlIndex && statusRef.current === 'loading') {
+            setCurrentImageSrc(dataUrl)
+            setImageStatus('loading') // Will be set to 'loaded' by onLoad
+          }
+        } else {
+          // Conversion failed, try next URL
+          if (currentUrlIndex === urlIndex && statusRef.current === 'loading') {
+            const nextIndex = urlIndex + 1
+            if (nextIndex < allUrls.length) {
+              console.log(`[PostCard] Conversion failed, trying fallback URL ${nextIndex + 1}/${allUrls.length}`)
+              setCurrentUrlIndex(nextIndex)
+              setImageStatus('loading')
+            } else {
+              setImageStatus('error')
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[PostCard] Error converting URL to data URL:', error)
+        // Try next URL on error
+        if (currentUrlIndex === urlIndex && statusRef.current === 'loading') {
+          const nextIndex = urlIndex + 1
+          if (nextIndex < allUrls.length) {
+            console.log(`[PostCard] Error occurred, trying fallback URL ${nextIndex + 1}/${allUrls.length}`)
+            setCurrentUrlIndex(nextIndex)
+            setImageStatus('loading')
+          } else {
+            setImageStatus('error')
+          }
+        }
+      }
+    }
+
+    // Start loading current URL
+    const currentUrl = allUrls[currentUrlIndex]
+    if (currentUrl) {
+      setImageStatus('loading')
+      loadImage(currentUrl, currentUrlIndex)
+    } else {
+      setImageStatus('error')
+    }
+
+    // Set timeout to prevent infinite loading (10 seconds)
+    timeoutRef.current = setTimeout(() => {
+      if (statusRef.current === 'loading') {
+        console.warn(`[PostCard] Image load timeout for URL index ${currentUrlIndex}`)
+        const nextIndex = currentUrlIndex + 1
+        if (nextIndex < allUrls.length) {
+          console.log(`[PostCard] Timeout, trying fallback URL ${nextIndex + 1}/${allUrls.length}`)
+          setCurrentUrlIndex(nextIndex)
+          setImageStatus('loading')
+        } else {
+          setImageStatus('error')
+        }
+      }
+    }, 10000)
 
     return () => {
-      observer.disconnect()
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
     }
-  }, [thumbnailUrl, shouldLoad])
+  }, [allUrls, currentUrlIndex, currentImageSrc])
+
+  // Reset when thumbnailUrl changes
+  useEffect(() => {
+    // If thumbnailUrl is already a data URL, use it immediately
+    if (thumbnailUrl && thumbnailUrl.startsWith('data:image/')) {
+      setCurrentImageSrc(thumbnailUrl)
+      setImageStatus('loading') // Will be set to 'loaded' by onLoad
+      setCurrentUrlIndex(0)
+    } else {
+      setImageStatus('loading')
+      setCurrentImageSrc(null)
+      setCurrentUrlIndex(0)
+    }
+    
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+  }, [thumbnailUrl])
 
   const handleImageLoad = () => {
-    setImageLoaded(true)
-    setImageError(false)
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+    setImageStatus('loaded')
   }
 
   const handleImageError = () => {
-    setImageError(true)
-    setImageLoaded(true) // Mark as "loaded" to hide skeleton
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+
+    // Try next fallback URL
+    const nextIndex = currentUrlIndex + 1
+    if (nextIndex < allUrls.length) {
+      console.log(`[PostCard] Image error, trying fallback URL ${nextIndex + 1}/${allUrls.length}`)
+      setCurrentUrlIndex(nextIndex)
+      setImageStatus('loading')
+    } else {
+      // No more URLs to try
+      setImageStatus('error')
+    }
   }
 
-  const isImageLoading = !imageLoaded && !imageError
+  const isImageLoading = imageStatus === 'loading'
+  const showImage = imageStatus === 'loaded' && currentImageSrc
 
   return (
     <div
@@ -155,11 +301,11 @@ function PostCard({
             }}
           />
         )}
-        {thumbnailUrl ? (
+        {currentImageSrc ? (
           <img
             ref={imgRef}
-            key={thumbnailUrl}
-            src={shouldLoad ? thumbnailUrl : undefined}
+            key={currentImageSrc}
+            src={currentImageSrc}
             alt={generation.idea_title}
             onLoad={handleImageLoad}
             onError={handleImageError}
@@ -170,8 +316,8 @@ function PostCard({
               objectFit: 'cover',
               display: 'block',
               position: 'relative',
-              zIndex: imageLoaded ? 2 : 0,
-              opacity: imageLoaded ? 1 : 0,
+              zIndex: showImage ? 2 : 0,
+              opacity: showImage ? 1 : 0,
               transition: 'opacity 0.3s ease-in-out',
             }}
           />

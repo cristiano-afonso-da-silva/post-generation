@@ -41,6 +41,27 @@ function DashboardView() {
   useEffect(() => {
     if (!loading && !user) {
       router.push('/signin')
+      return
+    }
+    
+    // Check if onboarding is completed
+    if (user && !loading) {
+      const onboardingData = localStorage.getItem('onboarding_data')
+      if (!onboardingData) {
+        router.push('/onboarding')
+        return
+      }
+      try {
+        const data = JSON.parse(onboardingData)
+        if (!data.completed) {
+          router.push('/onboarding')
+          return
+        }
+      } catch (e) {
+        // If parse fails, redirect to onboarding
+        router.push('/onboarding')
+        return
+      }
     }
   }, [user, loading, router])
 

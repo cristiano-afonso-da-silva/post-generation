@@ -3,6 +3,8 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // Each template defines the complete styling for carousel rendering
 
+import type { TemplateLayout } from './prompts'
+
 export interface CarouselTemplate {
   id: string
   name: string
@@ -148,10 +150,9 @@ export interface CarouselTemplate {
   // Footer configuration
   footer?: {
     enabled: boolean
-    height?: number              // e.g. 80 (required if enabled is true)
-    lineColor?: string           // separator line color
-    lineThickness?: number       // e.g. 2
-    paddingX?: number            // left/right padding inside footer
+    height?: number              // e.g. 40 (required if enabled is true)
+    paddingX?: number            // horizontal padding (left/right) inside footer
+    paddingY?: number            // vertical padding (top/bottom) inside footer - should equal paddingX
     leftText?: string            // e.g. '@postmynote' (can be overridden by user input)
     rightText?: string           // e.g. 'postmynote.app' (can be overridden by user input)
     fontRole?: 'content' | 'title' | 'hook' // reuse an existing font role
@@ -267,7 +268,14 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
       marginBottom: 40
     },
     footer: {
-      enabled: false
+      enabled: true,
+      height: 40,
+      paddingX: 48,
+      paddingY: 48,
+      leftText: '@postmynote',  // Default, can be overridden by user input
+      rightText: 'postmynote.app',  // Default, can be overridden by user input
+      fontRole: 'content',
+      fontSize: 28  // Smaller footer text (content font is 55px, footer will be 28px)
     },
     writingStyle: {
       tone: 'friendly and conversational, like talking to a friend, warm and approachable',
@@ -352,7 +360,14 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
       marginBottom: 50
     },
     footer: {
-      enabled: false
+      enabled: true,
+      height: 40,
+      paddingX: 48,
+      paddingY: 48,
+      leftText: '@postmynote',  // Default, can be overridden by user input
+      rightText: 'postmynote.app',  // Default, can be overridden by user input
+      fontRole: 'content',
+      fontSize: 28  // Smaller footer text (content font is 56px, footer will be 28px)
     },
     writingStyle: {
       tone: 'sophisticated and refined, elegant and thoughtful, with a touch of poetic grace',
@@ -492,7 +507,14 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
       marginBottom: 30
     },
     footer: {
-      enabled: false
+      enabled: true,
+      height: 40,
+      paddingX: 48,
+      paddingY: 48,
+      leftText: '@postmynote',  // Default, can be overridden by user input
+      rightText: 'postmynote.app',  // Default, can be overridden by user input
+      fontRole: 'content',
+      fontSize: 28  // Smaller footer text (content font is 52px, footer will be 28px)
     },
     writingStyle: {
       tone: 'casual and direct, modern and straightforward, no-nonsense approach',
@@ -592,10 +614,9 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     },
     footer: {
       enabled: true,
-      height: 80,
-      lineColor: '#FFFFFF',
-      lineThickness: 2,
+      height: 40,
       paddingX: 48,
+      paddingY: 48,
       leftText: '@postmynote',  // Default, can be overridden by user input
       rightText: 'postmynote.app',  // Default, can be overridden by user input
       fontRole: 'content',
@@ -700,12 +721,11 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     },
     footer: {
       enabled: true,
-      height: 80,
-      lineColor: '#000000',
-      lineThickness: 0,
-      paddingX: 80,
-      leftText: '',
-      rightText: '@your_handle',
+      height: 40,
+      paddingX: 48,
+      paddingY: 48,
+      leftText: '@postmynote',  // Default, can be overridden by user input
+      rightText: 'postmynote.app',  // Default, can be overridden by user input
       fontRole: 'content',
       fontSize: 26
     },
@@ -825,7 +845,14 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
       marginBottom: 40
     },
     footer: {
-      enabled: false
+      enabled: true,
+      height: 40,
+      paddingX: 48,
+      paddingY: 48,
+      leftText: '@postmynote',  // Default, can be overridden by user input
+      rightText: 'postmynote.app',  // Default, can be overridden by user input
+      fontRole: 'content',
+      fontSize: 26  // Smaller footer text (content font is 48px, footer will be 26px)
     },
     roleColors: {
       hook: '#085C36',
@@ -959,10 +986,17 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
       marginBottom: 24
     },
     footer: {
-      enabled: false
+      enabled: true,
+      height: 40,
+      paddingX: 48,
+      paddingY: 48,
+      leftText: '@postmynote',  // Default, can be overridden by user input
+      rightText: 'postmynote.app',  // Default, can be overridden by user input
+      fontRole: 'content',
+      fontSize: 24  // Smaller footer text (content font is 40px, footer will be 24px)
     },
     roleColors: {
-      // Text stays dark; glow color comes from the color theme’s primary color
+      // Text stays dark; glow color comes from the color theme's primary color
       hook: '#000000',
       title: '#000000',
       content: '#000000',
@@ -1120,5 +1154,34 @@ export async function initializeTemplateCache(userId: string): Promise<void> {
 export async function getAllTemplates(userId: string): Promise<CarouselTemplate[]> {
   const customTemplates = await fetchCustomTemplates(userId)
   return [...CAROUSEL_TEMPLATES, ...customTemplates]
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TEMPLATE LAYOUT EXTRACTION (for new prompt structure)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Extract only layout constraints from template (removes tone/voice)
+ * This separates template concerns (length/structure) from user voice
+ */
+export function extractTemplateLayout(template: CarouselTemplate): TemplateLayout {
+  if (!template.writingStyle) {
+    // Fallback to defaults if template has no writing style
+    return {
+      hookTitle: { min: 6, max: 12 },
+      middleTitle: { min: 2, max: 5 },
+      middleContent: { min: 18, max: 32 },
+      caption: { min: 80, max: 120 },
+      includeMiddleTitles: true
+    }
+  }
+  
+  return {
+    hookTitle: template.writingStyle.lengthConstraints.hookTitle,
+    middleTitle: template.writingStyle.lengthConstraints.middleTitle,
+    middleContent: template.writingStyle.lengthConstraints.middleContent,
+    caption: template.writingStyle.lengthConstraints.caption,
+    includeMiddleTitles: template.writingStyle.structure.includeMiddleTitles !== false
+  }
 }
 
