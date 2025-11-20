@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
-import { SquarePen, ChevronLeft, Menu, Send, Sparkle, Zap } from 'lucide-react'
+import { SquarePen, ChevronLeft, Menu, Send, Sparkle, Zap, Bug } from 'lucide-react'
 import Image from 'next/image'
 import AccountModal from './AccountModal'
 
@@ -217,6 +217,39 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
             </button>
           )
         })}
+
+        <div style={{
+          marginTop: '24px',
+          paddingTop: '16px',
+          borderTop: '1px solid #f0f0f0'
+        }}>
+          <button
+            onClick={() => {
+              router.push('/debug')
+              if (isMobile && onClose) {
+                onClose()
+              }
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: shouldShowCollapsed ? 'center' : 'flex-start',
+              gap: '12px',
+              padding: '12px',
+              borderRadius: '8px',
+              background: '#fff8f0',
+              color: '#b35300',
+              fontSize: '14px',
+              fontWeight: 600,
+              border: '1px solid #ffd9b3',
+              width: '100%',
+              cursor: 'pointer'
+            }}
+          >
+            <Bug size={18} />
+            {!shouldShowCollapsed && <span>Debug (dev)</span>}
+          </button>
+        </div>
 
       </div>
 
