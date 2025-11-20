@@ -929,15 +929,33 @@ function PostPageContent() {
   }
 
   const downloadAllCarousels = async () => {
-    const imageUrls = (generation as any)?.imageUrls || generation?.image_urls || []
-    
-    if (!generation || imageUrls.length === 0) {
-      console.error('No images available to download')
+    if (!generation) {
+      console.error('No generation available to download')
       return
     }
 
     setDownloading(true)
     try {
+      // First, try to get images from database (stored images)
+      let imageUrls = (generation as any)?.imageUrls || generation?.image_urls || []
+      let useDataUrls = false
+      
+      // If no stored images, try to get in-memory images from CarouselImageGenerator (text-only mode)
+      if (imageUrls.length === 0 && carouselGeneratorRef.current?.getImages) {
+        const inMemoryImages = carouselGeneratorRef.current.getImages()
+        if (inMemoryImages.length > 0) {
+          console.log(`📸 Using ${inMemoryImages.length} in-memory images from CarouselImageGenerator (text-only mode)`)
+          imageUrls = inMemoryImages
+          useDataUrls = true // These are data URLs, not URLs to fetch
+        }
+      }
+      
+      if (imageUrls.length === 0) {
+        console.error('No images available to download')
+        setDownloading(false)
+        return
+      }
+
       const isMobile = isMobileDevice()
       
       if (isMobile) {
@@ -951,12 +969,21 @@ function PostPageContent() {
             
             setTimeout(async () => {
               try {
-                const response = await fetch(currentUrl)
-                if (!response.ok) {
-                  console.error(`Failed to fetch image ${index + 1}: HTTP ${response.status}`)
-                  return
+                let blob: Blob
+                
+                if (useDataUrls && currentUrl.startsWith('data:image/')) {
+                  // Convert data URL to blob
+                  const response = await fetch(currentUrl)
+                  blob = await response.blob()
+                } else {
+                  // Fetch from URL
+                  const response = await fetch(currentUrl)
+                  if (!response.ok) {
+                    console.error(`Failed to fetch image ${index + 1}: HTTP ${response.status}`)
+                    return
+                  }
+                  blob = await response.blob()
                 }
-                const blob = await response.blob()
                 
                 const carousel = note?.carousels[index] || generation.slides[index]
                 const kind = carousel?.kind || 'MIDDLE'
@@ -986,6 +1013,7 @@ function PostPageContent() {
         return
       }
       
+      // Desktop: Create ZIP file
       const zip = new JSZip()
       
       for (let i = 0; i < imageUrls.length; i++) {
@@ -993,12 +1021,21 @@ function PostPageContent() {
         if (!imageUrl) continue
         
         try {
-          const response = await fetch(imageUrl)
-          if (!response.ok) {
-            console.error(`Failed to fetch image ${i + 1}: HTTP ${response.status}`)
-            continue
+          let blob: Blob
+          
+          if (useDataUrls && imageUrl.startsWith('data:image/')) {
+            // Convert data URL to blob
+            const response = await fetch(imageUrl)
+            blob = await response.blob()
+          } else {
+            // Fetch from URL
+            const response = await fetch(imageUrl)
+            if (!response.ok) {
+              console.error(`Failed to fetch image ${i + 1}: HTTP ${response.status}`)
+              continue
+            }
+            blob = await response.blob()
           }
-          const blob = await response.blob()
           
           const carousel = note?.carousels[i] || generation.slides[i]
           const kind = carousel?.kind || 'MIDDLE'
@@ -1213,8 +1250,12 @@ function PostPageContent() {
   if (generationId && (generation || isLoadingGeneration)) {
     const showLoading = isLoadingGeneration || (generation && !note)
     const imageUrls = generation ? ((generation as any)?.imageUrls || generation?.image_urls || []) : []
-    const hasImages = imageUrls.length > 0
-    const isDownloadDisabled = downloading || !generation || !hasImages
+    // Check if we have images from database OR from CarouselImageGenerator (text-only mode)
+    const hasStoredImages = imageUrls.length > 0
+    const hasInMemoryImages = carouselGeneratorRef.current?.getImages ? carouselGeneratorRef.current.getImages().length > 0 : false
+    const hasImages = hasStoredImages || hasInMemoryImages
+    // Allow download if we have generation and either stored images or in-memory images (text-only mode)
+    const isDownloadDisabled = downloading || !generation || (!hasStoredImages && !hasInMemoryImages)
 
     return (
       <div
@@ -2497,6 +2538,17 @@ function PostPageContent() {
               // Priority: imageUrls (camelCase) > image_urls (snake_case) > thumbnail_urls
               const imageUrls = generation.imageUrls || generation.image_urls || []
               const thumbnailUrls = generation.thumbnail_urls || []
+              
+              // Debug logging to help identify missing URLs
+              if (imageUrls.length === 0 && thumbnailUrls.length === 0) {
+                console.warn(`[PostPage] Generation ${generation.id} has no image URLs:`, {
+                  hasImageUrls: !!generation.imageUrls,
+                  hasImage_urls: !!generation.image_urls,
+                  hasThumbnail_urls: !!generation.thumbnail_urls,
+                  imageUrlsLength: imageUrls.length,
+                  thumbnailUrlsLength: thumbnailUrls.length
+                })
+              }
               
               // Find first valid URL (non-empty string)
               let thumbnailUrl: string | null = null

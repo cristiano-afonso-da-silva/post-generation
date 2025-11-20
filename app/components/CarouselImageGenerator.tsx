@@ -118,6 +118,7 @@ interface Props {
 
 export interface CarouselImageGeneratorHandle {
   regenerateAndSave: (updatedUnderlineWords?: Record<number, { underline: string; highlight: string; imageUrl?: string | null; originalImageUrl?: string | null }>) => Promise<void>
+  getImages: () => string[]
 }
 
 // Helper: Create content hash for cache matching

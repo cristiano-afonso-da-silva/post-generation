@@ -697,7 +697,7 @@ export default function OnboardingPage() {
             className="button"
             style={{ flex: 1 }}
           >
-            {isLoading ? 'Loading...' : currentStep === 6 ? 'Generate my first carousel' : 'Next'}
+            {isLoading ? 'Loading...' : currentStep === 6 ? 'Generate' : 'Next'}
           </button>
         </div>
       </div>
