@@ -17,7 +17,21 @@ export default function SignUpPage() {
 
   useEffect(() => {
     if (!loading && user) {
-      router.push('/dashboard')
+      // Check if onboarding is completed
+      const onboardingData = localStorage.getItem('onboarding_data')
+      if (onboardingData) {
+        try {
+          const data = JSON.parse(onboardingData)
+          if (data.completed) {
+            router.push('/dashboard')
+            return
+          }
+        } catch (e) {
+          // If parse fails, redirect to onboarding
+        }
+      }
+      // If no onboarding data or not completed, redirect to onboarding
+      router.push('/onboarding')
     }
   }, [user, loading, router])
 
@@ -58,8 +72,8 @@ export default function SignUpPage() {
         (window.location.hostname === 'postmynote.app' || 
          window.location.hostname === 'www.postmynote.app')
       const redirectUrl = isProduction 
-        ? 'https://postmynote.app/dashboard' 
-        : `${window.location.origin}/dashboard`
+        ? 'https://postmynote.app/onboarding' 
+        : `${window.location.origin}/onboarding`
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',

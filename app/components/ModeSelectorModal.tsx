@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 
 interface ModeOption {
   id: string
@@ -101,8 +102,6 @@ export default function ModeSelectorDropdown({
     }
   }, [isOpen, onClose])
 
-  if (!isOpen) return null
-
   const handleSelectMode = (modeId: string) => {
     // Prevent selecting "Text + Image" if template is text-only
     if (isTextOnly && modeId === 'text-image') {
@@ -124,18 +123,52 @@ export default function ModeSelectorDropdown({
 
   // Calculate position
   const [position, setPosition] = useState({ top: 0, left: 0 })
+  const [mounted, setMounted] = useState(false)
+  
+  useEffect(() => {
+    setMounted(true)
+  }, [])
   
   useEffect(() => {
     if (isOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect()
-      setPosition({
-        top: rect.bottom + 8,
-        left: rect.left
-      })
+      // Use requestAnimationFrame to ensure layout is settled
+      const updatePosition = () => {
+        if (buttonRef.current) {
+          const rect = buttonRef.current.getBoundingClientRect()
+          // Ensure we have valid viewport coordinates
+          if (rect && rect.bottom > 0 && rect.left >= 0) {
+            setPosition({
+              top: rect.bottom + 8,
+              left: rect.left
+            })
+          }
+        }
+      }
+      
+      // Small delay to ensure layout is settled, then calculate
+      const timeoutId = setTimeout(() => {
+        updatePosition()
+        // Also update on next frame to catch any layout changes
+        requestAnimationFrame(updatePosition)
+      }, 0)
+      
+      // Update on window resize and scroll
+      const handleResize = () => updatePosition()
+      const handleScroll = () => updatePosition()
+      window.addEventListener('resize', handleResize)
+      window.addEventListener('scroll', handleScroll, true)
+      
+      return () => {
+        clearTimeout(timeoutId)
+        window.removeEventListener('resize', handleResize)
+        window.removeEventListener('scroll', handleScroll, true)
+      }
     }
   }, [isOpen, buttonRef])
 
-  return (
+  if (!isOpen || !mounted || typeof document === 'undefined') return null
+
+  const dropdownContent = (
     <div
       ref={dropdownRef}
       style={{
@@ -230,5 +263,7 @@ export default function ModeSelectorDropdown({
       })}
     </div>
   )
+
+  return typeof document !== 'undefined' ? createPortal(dropdownContent, document.body) : null
 }
 

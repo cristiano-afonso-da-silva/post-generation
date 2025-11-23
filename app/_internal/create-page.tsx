@@ -153,10 +153,12 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
   const [ideas, setIdeas] = useState<string[]>([])
   const [selectedIdea, setSelectedIdea] = useState<string | null>(null)
   const [note, setNote] = useState<Note | null>(null) // Only used for loading existing generations
+  const [recommendedIdeas, setRecommendedIdeas] = useState<string[]>([])
   
   // Loading states
   const [loadingIdeas, setLoadingIdeas] = useState(false)
   const [loadingNote, setLoadingNote] = useState(false)
+  const [loadingRecommendedIdeas, setLoadingRecommendedIdeas] = useState(false)
   const [currentStep, setCurrentStep] = useState<'generating' | 'analysing' | 'rendering' | null>(null)
   const [renderingMessageIndex, setRenderingMessageIndex] = useState(0)
   const [showRenderingMessages, setShowRenderingMessages] = useState(false)
@@ -422,6 +424,44 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
     }
   }, [authLoading, user, ideas.length, note, loadingIdeas, loadingNote])
 
+  // Fetch recommended ideas on mount when user is authenticated and in empty state
+  useEffect(() => {
+    if (!user?.id || authLoading || loadingIdeas || loadingNote || ideas.length > 0 || note || selectedIdea) {
+      return
+    }
+
+    const fetchRecommendedIdeas = async () => {
+      setLoadingRecommendedIdeas(true)
+      try {
+        const response = await fetch(`${API_URL}/api/social`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'recommended-ideas',
+            userId: user.id
+          })
+        })
+
+        const result = await response.json()
+
+        if (result.success && result.data?.ideas && Array.isArray(result.data.ideas) && result.data.ideas.length > 0) {
+          setRecommendedIdeas(result.data.ideas)
+        } else {
+          // User doesn't have preferences or no ideas generated - silently fail
+          setRecommendedIdeas([])
+        }
+      } catch (err: any) {
+        console.error('Error fetching recommended ideas:', err)
+        // Silently fail - don't show recommendations if API fails
+        setRecommendedIdeas([])
+      } finally {
+        setLoadingRecommendedIdeas(false)
+      }
+    }
+
+    fetchRecommendedIdeas()
+  }, [user?.id, authLoading, loadingIdeas, loadingNote, ideas.length, note, selectedIdea])
+
   // Track color theme changes (don't clear cache immediately - let hash-based invalidation handle it)
   // This prevents egress when users reload page after theme change
   useEffect(() => {
@@ -532,6 +572,7 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
     setIdeas([])
     setNote(null)
     setSelectedIdea(null)
+    setRecommendedIdeas([]) // Clear recommended ideas when user starts generating
 
     try {
       const response = await fetch(`${API_URL}/api/social`, {
@@ -539,7 +580,8 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'ideas',
-          accountDescription: accountDescription.trim()
+          accountDescription: accountDescription.trim(),
+          templateId: templateId
         })
       })
 
@@ -610,6 +652,7 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
     setError('')
     setNote(null)
     setCurrentStep('analysing')
+    setRecommendedIdeas([]) // Clear recommended ideas when user starts generating
     
     // Clear localStorage
     try {
@@ -984,142 +1027,108 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
+        position: 'relative',
       }}>
         {/* Empty State */}
         {!ideas.length && !loadingIdeas && !note && !pendingGenerationRef.current && !loadingNote && !redirectingRef.current && (
-          <div style={{
-            maxWidth: '800px',
-            width: '100%',
-            textAlign: 'center',
-            marginTop: '-180px',
-          }}>
-            <h1 style={{
-              fontSize: '32px',
-              fontWeight: '700',
-              color: '#000000',
-              marginBottom: '16px',
-            }}>
-              Create Your Carousel
-            </h1>
-            <p style={{
-              fontSize: '16px',
-              color: '#666666',
-              marginBottom: '32px',
-            }}>
-              Enter your idea below to get started
-            </p>
-            
-            {/* Textarea Input with Action Bar */}
+          <>
+            {/* Fixed Top Section - Title, Subtitle, Input */}
             <div style={{
+              position: 'absolute',
+              top: '40%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              maxWidth: '800px',
               width: '100%',
-              background: '#ffffff',
-              borderRadius: '12px',
-              border: '1px solid #e5e5e5',
-              overflow: 'hidden',
+              textAlign: 'center',
+              padding: '0 24px',
             }}>
-            <textarea
-              ref={textareaRef}
-              value={accountDescription}
-              onChange={(e) => setAccountDescription(e.target.value)}
-              onKeyDown={(e) => {
-                // Submit on Enter (without Shift) - same as clicking the button
-                if (e.key === 'Enter' && !e.shiftKey && !loadingIdeas && !loadingNote && accountDescription.trim()) {
-                  e.preventDefault()
-                  generateIdeas()
-                }
-                // Also support Cmd/Ctrl+Enter for submission
-                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !loadingIdeas && !loadingNote) {
-                  e.preventDefault()
-                  generateIdeas()
-                }
-              }}
-              placeholder="Describe the post you want to create"
-              disabled={loadingIdeas || loadingNote}
-              style={{
-                width: '100%',
-                minHeight: '80px',
-                padding: '20px',
-                  border: 'none',
-                fontSize: '15px',
-                color: '#333333',
-                  background: 'transparent',
-                outline: 'none',
-                resize: 'none',
-                fontFamily: 'inherit',
-                lineHeight: '1.5',
-              }}
-              onFocus={(e) => {
-                  e.currentTarget.closest('div')!.style.borderColor = '#cccccc'
-              }}
-              onBlur={(e) => {
-                  e.currentTarget.closest('div')!.style.borderColor = '#e5e5e5'
-                }}
-              />
-              {/* Action Bar - Attached to textarea */}
-              <div style={{
-                padding: '12px 16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                background: '#ffffff',
+              <h1 style={{
+                fontSize: '32px',
+                fontWeight: '700',
+                color: '#000000',
+                marginBottom: '16px',
               }}>
-                {/* Left: Icon Buttons */}
+                Create Your Carousel
+              </h1>
+              <p style={{
+                fontSize: '16px',
+                color: '#666666',
+                marginBottom: '32px',
+              }}>
+                Enter your idea below to get started
+              </p>
+              
+              {/* Textarea Input with Action Bar */}
+              <div style={{
+                width: '100%',
+                background: '#ffffff',
+                borderRadius: '12px',
+                border: '1px solid #e5e5e5',
+                overflow: 'hidden',
+              }}>
+              <textarea
+                ref={textareaRef}
+                value={accountDescription}
+                onChange={(e) => setAccountDescription(e.target.value)}
+                onKeyDown={(e) => {
+                  // Submit on Enter (without Shift) - same as clicking the button
+                  if (e.key === 'Enter' && !e.shiftKey && !loadingIdeas && !loadingNote && accountDescription.trim()) {
+                    e.preventDefault()
+                    generateIdeas()
+                  }
+                  // Also support Cmd/Ctrl+Enter for submission
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !loadingIdeas && !loadingNote) {
+                    e.preventDefault()
+                    generateIdeas()
+                  }
+                }}
+                placeholder="Describe the post you want to create"
+                disabled={loadingIdeas || loadingNote}
+                style={{
+                  width: '100%',
+                  minHeight: '80px',
+                  padding: '20px',
+                    border: 'none',
+                  fontSize: '15px',
+                  color: '#333333',
+                    background: 'transparent',
+                  outline: 'none',
+                  resize: 'none',
+                  fontFamily: 'inherit',
+                  lineHeight: '1.5',
+                }}
+                onFocus={(e) => {
+                    e.currentTarget.closest('div')!.style.borderColor = '#cccccc'
+                }}
+                onBlur={(e) => {
+                    e.currentTarget.closest('div')!.style.borderColor = '#e5e5e5'
+                  }}
+                />
+                {/* Action Bar - Attached to textarea */}
                 <div style={{
+                  padding: '12px 16px',
                   display: 'flex',
-                  gap: '8px',
                   alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: '#ffffff',
                 }}>
-                  {/* Template Selector Button */}
-                  <button
-                    onClick={() => setShowTemplateModal(true)}
-                    disabled={loadingIdeas || loadingNote}
-                    style={{
-                      height: '32px',
-                      padding: '0 12px',
-                      borderRadius: '6px',
-                      border: '1px solid #e5e5e5',
-                      background: '#ffffff',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      cursor: loadingIdeas || loadingNote ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s ease',
-                      opacity: loadingIdeas || loadingNote ? 0.5 : 1,
-                      whiteSpace: 'nowrap',
-                      width: 'fit-content'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!loadingIdeas && !loadingNote) {
-                        e.currentTarget.style.background = '#f5f5f5'
-                        e.currentTarget.style.borderColor = '#d0d0d0'
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!loadingIdeas && !loadingNote) {
-                        e.currentTarget.style.background = '#ffffff'
-                        e.currentTarget.style.borderColor = '#e5e5e5'
-                      }
-                    }}
-                    title="Select Template"
-                  >
-                    <span style={{ fontSize: '14px', fontWeight: '500', color: '#000000' }}>
-                      {getCarouselTemplate(templateId).name}
-                    </span>
-                    <ChevronDown size={16} color="#666666" />
-                  </button>
-                  
-                  {/* Mode Selector Button */}
-                  <div style={{ position: 'relative' }}>
+                  {/* Left: Icon Buttons */}
+                  <div style={{
+                    display: 'flex',
+                    gap: '8px',
+                    alignItems: 'center',
+                  }}>
+                    {/* Template Selector Button */}
                     <button
-                      ref={modeButtonRef}
-                      onClick={() => setShowModeDropdown(!showModeDropdown)}
+                      onClick={() => setShowTemplateModal(true)}
                       disabled={loadingIdeas || loadingNote}
                       style={{
                         height: '32px',
                         padding: '0 12px',
                         borderRadius: '6px',
                         border: '1px solid #e5e5e5',
-                        background: showModeDropdown ? '#f5f5f5' : '#ffffff',
+                        background: '#ffffff',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px',
@@ -1130,182 +1139,202 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
                         width: 'fit-content'
                       }}
                       onMouseEnter={(e) => {
-                        if (!loadingIdeas && !loadingNote && !showModeDropdown) {
+                        if (!loadingIdeas && !loadingNote) {
                           e.currentTarget.style.background = '#f5f5f5'
                           e.currentTarget.style.borderColor = '#d0d0d0'
                         }
                       }}
                       onMouseLeave={(e) => {
-                        if (!loadingIdeas && !loadingNote && !showModeDropdown) {
+                        if (!loadingIdeas && !loadingNote) {
                           e.currentTarget.style.background = '#ffffff'
                           e.currentTarget.style.borderColor = '#e5e5e5'
                         }
                       }}
-                      title="Select Mode"
+                      title="Select Template"
                     >
-                      <span style={{ fontSize: '14px', fontWeight: '500', color: '#000000', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        {!includeImages ? (
-                          <>Text</>
-                        ) : (
-                          <>Text + Image</>
-                        )}
+                      <span style={{ fontSize: '14px', fontWeight: '500', color: '#000000' }}>
+                        {getCarouselTemplate(templateId).name}
                       </span>
                       <ChevronDown size={16} color="#666666" />
                     </button>
-                    {showModeDropdown && (
-                      <ModeSelectorDropdown
-                        isOpen={showModeDropdown}
-                        onClose={() => setShowModeDropdown(false)}
-                        currentMode={{
-                          includeImages,
-                          useAIImages,
-                          aiImageStyle
+                    
+                    {/* Mode Selector Button */}
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        ref={modeButtonRef}
+                        onClick={() => setShowModeDropdown(!showModeDropdown)}
+                        disabled={loadingIdeas || loadingNote}
+                        style={{
+                          height: '32px',
+                          padding: '0 12px',
+                          borderRadius: '6px',
+                          border: '1px solid #e5e5e5',
+                          background: showModeDropdown ? '#f5f5f5' : '#ffffff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          cursor: loadingIdeas || loadingNote ? 'not-allowed' : 'pointer',
+                          transition: 'all 0.2s ease',
+                          opacity: loadingIdeas || loadingNote ? 0.5 : 1,
+                          whiteSpace: 'nowrap',
+                          width: 'fit-content'
                         }}
-                        isTextOnly={isTextOnlyTemplate(templateId)}
-                        onSelectMode={(mode) => {
-                          console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-                          console.log('🎯 MODE SELECTED');
-                          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-                          console.log('🖼️ includeImages:', mode.includeImages);
-                          console.log('🎨 useAIImages:', mode.useAIImages);
-                          console.log('🎭 aiImageStyle:', mode.aiImageStyle);
-                          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-                          
-                          setIncludeImages(mode.includeImages)
-                          setUseAIImages(mode.useAIImages)
-                          setAiImageStyle(mode.aiImageStyle)
-                          
-                          // Persist to localStorage (batch write)
-                          saveToLocalStorage({
-                            includeImages: String(mode.includeImages),
-                            useAIImages: String(mode.useAIImages),
-                            aiImageStyle: mode.aiImageStyle
-                          })
+                        onMouseEnter={(e) => {
+                          if (!loadingIdeas && !loadingNote && !showModeDropdown) {
+                            e.currentTarget.style.background = '#f5f5f5'
+                            e.currentTarget.style.borderColor = '#d0d0d0'
+                          }
                         }}
-                        buttonRef={modeButtonRef}
-                      />
-                    )}
+                        onMouseLeave={(e) => {
+                          if (!loadingIdeas && !loadingNote && !showModeDropdown) {
+                            e.currentTarget.style.background = '#ffffff'
+                            e.currentTarget.style.borderColor = '#e5e5e5'
+                          }
+                        }}
+                        title="Select Mode"
+                      >
+                        <span style={{ fontSize: '14px', fontWeight: '500', color: '#000000', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {!includeImages ? (
+                            <>Text</>
+                          ) : (
+                            <>Text + Image</>
+                          )}
+                        </span>
+                        <ChevronDown size={16} color="#666666" />
+                      </button>
+                      {showModeDropdown && (
+                        <ModeSelectorDropdown
+                          isOpen={showModeDropdown}
+                          onClose={() => setShowModeDropdown(false)}
+                          currentMode={{
+                            includeImages,
+                            useAIImages,
+                            aiImageStyle
+                          }}
+                          isTextOnly={isTextOnlyTemplate(templateId)}
+                          onSelectMode={(mode) => {
+                            console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                            console.log('🎯 MODE SELECTED');
+                            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                            console.log('🖼️ includeImages:', mode.includeImages);
+                            console.log('🎨 useAIImages:', mode.useAIImages);
+                            console.log('🎭 aiImageStyle:', mode.aiImageStyle);
+                            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+                            
+                            setIncludeImages(mode.includeImages)
+                            setUseAIImages(mode.useAIImages)
+                            setAiImageStyle(mode.aiImageStyle)
+                            
+                            // Persist to localStorage (batch write)
+                            saveToLocalStorage({
+                              includeImages: String(mode.includeImages),
+                              useAIImages: String(mode.useAIImages),
+                              aiImageStyle: mode.aiImageStyle
+                            })
+                          }}
+                          buttonRef={modeButtonRef}
+                        />
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                {/* Right: Send Button */}
-                <button
-                  onClick={generateIdeas}
-                  disabled={loadingIdeas || loadingNote || !accountDescription.trim()}
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '6px',
-                    background: loadingIdeas || loadingNote || !accountDescription.trim() ? '#e5e5e5' : '#ffbd59',
-                    border: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: loadingIdeas || loadingNote || !accountDescription.trim() ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!loadingIdeas && !loadingNote && accountDescription.trim()) {
-                      e.currentTarget.style.background = '#ffa929'
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!loadingIdeas && !loadingNote && accountDescription.trim()) {
-                      e.currentTarget.style.background = '#ffbd59'
-                    }
-                  }}
-                  title="Generate"
-                >
-                  <ArrowUp size={18} color={loadingIdeas || loadingNote || !accountDescription.trim() ? '#999999' : '#000000'} />
-                </button>
+                  {/* Right: Send Button */}
+                  <button
+                    onClick={generateIdeas}
+                    disabled={loadingIdeas || loadingNote || !accountDescription.trim()}
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '6px',
+                      background: loadingIdeas || loadingNote || !accountDescription.trim() ? '#e5e5e5' : '#ffbd59',
+                      border: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: loadingIdeas || loadingNote || !accountDescription.trim() ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!loadingIdeas && !loadingNote && accountDescription.trim()) {
+                        e.currentTarget.style.background = '#ffa929'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!loadingIdeas && !loadingNote && accountDescription.trim()) {
+                        e.currentTarget.style.background = '#ffbd59'
+                      }
+                    }}
+                    title="Generate"
+                  >
+                    <ArrowUp size={18} color={loadingIdeas || loadingNote || !accountDescription.trim() ? '#999999' : '#000000'} />
+                  </button>
+                </div>
               </div>
             </div>
             
-            {/* Account Name and Website Inputs - Moved to bottom */}
-            <div style={{
-              width: '100%',
-              display: 'flex',
-              gap: '12px',
-              marginTop: '24px',
-            }}>
-              <div style={{ flex: 1 }}>
-                <label style={{
-                  display: 'block',
-                  fontSize: '13px',
-                  fontWeight: '500',
+            {/* Recommended Ideas Section - Positioned below fixed section */}
+            {recommendedIdeas.length > 0 && !loadingRecommendedIdeas && (
+              <div style={{
+                position: 'absolute',
+                top: 'calc(40% + 160px)',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                maxWidth: '800px',
+                width: '100%',
+                padding: '0 24px',
+              }}>
+                <p style={{
+                  fontSize: '14px',
                   color: '#666666',
-                  marginBottom: '6px',
+                  marginBottom: '12px',
                   textAlign: 'left',
-                }}>
-                  Account Name (footer)
-                </label>
-                <input
-                  type="text"
-                  value={accountName}
-                  onChange={(e) => {
-                    setAccountName(e.target.value)
-                    saveToLocalStorage({ accountName: e.target.value })
-                  }}
-                  placeholder="@yourhandle"
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    fontSize: '14px',
-                    color: '#333333',
-                    background: '#ffffff',
-                    border: '1px solid #e5e5e5',
-                    borderRadius: '8px',
-                    outline: 'none',
-                    fontFamily: 'inherit',
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = '#cccccc'
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = '#e5e5e5'
-                  }}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{
-                  display: 'block',
-                  fontSize: '13px',
                   fontWeight: '500',
-                  color: '#666666',
-                  marginBottom: '6px',
-                  textAlign: 'left',
                 }}>
-                  Website (footer)
-                </label>
-                <input
-                  type="text"
-                  value={website}
-                  onChange={(e) => {
-                    setWebsite(e.target.value)
-                    saveToLocalStorage({ website: e.target.value })
-                  }}
-                  placeholder="yourwebsite.com"
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    fontSize: '14px',
-                    color: '#333333',
-                    background: '#ffffff',
-                    border: '1px solid #e5e5e5',
-                    borderRadius: '8px',
-                    outline: 'none',
-                    fontFamily: 'inherit',
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = '#cccccc'
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = '#e5e5e5'
-                  }}
-                />
+                  Recommended for you
+                </p>
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                }}>
+                  {recommendedIdeas.map((idea, index) => (
+                    <button
+                      key={index}
+                      onClick={() => generateNote(idea)}
+                      disabled={loadingNote || loadingIdeas}
+                      style={{
+                        padding: '16px 20px',
+                        background: '#ffffff',
+                        border: '2px solid #e5e5e5',
+                        borderRadius: '12px',
+                        textAlign: 'left',
+                        cursor: loadingNote || loadingIdeas ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s ease',
+                        fontSize: '15px',
+                        color: '#333333',
+                        lineHeight: '1.6',
+                        opacity: loadingNote || loadingIdeas ? 0.5 : 1,
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!loadingNote && !loadingIdeas) {
+                          e.currentTarget.style.borderColor = '#ffbd59'
+                          e.currentTarget.style.background = '#fffbf5'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!loadingNote && !loadingIdeas) {
+                          e.currentTarget.style.borderColor = '#e5e5e5'
+                          e.currentTarget.style.background = '#ffffff'
+                        }
+                      }}
+                    >
+                      {idea}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          </div>
+            )}
+          </>
         )}
 
         {/* Loading Ideas */}
@@ -1378,13 +1407,11 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.borderColor = '#ffbd59'
-                    e.currentTarget.style.transform = 'translateY(-2px)'
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(255, 189, 89, 0.2)'
+                    e.currentTarget.style.background = '#fffbf5'
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.borderColor = '#e5e5e5'
-                    e.currentTarget.style.transform = 'translateY(0)'
-                    e.currentTarget.style.boxShadow = 'none'
+                    e.currentTarget.style.background = '#ffffff'
                   }}
                 >
                   <span style={{
@@ -1405,6 +1432,35 @@ export default function CreatePage({ generationId, onHasUnsavedWorkChange }: Cre
                   {idea}
                 </button>
               ))}
+              <button
+                onClick={generateIdeas}
+                disabled={loadingIdeas || loadingNote || !accountDescription.trim()}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  background: loadingIdeas || loadingNote || !accountDescription.trim() ? '#e5e5e5' : '#ffbd59',
+                  color: '#000000',
+                  border: 'none',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: loadingIdeas || loadingNote || !accountDescription.trim() ? 'not-allowed' : 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.2s ease',
+                  marginTop: '8px',
+                }}
+                onMouseEnter={(e) => {
+                  if (!loadingIdeas && !loadingNote && accountDescription.trim()) {
+                    e.currentTarget.style.background = '#ffa929'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!loadingIdeas && !loadingNote && accountDescription.trim()) {
+                    e.currentTarget.style.background = '#ffbd59'
+                  }
+                }}
+              >
+                Regenerate
+              </button>
             </div>
           </div>
         )}

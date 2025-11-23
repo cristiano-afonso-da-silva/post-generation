@@ -118,6 +118,7 @@ interface Props {
 
 export interface CarouselImageGeneratorHandle {
   regenerateAndSave: (updatedUnderlineWords?: Record<number, { underline: string; highlight: string; imageUrl?: string | null; originalImageUrl?: string | null }>) => Promise<void>
+  getImages: () => string[]
 }
 
 // Helper: Create content hash for cache matching
@@ -1536,6 +1537,211 @@ function CarouselImageGeneratorComponent({
     prevCarouselsContent.current = JSON.stringify(carousels)
   }, [ideaTitle, generating])
 
+  /**
+   * Check if a background color is dark (for dark theme detection)
+   * @param backgroundColor - Hex color string (e.g., "#000000") or color object
+   * @returns true if the background is dark, false if light
+   */
+  const isDarkBackground = (backgroundColor: string | { type: string; value?: string } | undefined): boolean => {
+    if (!backgroundColor) return false
+    
+    let colorValue: string | undefined
+    
+    if (typeof backgroundColor === 'string') {
+      colorValue = backgroundColor
+    } else if (backgroundColor.type === 'color' && backgroundColor.value) {
+      colorValue = backgroundColor.value
+    } else {
+      // Image backgrounds are typically light, but we default to false (light removal)
+      return false
+    }
+    
+    if (!colorValue) return false
+    
+    // Parse hex color
+    let hex = colorValue.trim()
+    if (hex.startsWith('#')) {
+      hex = hex.slice(1)
+    }
+    
+    // Handle 3-digit hex
+    if (hex.length === 3) {
+      hex = hex.split('').map(ch => `${ch}${ch}`).join('')
+    }
+    
+    if (hex.length === 6) {
+      const r = parseInt(hex.slice(0, 2), 16)
+      const g = parseInt(hex.slice(2, 4), 16)
+      const b = parseInt(hex.slice(4, 6), 16)
+      
+      if (!Number.isNaN(r) && !Number.isNaN(g) && !Number.isNaN(b)) {
+        // Calculate brightness (0-255)
+        const brightness = (r + g + b) / 3
+        // Consider background dark if brightness is less than 128 (midpoint)
+        return brightness < 128
+      }
+    }
+    
+    return false
+  }
+
+  /**
+   * Remove backgrounds from an image using canvas processing
+   * Supports both light (white) and dark (black) background removal
+   * This is particularly useful for Pollinations.AI images
+   * @param image - The source image element
+   * @param removeDark - If true, removes dark/black backgrounds. If false, removes white/light backgrounds
+   * @param threshold - RGB threshold (0-255). For light removal: default 240. For dark removal: default 15
+   * @returns A new HTMLImageElement with transparent background
+   */
+  const removeBackground = (
+    image: HTMLImageElement, 
+    removeDark: boolean = false, 
+    threshold: number = removeDark ? 15 : 240
+  ): Promise<HTMLImageElement> => {
+    return new Promise((resolve, reject) => {
+      try {
+        const canvas = document.createElement('canvas')
+        // Use willReadFrequently if supported for better performance
+        const ctx = canvas.getContext('2d', { willReadFrequently: true }) || canvas.getContext('2d')
+        
+        if (!ctx) {
+          reject(new Error('Could not get canvas context'))
+          return
+        }
+        
+        canvas.width = image.width
+        canvas.height = image.height
+        
+        // Draw the original image
+        ctx.drawImage(image, 0, 0)
+        
+        // Get image data
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+        const data = imageData.data
+        
+        // Process each pixel
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i]
+          const g = data[i + 1]
+          const b = data[i + 2]
+          const a = data[i + 3]
+          
+          // Skip already transparent pixels
+          if (a === 0) continue
+          
+          const brightness = (r + g + b) / 3
+          
+          if (removeDark) {
+            // Remove dark/black backgrounds (for dark themes with white lines)
+            const distanceFromBlack = Math.sqrt(
+              Math.pow(r, 2) + Math.pow(g, 2) + Math.pow(b, 2)
+            )
+            
+            // Primary check: If pixel is very dark/black, make it fully transparent
+            if (brightness < threshold && r < threshold && g < threshold && b < threshold) {
+              data[i + 3] = 0 // Set alpha to 0 (transparent)
+            }
+            // Secondary check: For pixels close to black (smooth edge transition)
+            else if (distanceFromBlack < 30 && brightness < threshold + 30) {
+              // Create smooth gradient transparency for edge pixels
+              const fadeFactor = distanceFromBlack / 30 // 0 to 1
+              data[i + 3] = Math.max(0, Math.min(255, a * fadeFactor * 0.5))
+            }
+            // Tertiary check: Very dark gray pixels (softer removal)
+            else if (brightness < threshold + 15 && r < threshold + 15 && g < threshold + 15 && b < threshold + 15) {
+              // Make slightly transparent for smoother edges
+              data[i + 3] = Math.max(0, a * 0.2)
+            }
+          } else {
+            // Remove white/light backgrounds (original behavior for light themes)
+            const distanceFromWhite = Math.sqrt(
+              Math.pow(255 - r, 2) + Math.pow(255 - g, 2) + Math.pow(255 - b, 2)
+            )
+            
+            // Primary check: If pixel is very white/light, make it fully transparent
+            if (brightness > threshold && r > threshold && g > threshold && b > threshold) {
+              data[i + 3] = 0 // Set alpha to 0 (transparent)
+            }
+            // Secondary check: For pixels close to white (smooth edge transition)
+            else if (distanceFromWhite < 30 && brightness > threshold - 30) {
+              // Create smooth gradient transparency for edge pixels
+              const fadeFactor = distanceFromWhite / 30 // 0 to 1
+              data[i + 3] = Math.max(0, Math.min(255, a * fadeFactor * 0.5))
+            }
+            // Tertiary check: Very light gray pixels (softer removal)
+            else if (brightness > threshold - 15 && r > threshold - 15 && g > threshold - 15 && b > threshold - 15) {
+              // Make slightly transparent for smoother edges
+              data[i + 3] = Math.max(0, a * 0.2)
+            }
+          }
+        }
+        
+        // Put processed data back
+        ctx.putImageData(imageData, 0, 0)
+        
+        // Convert canvas to image
+        const processedImage = new Image()
+        processedImage.onload = () => {
+          const mode = removeDark ? 'dark' : 'light'
+          console.log(`✅ ${mode === 'dark' ? 'Dark' : 'Light'} background removed from image (${image.width}x${image.height})`)
+          resolve(processedImage)
+        }
+        processedImage.onerror = (error) => {
+          console.error('❌ Failed to create processed image:', error)
+          reject(error)
+        }
+        processedImage.src = canvas.toDataURL('image/png')
+      } catch (error) {
+        console.error('❌ Error processing image for background removal:', error)
+        reject(error)
+      }
+    })
+  }
+
+  /**
+   * Check if an image URL is from Pollinations.AI
+   */
+  const isPollinationsImage = (url: string): boolean => {
+    try {
+      const urlObj = new URL(url)
+      return urlObj.hostname === 'image.pollinations.ai' || url.includes('pollinations.ai')
+    } catch {
+      return url.includes('pollinations.ai')
+    }
+  }
+
+  /**
+   * Load an image and optionally process it to remove background if it's from Pollinations.AI
+   * Automatically detects dark vs light themes and removes the appropriate background
+   */
+  const loadAndProcessImage = async (
+    src: string, 
+    timeout = 45000, 
+    processBackground = true,
+    template?: { background?: { type: string; value?: string } }
+  ): Promise<HTMLImageElement> => {
+    const image = await loadImage(src, timeout)
+    
+    // Process Pollinations.AI images to remove backgrounds
+    if (processBackground && isPollinationsImage(src)) {
+      // Detect if we need to remove dark or light backgrounds based on template
+      const removeDark = template ? isDarkBackground(template.background) : false
+      const mode = removeDark ? 'dark' : 'light'
+      
+      console.log(`🎨 Processing Pollinations.AI image to remove ${mode} background...`)
+      try {
+        const processedImage = await removeBackground(image, removeDark)
+        return processedImage
+      } catch (error) {
+        console.warn(`⚠️ Failed to process image background, using original:`, error)
+        return image
+      }
+    }
+    
+    return image
+  }
+
   const loadImage = (src: string, timeout = 45000): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
       const img = new Image()
@@ -1684,7 +1890,7 @@ function CarouselImageGeneratorComponent({
           })
       fontPromises.push(contentFontPromise)
       
-      // Load additional fonts for template 3 (hookTopic, hookSubtitle, hookCTA)
+      // Load additional fonts for templates that use hookTopic, hookSubtitle, hookCTA
       if (template.fonts.hookTopic) {
         const hookTopicFontKey = getFontKey(template.fonts.hookTopic.family, template.fonts.hookTopic.weight, template.fonts.hookTopic.style)
         const hookTopicFontPromise = isFontLoaded(template.fonts.hookTopic.family, template.fonts.hookTopic.weight, template.fonts.hookTopic.style)
@@ -1916,9 +2122,9 @@ function CarouselImageGeneratorComponent({
     }
 
     // Safe area (avoiding Instagram UI elements and footer)
-    const originalSafeMarginTop = 150
-    const originalSafeMarginBottom = 150
-    let safeMarginSides = 100
+    const originalSafeMarginTop = 160
+    const originalSafeMarginBottom = 160
+    let safeMarginSides = 160
     
     // Account for footer height if enabled
     const footerHeight = template.footer?.enabled && template.footer.height ? template.footer.height : 0
@@ -1926,33 +2132,7 @@ function CarouselImageGeneratorComponent({
     let safeMarginTop = originalSafeMarginTop
     let safeMarginBottom = originalSafeMarginBottom + footerHeight  // Add footer height to bottom margin
     
-    // For template 5, use its specific safe area if enabled
-    if (template.id === 'template5' && template.safeArea?.enabled) {
-      safeMarginTop = template.safeArea.top
-      safeMarginBottom = template.safeArea.bottom + footerHeight
-      safeMarginSides = template.safeArea.left
-      console.log(`   Template 5 safe area: top=${safeMarginTop}, bottom=${safeMarginBottom}, sides=${safeMarginSides}`)
-    }
     
-    // For template 4, use larger safe area margins to ensure footer stays within bounds
-    if (template.id === 'template4') {
-      safeMarginTop = 120  // Larger top margin
-      // Large bottom margin: 250px buffer + footer height to ensure footer is well within safe area
-      safeMarginBottom = 250 + footerHeight
-    }
-    
-    // For template 3 MIDDLE slides, EXCLUDE topic and page number from safe area completely
-    if (template.id === 'template3' && cleanCarousel.kind === 'MIDDLE') {
-      // Topic takes: originalSafeMarginTop + font size + spacing
-      if (template.fonts.hookTopic) {
-        safeMarginTop = originalSafeMarginTop + template.fonts.hookTopic.size + 100 // Extra 100px spacing
-      }
-      // Page number box: height - 150 - 60 = 1140
-      // Content must NOT go below Y=1090 (50px above page number)
-      // So safe margin from bottom needs to be: 1350 - 1090 = 260
-      // But we need MORE space, so increase to 300px total
-      safeMarginBottom = originalSafeMarginBottom + 150 + footerHeight // 150 + 150 = 300px total safe margin at bottom + footer
-    }
     
     // Use layout.contentMaxWidth if provided, otherwise calculate from safe margins
     const safeWidth = template.layout?.contentMaxWidth || (width - (safeMarginSides * 2))
@@ -1998,11 +2178,11 @@ function CarouselImageGeneratorComponent({
     }
 
     if (cleanCarousel.kind === 'HOOK') {
-      // Check if this template uses the new hook layout (template 3)
+      // Check if this template uses the new hook layout
       if (template.hookLayout?.showTopic || template.hookLayout?.showSubtitle || template.hookLayout?.showCTA) {
-        // NEW TEMPLATE 3 LAYOUT: topic (at top), title (centered), subtitle, CTA with colored box and arrow
+        // NEW HOOK LAYOUT: topic (at top), title (centered), subtitle, CTA with colored box and arrow
         const topicText = cleanCarousel.topic || ''
-        const titleText = ideaTitle?.trim() || cleanCarousel.title || ''
+        const titleText = ideaTitle || ''
         const subtitleText = cleanCarousel.subtitle || ''
         const ctaText = cleanCarousel.cta || ''
 
@@ -2045,7 +2225,7 @@ function CarouselImageGeneratorComponent({
           try {
             const imageLoadStart = performance.now()
             console.log(`      🖼️ Loading hook image from: ${imageSourceUrl.substring(0, 50)}...`)
-            loadedHookImage = await loadImage(imageSourceUrl)
+            loadedHookImage = await loadAndProcessImage(imageSourceUrl, 45000, true, template)
             const imageLoadDuration = performance.now() - imageLoadStart
             console.log(`      ⏱️ Hook image load took: ${imageLoadDuration.toFixed(2)}ms`)
             
@@ -2155,7 +2335,7 @@ function CarouselImageGeneratorComponent({
           
           // Dynamic sizing to fit within safe area
           if (totalContentHeight > effectiveSafeHeight) {
-            console.log(`⚠️  Template 3 Hook: Content too tall (${totalContentHeight}px > ${effectiveSafeHeight}px), scaling down...`)
+            console.log(`⚠️  Hook: Content too tall (${totalContentHeight}px > ${effectiveSafeHeight}px), scaling down...`)
             
             // Scale hook title font
             const scaleFactor = Math.max(0.3, Math.min(0.95, effectiveSafeHeight / totalContentHeight))
@@ -2358,7 +2538,7 @@ function CarouselImageGeneratorComponent({
 
       } else {
         // ORIGINAL HOOK LAYOUT (templates 1, 2, 4): Simple centered hook with highlight
-      const hookText = ideaTitle?.trim() || cleanCarousel.title || cleanCarousel.content
+      const hookText = ideaTitle || cleanCarousel.content || ''
         const hookLetterSpacing = getLetterSpacingFor('hook')
         const hookAlign = getTextAlignFor('hook')
       
@@ -2397,7 +2577,7 @@ function CarouselImageGeneratorComponent({
             try {
               const imageLoadStart = performance.now()
               console.log(`      🖼️ Loading hook image from: ${imageSourceUrl.substring(0, 50)}...`)
-              loadedHookImage = await loadImage(imageSourceUrl)
+              loadedHookImage = await loadAndProcessImage(imageSourceUrl, 45000, true, template)
               const imageLoadDuration = performance.now() - imageLoadStart
               console.log(`      ⏱️ Hook image load took: ${imageLoadDuration.toFixed(2)}ms`)
               
@@ -2425,8 +2605,6 @@ function CarouselImageGeneratorComponent({
       
         const hookBaseFontSize = template.fonts.hook.size
         const hookLineHeightRatio = template.fonts.hook.lineHeight / Math.max(1, hookBaseFontSize)
-      const highlightOffsetRatio = 100 / Math.max(1, hookBaseFontSize)
-      const highlightHeightRatio = 120 / Math.max(1, hookBaseFontSize)
 
       const buildHookFont = (size: number) =>
           template.fonts.hook.cssFont.replace(/(\d+\.?\d*)px/, `${size}px`)
@@ -2453,8 +2631,7 @@ function CarouselImageGeneratorComponent({
         const lineHeight = fontSize * hookLineHeightRatio
         const totalHeight =
           (wrappedLines.length > 0 ? fontSize : 0) +
-          Math.max(0, wrappedLines.length - 1) * lineHeight +
-          (wrappedLines.length > 0 ? fontSize * 0.2 : 0)
+          Math.max(0, wrappedLines.length - 1) * lineHeight
 
         let maxWidth = 0
         wrappedLines.forEach(line => {
@@ -2554,8 +2731,8 @@ function CarouselImageGeneratorComponent({
       const hookLineHeight = hookLayout.lineHeight
       const hookLines = hookLayout.lines
       const hookTotalHeight = hookLayout.totalHeight
-      const highlightOffset = hookFontSize * highlightOffsetRatio
-      const highlightHeight = hookFontSize * highlightHeightRatio
+      const highlightOffset = hookFontSize * 0.91
+      const highlightHeight = hookFontSize * 1.09
 
       ctx.font = buildHookFont(hookFontSize)
       ctx.fillStyle = getTextColor('hook')
@@ -2639,7 +2816,8 @@ function CarouselImageGeneratorComponent({
       // Draw each line
       hookLines.forEach((line, lineIndex) => {
         const lineWidth = measureTextWithLetterSpacing(ctx, line, hookLetterSpacing)
-        const startX = hookAlign === 'center'
+        // For template 4, always center text
+        const startX = (template.id === 'template4' || hookAlign === 'center')
           ? (width / 2) - (lineWidth / 2)
           : safeMarginSides
         const lineWords = line.split(' ')
@@ -2687,22 +2865,6 @@ function CarouselImageGeneratorComponent({
       }  // End of else block for original HOOK layout
       
     } else if (cleanCarousel.kind === 'CTA') {
-      // Render topic at the top for template 3 (using topic from HOOK slide)
-      if (template.id === 'template3' && template.fonts.hookTopic) {
-        const topicText = carousels[0]?.topic || '' // Get topic from HOOK slide
-        if (topicText) {
-          ctx.font = template.fonts.hookTopic.cssFont
-          ctx.fillStyle = colorTheme.primaryColor
-          ctx.textAlign = 'left'
-          const topicLetterSpacing = getLetterSpacingFor('hookTopic')
-          const topicValue = topicText.toUpperCase()
-          const topicWidth = measureTextWithLetterSpacing(ctx, topicValue, topicLetterSpacing)
-          const topicX = (width - topicWidth) / 2
-          // Use ORIGINAL safe margin for consistent positioning
-          const topicY = originalSafeMarginTop + template.fonts.hookTopic.size
-          drawTextWithLetterSpacing(ctx, topicValue, topicX, topicY, topicLetterSpacing)
-        }
-      }
 
       const ctaLetterSpacing = getLetterSpacingFor('cta')
       const ctaAlign = getTextAlignFor('cta')
@@ -2920,44 +3082,6 @@ function CarouselImageGeneratorComponent({
         y += lineHeight
       })
       
-      // Render subtitle at the bottom for template 3 CTA page
-      if (template.id === 'template3' && template.hookLayout?.showSubtitle && template.fonts.hookSubtitle) {
-        const subtitleText = carousels[0]?.subtitle || '' // Get subtitle from HOOK slide
-        if (subtitleText) {
-          ctx.font = template.fonts.hookSubtitle.cssFont
-          ctx.fillStyle = getTextColor('hook')
-          ctx.textAlign = 'left'
-          const subtitleLetterSpacing = getLetterSpacingFor('hookSubtitle')
-
-          const words = subtitleText.split(' ')
-          const wrappedLines: string[] = []
-          let currentLine = ''
-
-          for (const word of words) {
-            const testLine = currentLine ? `${currentLine} ${word}` : word
-            const lineWidth = measureTextWithLetterSpacing(ctx, testLine, subtitleLetterSpacing)
-
-            if (lineWidth > safeWidth && currentLine) {
-              wrappedLines.push(currentLine)
-              currentLine = word
-            } else {
-              currentLine = testLine
-            }
-          }
-          if (currentLine) wrappedLines.push(currentLine)
-
-          const subtitleLineHeight = template.fonts.hookSubtitle!.lineHeight
-          const subtitleTotalHeight = wrappedLines.length * subtitleLineHeight
-          let subtitleY = height - 150 - subtitleTotalHeight + template.fonts.hookSubtitle!.size
-
-          wrappedLines.forEach(line => {
-            const lineWidth = measureTextWithLetterSpacing(ctx, line, subtitleLetterSpacing)
-            const lineX = (width - lineWidth) / 2
-            drawTextWithLetterSpacing(ctx, line, lineX, subtitleY, subtitleLetterSpacing)
-            subtitleY += subtitleLineHeight
-          })
-        }
-      }
       
     } else {
       const titleLetterSpacing = getLetterSpacingFor('title')
@@ -3037,7 +3161,7 @@ function CarouselImageGeneratorComponent({
         try {
           const imageLoadStart = performance.now()
           console.log(`      🖼️ Loading content image from: ${imageSourceUrl.substring(0, 50)}...`)
-          loadedImage = await loadImage(imageSourceUrl)
+          loadedImage = await loadAndProcessImage(imageSourceUrl, 45000, true, template)
           const imageLoadDuration = performance.now() - imageLoadStart
           console.log(`      ⏱️ Content image load took: ${imageLoadDuration.toFixed(2)}ms`)
           
@@ -3053,9 +3177,8 @@ function CarouselImageGeneratorComponent({
               imageHeight = Math.round(imageWidth * 9 / 16)
             }
           } else {
-            // Fallback to template-specific sizing when maxHeightRatio is not specified
-            const sizeMultiplier = template.id === 'template3' ? 0.7 : 1.0
-            imageWidth = Math.round(safeWidth * sizeMultiplier)
+            // Fallback to default sizing when maxHeightRatio is not specified
+            imageWidth = Math.round(safeWidth)
             imageHeight = Math.round(imageWidth * 9 / 16)
           }
           console.log(`      ✅ Image loaded! Dimensions: ${loadedImage.width}x${loadedImage.height}, Display: ${imageWidth}x${imageHeight}`)
@@ -3081,10 +3204,10 @@ function CarouselImageGeneratorComponent({
       }
       
       // Dynamic spacing - use layout values if provided
-      const minTitleContentGap = template.id === 'template3' ? 20 : 20
-      const minImageGap = template.id === 'template3' ? 20 : 20
-      const maxTitleContentGap = template.layout?.gapTitleToContent || (template.id === 'template3' ? 40 : 70)
-      const maxImageGap = template.imageLayout?.marginBottom || (template.id === 'template3' ? 30 : 40)
+      const minTitleContentGap = 20
+      const minImageGap = 20
+      const maxTitleContentGap = template.layout?.gapTitleToContent || 70
+      const maxImageGap = template.imageLayout?.marginBottom || 40
       
       const buildTitleFont = (size: number) => template.fonts.title.cssFont.replace(/(\d+\.?\d*)px/, `${size}px`)
       const buildContentFont = (size: number) => template.fonts.content.cssFont.replace(/(\d+\.?\d*)px/, `${size}px`)
@@ -3167,21 +3290,6 @@ function CarouselImageGeneratorComponent({
       // Calculate effective safe height for ALL templates
       let effectiveSafeHeight = safeHeight
       
-      // For template 5, use its specific safe area if enabled
-      if (template.id === 'template5' && template.safeArea?.enabled) {
-        const template5SafeTop = template.safeArea.top
-        const template5SafeBottom = template.safeArea.bottom
-        effectiveSafeHeight = height - template5SafeTop - template5SafeBottom
-        console.log(`   Template 5: Using safe area (top: ${template5SafeTop}, bottom: ${template5SafeBottom}), available height=${effectiveSafeHeight}px`)
-      }
-      
-      // For template 3 MIDDLE slides, account for topic and page number
-      if (template.id === 'template3' && cleanCarousel.kind === 'MIDDLE') {
-        const topicBottomY = originalSafeMarginTop + (template.fonts.hookTopic ? template.fonts.hookTopic.size + 100 : 0)
-        const pageNumberTopY = height - originalSafeMarginBottom - 60 - 90
-        effectiveSafeHeight = pageNumberTopY - topicBottomY
-        console.log(`   Template 3 MIDDLE: Available height=${effectiveSafeHeight}px`)
-      }
       
       // Apply safety area check and dynamic sizing for ALL templates
       if (layout.totalHeight > effectiveSafeHeight) {
@@ -3262,80 +3370,33 @@ function CarouselImageGeneratorComponent({
       
       console.log(`📏 Layout: ${titleLines.length} title lines, ${contentLines.length} content lines, total: ${Math.round(totalHeight)}px, safe: ${safeHeight}px`)
       
-      // Render topic at the top for template 3 MIDDLE slides (using topic from HOOK slide)
-      if (template.id === 'template3' && cleanCarousel.kind === 'MIDDLE' && template.fonts.hookTopic) {
-        const topicText = carousels[0]?.topic || '' // Get topic from HOOK slide
-        if (topicText) {
-          ctx.font = template.fonts.hookTopic.cssFont
-          ctx.fillStyle = colorTheme.primaryColor
-          ctx.textAlign = 'left'
-          const topicLetterSpacing = getLetterSpacingFor('hookTopic')
-          const topicValue = topicText.toUpperCase()
-          const topicWidth = measureTextWithLetterSpacing(ctx, topicValue, topicLetterSpacing)
-          const topicX = (width - topicWidth) / 2
-          // Use ORIGINAL safe margin, not adjusted
-          const topicY = originalSafeMarginTop + template.fonts.hookTopic.size
-          drawTextWithLetterSpacing(ctx, topicValue, topicX, topicY, topicLetterSpacing)
-        }
-      }
-
       const firstLineFontSize = titleLines.length > 0 ? titleFontSize : contentFontSize
       
-      // For template 3 MIDDLE slides, center the image+title+content vertically (between topic and page number)
+      // Calculate vertical positioning
       let y: number
       let imageY: number | null = null
       
-      if (template.id === 'template3' && cleanCarousel.kind === 'MIDDLE') {
-        // Calculate available vertical space (between topic and page number)
-        const topicBottomY = originalSafeMarginTop + (template.fonts.hookTopic ? template.fonts.hookTopic.size + 100 : 0)
-        // Page number box: at height - 150 - 60, with 90px spacing above it
-        const pageNumberTopY = height - originalSafeMarginBottom - 60 - 90
-        const availableHeight = pageNumberTopY - topicBottomY
-        
-        // Calculate total content height (image first, then title, then content)
-        const titleH = titleLines.length > 0 
-          ? titleFontSize + (titleLines.length - 1) * titleLineHeight + (titleFontSize * 0.2)
-          : 0
-        const contentH = contentLines.length > 0
-          ? contentFontSize + (contentLines.length - 1) * contentLineHeight + (contentFontSize * 0.2)
-          : 0
-        const totalContentHeight = imageHeight + (imageHeight > 0 ? imageGap : 0) + titleH + titleContentGap + contentH
-        
-        // Center everything vertically within available space
-        const startY = topicBottomY + (availableHeight - totalContentHeight) / 2
-        
-        // Image at the top
+      // For all templates, use verticalAlign or center everything
+      const titlePadding = template.layout?.titlePadding
+      const topPadding = titlePadding?.top || 0
+      
+      if (template.layout?.verticalAlign === 'top') {
+        // Start from top with padding
+        const startY = safeMarginTop + topPadding
         if (imageHeight > 0) {
           imageY = startY
           y = startY + imageHeight + imageGap + titleFontSize
         } else {
           y = startY + titleFontSize
         }
-        
-        console.log(`   Centering: topicBottom=${topicBottomY}, pageNumberTop=${pageNumberTopY}, contentHeight=${Math.round(totalContentHeight)}, imageY=${imageY}, startY=${Math.round(y)}`)
       } else {
-        // For other templates, use verticalAlign or center everything
-        const titlePadding = template.layout?.titlePadding
-        const topPadding = titlePadding?.top || 0
-        
-        if (template.layout?.verticalAlign === 'top') {
-          // Start from top with padding
-          const startY = safeMarginTop + topPadding
-          if (imageHeight > 0) {
-            imageY = startY
-            y = startY + imageHeight + imageGap + titleFontSize
-          } else {
-            y = startY + titleFontSize
-          }
+        // Center everything
+        const startY = centerY - (totalHeight / 2)
+        if (imageHeight > 0) {
+          imageY = startY
+          y = startY + imageHeight + imageGap + titleFontSize
         } else {
-          // Center everything
-          const startY = centerY - (totalHeight / 2)
-          if (imageHeight > 0) {
-            imageY = startY
-            y = startY + imageHeight + imageGap + titleFontSize
-          } else {
-            y = startY + titleFontSize
-          }
+          y = startY + titleFontSize
         }
       }
       
@@ -3396,7 +3457,10 @@ function CarouselImageGeneratorComponent({
 
         titleLines.forEach(line => {
         const lineWidth = measureTextWithLetterSpacing(ctx, line, titleLetterSpacing)
-        const startX = getLineStartX(titleAlign, lineWidth)
+        // For template 4, always center text
+        const startX = template.id === 'template4' 
+          ? (width / 2) - (lineWidth / 2)
+          : getLineStartX(titleAlign, lineWidth)
         drawTextWithLetterSpacing(ctx, line, startX, y, titleLetterSpacing)
           y += titleLineHeight
         })
@@ -3457,7 +3521,10 @@ function CarouselImageGeneratorComponent({
           }
           
         const lineWidth = measureTextWithLetterSpacing(ctx, line, contentLetterSpacing)
-        const startX = getLineStartX(contentAlign, lineWidth)
+        // For template 4, always center text
+        const startX = template.id === 'template4'
+          ? (width / 2) - (lineWidth / 2)
+          : getLineStartX(contentAlign, lineWidth)
         const wordPositions: Array<{ start: number; end: number }> = []
 
         let tempX = startX
@@ -3532,51 +3599,6 @@ function CarouselImageGeneratorComponent({
         })
     }
 
-    // Render page number for MIDDLE slides in template 3 (same position as subtitle on hook slide)
-    if (template.id === 'template3' && cleanCarousel.kind === 'MIDDLE') {
-      // Calculate page number (excluding HOOK which is index 0)
-      const pageNumber = index // This will be 1, 2, 3, etc. for MIDDLE slides
-      const pageText = `${pageNumber}` // Just the number
-      
-      // Set font for page number - use Mansalva
-      const pageNumberFontSize = 36
-      ctx.font = `${pageNumberFontSize}px Mansalva, cursive`
-      const pageTextWidth = ctx.measureText(pageText).width
-      
-      // Box dimensions
-      const boxPaddingX = 24
-      const boxPaddingY = 12
-      const boxWidth = pageTextWidth + boxPaddingX * 2
-      const boxHeight = pageNumberFontSize + boxPaddingY * 2
-      const boxRadius = 8
-      
-      // Position at bottom middle - using original safeMarginBottom (150) to match subtitle position
-      const boxX = (width - boxWidth) / 2
-      const boxY = height - 150 - boxHeight
-      
-      // Draw colored box with theme primary color
-      ctx.fillStyle = colorTheme.primaryColor
-      ctx.beginPath()
-      ctx.moveTo(boxX + boxRadius, boxY)
-      ctx.lineTo(boxX + boxWidth - boxRadius, boxY)
-      ctx.quadraticCurveTo(boxX + boxWidth, boxY, boxX + boxWidth, boxY + boxRadius)
-      ctx.lineTo(boxX + boxWidth, boxY + boxHeight - boxRadius)
-      ctx.quadraticCurveTo(boxX + boxWidth, boxY + boxHeight, boxX + boxWidth - boxRadius, boxY + boxHeight)
-      ctx.lineTo(boxX + boxRadius, boxY + boxHeight)
-      ctx.quadraticCurveTo(boxX, boxY + boxHeight, boxX, boxY + boxHeight - boxRadius)
-      ctx.lineTo(boxX, boxY + boxRadius)
-      ctx.quadraticCurveTo(boxX, boxY, boxX + boxRadius, boxY)
-      ctx.closePath()
-      ctx.fill()
-      
-      // Draw page number text in white
-      ctx.fillStyle = '#FFFFFF'
-      ctx.textAlign = 'left'
-      const textX = boxX + boxPaddingX
-      const textY = boxY + boxPaddingY + pageNumberFontSize * 0.75
-      ctx.fillText(pageText, textX, textY)
-    }
-
     const arrowConfig = template.styles?.arrow
     if (arrowConfig?.type === 'right' && cleanCarousel.kind !== 'CTA' && !template.hookLayout?.showCTA) {
       const arrowEndX = width - safeMarginSides - arrowConfig.offsetRight
@@ -3604,31 +3626,16 @@ function CarouselImageGeneratorComponent({
     // Render footer if enabled
     if (template.footer?.enabled && template.footer.height) {
       const footerHeight = template.footer.height
-      // Position footer - ensure it stays within safe area boundaries
-      // For template 4, safeMarginBottom is 250 + footerHeight, so footer should be well within bounds
-      // Calculate max Y position based on safe area
-      const maxFooterY = height - safeMarginBottom + footerHeight
-      // Position footer at bottom, but ensure it doesn't exceed safe area
-      const footerY = template.id === 'template4' 
-        ? Math.min(height - footerHeight, maxFooterY)  // For template 4, ensure within safe area
-        : height - footerHeight  // For other templates, position at bottom
+      const paddingX = template.footer.paddingX || 48
+      const paddingY = template.footer.paddingY || paddingX
       
-      // Draw separator line
-      if (template.footer.lineThickness && template.footer.lineColor) {
-        ctx.strokeStyle = template.footer.lineColor
-        ctx.lineWidth = template.footer.lineThickness
-        ctx.beginPath()
-        const paddingX = template.footer.paddingX || 48
-        ctx.moveTo(paddingX, footerY)
-        ctx.lineTo(width - paddingX, footerY)
-        ctx.stroke()
-      }
+      // Position footer at the very bottom of canvas
+      const footerY = height - footerHeight
       
-      // Draw footer text (left and right)
+      // Draw footer text (left and right) - positioned at bottom of footer
       const footerFontRole = template.footer.fontRole || 'content'
       const footerFont = template.fonts[footerFontRole]
       if (footerFont) {
-        // Use fontSize override if provided, otherwise use fontRole's default size
         const footerFontSize = template.footer.fontSize || footerFont.size
         const footerCssFont = footerFont.cssFont.replace(/(\d+\.?\d*)px/, `${footerFontSize}px`)
         
@@ -3636,16 +3643,16 @@ function CarouselImageGeneratorComponent({
         ctx.fillStyle = getTextColor(footerFontRole as 'hook' | 'title' | 'content' | 'cta')
         ctx.textAlign = 'left'
         
-        const paddingX = template.footer.paddingX || 48
-        const footerTextY = footerY + (footerHeight / 2) + (footerFontSize / 2)
+        // Position text at bottom of footer with paddingY from bottom
+        const footerTextY = footerY + footerHeight - paddingY
         
-        // Left text (account name) - use user input or template default
+        // Left text (account name)
         const leftText = accountName || template.footer.leftText || ''
         if (leftText) {
           ctx.fillText(leftText, paddingX, footerTextY)
         }
         
-        // Right text (website) - use user input or template default
+        // Right text (website/handle)
         const rightText = website || template.footer.rightText || ''
         if (rightText) {
           ctx.textAlign = 'right'

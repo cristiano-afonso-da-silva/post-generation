@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
             // Some URLs expired - regenerate only the expired ones
             console.log(`🔄 Generation ${gen.id}: ${validUrls.length}/${existingImageUrls.length} URLs still valid, regenerating ${existingImageUrls.length - validUrls.length} expired`)
             
-            imageUrls = await Promise.all(
+            const regeneratedUrls = await Promise.all(
               existingImageUrls.map(async (cachedUrl, index) => {
                 // If cached URL is still valid, use it
                 if (isSignedUrlValid(cachedUrl)) {
@@ -79,7 +79,12 @@ export async function GET(request: NextRequest) {
 
                 if (urlError) {
                   console.error(`Error creating signed URL for ${filePath}:`, urlError)
-                  // Fallback to public URL if signed URL fails
+                  // Check if file exists - if not, return null instead of public URL
+                  if (urlError.message?.includes('not found') || urlError.message?.includes('does not exist')) {
+                    console.warn(`File ${filePath} does not exist in storage`)
+                    return null
+                  }
+                  // Fallback to public URL if signed URL fails for other reasons
                   const { data: publicData } = supabase.storage
                     .from('carousel-images')
                     .getPublicUrl(filePath)
@@ -89,6 +94,18 @@ export async function GET(request: NextRequest) {
                 return data.signedUrl
               })
             )
+            
+            // Filter out null values (files that don't exist)
+            imageUrls = regeneratedUrls.filter((url): url is string => url !== null)
+            
+            // Update database with regenerated URLs if we have any
+            if (imageUrls.length > 0) {
+              await supabase
+                .from('generations')
+                .update({ image_urls: imageUrls })
+                .eq('id', gen.id)
+                .eq('user_id', userId)
+            }
           }
         } else if (userId) {
           // Cached URLs are completely missing - try to reconstruct from known pattern

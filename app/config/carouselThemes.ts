@@ -131,13 +131,28 @@ export const COLOR_THEMES: ColorTheme[] = [
   }
 ]
 
+// Custom color themes cache (for dynamically added themes)
+const customColorThemesCache: ColorTheme[] = []
+
+export function addColorThemeToCache(theme: ColorTheme): void {
+  const existingIndex = customColorThemesCache.findIndex(t => t.id === theme.id)
+  if (existingIndex >= 0) {
+    customColorThemesCache[existingIndex] = theme
+  } else {
+    customColorThemesCache.push(theme)
+  }
+}
+
 // Helper functions
 export function getFontCombination(id: string): FontCombination {
   return FONT_COMBINATIONS.find(c => c.id === id) || FONT_COMBINATIONS[0]
 }
 
 export function getColorTheme(id: string): ColorTheme {
-  return COLOR_THEMES.find(t => t.id === id) || COLOR_THEMES[0]
+  // Check custom themes first, then default themes
+  return customColorThemesCache.find(t => t.id === id) || 
+         COLOR_THEMES.find(t => t.id === id) || 
+         COLOR_THEMES[0]
 }
 
 

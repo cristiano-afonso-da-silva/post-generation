@@ -3,13 +3,13 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
-import { SquarePen, ChevronLeft, Menu, Send, Sparkle } from 'lucide-react'
+import { SquarePen, ChevronLeft, Menu, Send } from 'lucide-react'
 import Image from 'next/image'
 import AccountModal from './AccountModal'
 
 interface SidebarProps {
-  activeView: 'create' | 'post' | 'generate-template'
-  onViewChange: (view: 'create' | 'post' | 'generate-template') => void
+  activeView: 'create' | 'post' | 'generate-template' | 'extreme-generate-template'
+  onViewChange: (view: 'create' | 'post' | 'generate-template' | 'extreme-generate-template') => void
   isCollapsed?: boolean
   isMobile?: boolean
   isMobileOpen?: boolean
@@ -26,7 +26,9 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
   const menuItems = [
     { id: 'create' as const, label: 'Create', icon: SquarePen },
     { id: 'post' as const, label: 'Post', icon: Send },
-    { id: 'generate-template' as const, label: 'Generate Template', icon: Sparkle },
+    // Hidden: Generate Template and Extreme Generate Template
+    // { id: 'generate-template' as const, label: 'Generate Template', icon: Sparkle },
+    // { id: 'extreme-generate-template' as const, label: 'Extreme Generate Template', icon: Zap },
   ]
 
   // On mobile, always show full width sidebar (never collapsed)
@@ -216,6 +218,40 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
             </button>
           )
         })}
+
+        {/* Debug button hidden */}
+        {/* <div style={{
+          marginTop: '24px',
+          paddingTop: '16px',
+          borderTop: '1px solid #f0f0f0'
+        }}>
+          <button
+            onClick={() => {
+              router.push('/debug')
+              if (isMobile && onClose) {
+                onClose()
+              }
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: shouldShowCollapsed ? 'center' : 'flex-start',
+              gap: '12px',
+              padding: '12px',
+              borderRadius: '8px',
+              background: '#fff8f0',
+              color: '#b35300',
+              fontSize: '14px',
+              fontWeight: 600,
+              border: '1px solid #ffd9b3',
+              width: '100%',
+              cursor: 'pointer'
+            }}
+          >
+            <Bug size={18} />
+            {!shouldShowCollapsed && <span>Debug (dev)</span>}
+          </button>
+        </div> */}
 
       </div>
 
