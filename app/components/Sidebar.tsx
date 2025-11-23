@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
-import { SquarePen, ChevronLeft, Menu, Send, Bug } from 'lucide-react'
+import { SquarePen, ChevronLeft, Menu, Send } from 'lucide-react'
 import Image from 'next/image'
 import AccountModal from './AccountModal'
 
@@ -219,7 +219,8 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
           )
         })}
 
-        <div style={{
+        {/* Debug button hidden */}
+        {/* <div style={{
           marginTop: '24px',
           paddingTop: '16px',
           borderTop: '1px solid #f0f0f0'
@@ -250,7 +251,7 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
             <Bug size={18} />
             {!shouldShowCollapsed && <span>Debug (dev)</span>}
           </button>
-        </div>
+        </div> */}
 
       </div>
 
