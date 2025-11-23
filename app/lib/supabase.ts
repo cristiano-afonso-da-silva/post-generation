@@ -180,7 +180,7 @@ export async function getUserCreditsByStripeCustomerId(
   
   const { data, error } = await serverClient
     .from('user_credits')
-    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, account_handle, website, template_generation_used, created_at, updated_at')
+    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, account_handle, website, template_generation_used, first_name, brand_name, brand_handle, brand_intention, topics, template_style, copy_tone, created_at, updated_at')
     .eq('stripe_customer_id', stripeCustomerId)
     .single()
 
@@ -198,7 +198,7 @@ export async function getUserCreditsServer(userId: string): Promise<UserCredits 
   
   const { data, error } = await serverClient
     .from('user_credits')
-    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, account_handle, website, template_generation_used, created_at, updated_at')
+    .select('id, user_id, credits_remaining, total_credits_used, stripe_customer_id, stripe_subscription_id, subscription_status, current_plan, account_handle, website, template_generation_used, first_name, brand_name, brand_handle, brand_intention, topics, template_style, copy_tone, created_at, updated_at')
     .eq('user_id', userId)
     .single()
 

@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
             // Some URLs expired - regenerate only the expired ones
             console.log(`🔄 Generation ${gen.id}: ${validUrls.length}/${existingImageUrls.length} URLs still valid, regenerating ${existingImageUrls.length - validUrls.length} expired`)
             
-            imageUrls = await Promise.all(
+            const regeneratedUrls = await Promise.all(
               existingImageUrls.map(async (cachedUrl, index) => {
                 // If cached URL is still valid, use it
                 if (isSignedUrlValid(cachedUrl)) {
@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
             )
             
             // Filter out null values (files that don't exist)
-            imageUrls = imageUrls.filter((url): url is string => url !== null)
+            imageUrls = regeneratedUrls.filter((url): url is string => url !== null)
             
             // Update database with regenerated URLs if we have any
             if (imageUrls.length > 0) {
