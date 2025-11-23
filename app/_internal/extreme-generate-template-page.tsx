@@ -261,7 +261,7 @@ export default function ExtremeGenerateTemplatePage() {
         primaryColor: normalizedColor
       }
 
-      // TEMPLATE 3: Basic Type - STRICTLY USE TEMPLATE 5
+      // Basic Type - STRICTLY USE TEMPLATE 5
       const template5 = CAROUSEL_TEMPLATES.find(t => t.id === 'template5')
       if (!template5) throw new Error('Template5 not found')
       

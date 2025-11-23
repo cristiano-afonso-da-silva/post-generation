@@ -12,6 +12,7 @@ import {
 } from '../../config/prompts';
 import { GEMINI_MODEL } from '../../config/aiConfig';
 import { getCarouselTemplate, extractTemplateLayout } from '../../config/carouselTemplates';
+import { getUserCreditsServerSQL } from '../../lib/supabase-mcp';
 // ════════════════════════════════════════════════════════════════════════════
 // API Configuration
 // ════════════════════════════════════════════════════════════════════════════
@@ -620,8 +621,8 @@ const NOTE_SCHEMA = {
     },
     slides: {
       type: SchemaType.ARRAY,
-      minItems: 4,
-      maxItems: 9,
+      minItems: 5,
+      maxItems: 7,
       items: {
         type: SchemaType.OBJECT,
         properties: {
@@ -879,15 +880,52 @@ async function generatePollinationsImage(prompt: string, usedImageIds: Set<strin
 // API Functions
 // ════════════════════════════════════════════════════════════════════════════
 
-async function generateIdeasWithGemini(accountDescription: string) {
+async function generateIdeasWithGemini(
+  accountDescription: string,
+  userVoice?: UserVoice,
+  templateId?: string
+) {
   const startTime = Date.now();
   
   try {
+    // Get template and extract layout constraints
+    let templateLayout: TemplateLayout | undefined = undefined
+    if (templateId) {
+      try {
+        const template = getCarouselTemplate(templateId)
+        templateLayout = extractTemplateLayout(template)
+        console.log(`📏 Using template layout from: ${templateId}`)
+      } catch (error) {
+        console.warn(`⚠️  Failed to load template ${templateId}, using default layout:`, error)
+      }
+    }
+    
+    // Use provided userVoice or default
+    const finalUserVoice: UserVoice = userVoice || {
+      tone: 'friendly and conversational, authentic to the user\'s voice',
+      sentenceStyle: 'medium length, clear and natural',
+      preferWords: [],
+      avoidWords: [],
+      examples: ''
+    }
+    
+    if (userVoice) {
+      console.log(`🎯 Using user's voice for ideas: tone="${userVoice.tone}", style="${userVoice.sentenceStyle}"`)
+    } else {
+      console.log(`🎯 Using default user voice for ideas`)
+    }
+    
     const model = getModel();
     const result = await callGeminiWithRetry(model, {
       contents: [{
         role: 'user',
-        parts: [{ text: IDEAS_PROMPT(accountDescription) }]
+        parts: [{ 
+          text: IDEAS_PROMPT(
+            accountDescription,
+            finalUserVoice,
+            templateLayout
+          ) 
+        }]
       }],
       generationConfig: {
         temperature: 0.9,
@@ -928,8 +966,12 @@ async function generateIdeasWithGemini(accountDescription: string) {
   }
 }
 
-async function generateIdeas(accountDescription: string) {
-  return generateIdeasWithGemini(accountDescription);
+async function generateIdeas(
+  accountDescription: string,
+  userVoice?: UserVoice,
+  templateId?: string
+) {
+  return generateIdeasWithGemini(accountDescription, userVoice, templateId);
 }
 
 async function generateOnboardingIdeaWithGemini(
@@ -987,6 +1029,115 @@ async function generateOnboardingIdea(
   vibe: string
 ) {
   return generateOnboardingIdeaWithGemini(projectDescription, topics, vibe);
+}
+
+async function generateRecommendedIdeas(
+  userId: string
+) {
+  const startTime = Date.now();
+  
+  try {
+    // Fetch user preferences from database directly
+    const userCredits = await getUserCreditsServerSQL(userId);
+    
+    if (!userCredits) {
+      console.warn('⚠️  Failed to fetch user credits for recommended ideas');
+      return {
+        success: false,
+        error: 'Failed to fetch user preferences',
+        data: { ideas: [] }
+      };
+    }
+    
+    const brandIntention = userCredits.brand_intention;
+    const topics = userCredits.topics || [];
+    const templateStyle = userCredits.template_style || 'Clean & minimal';
+    
+    // Check if user has required preferences
+    if (!brandIntention || !brandIntention.trim() || topics.length === 0) {
+      console.log('ℹ️  User does not have required preferences (brandIntention or topics)');
+      return {
+        success: true,
+        action: 'recommended-ideas',
+        data: { ideas: [] },
+        meta: {
+          generationTime: `${Date.now() - startTime}ms`,
+          reason: 'no_preferences'
+        }
+      };
+    }
+    
+    // Generate 3 ideas by calling the prompt 3 times
+    // Add slight variation by including index in the prompt context
+    const ideas: string[] = [];
+    const errors: string[] = [];
+    
+    for (let i = 0; i < 3; i++) {
+      try {
+        const result = await generateOnboardingIdeaWithGemini(
+          brandIntention,
+          topics,
+          templateStyle
+        );
+        
+        if (result.success && result.data?.idea) {
+          const idea = result.data.idea.trim();
+          // Ensure uniqueness - if duplicate, try again (max 2 retries per idea)
+          if (!ideas.includes(idea)) {
+            ideas.push(idea);
+          } else {
+            // Retry once for duplicates
+            const retryResult = await generateOnboardingIdeaWithGemini(
+              brandIntention,
+              topics,
+              templateStyle
+            );
+            if (retryResult.success && retryResult.data?.idea) {
+              const retryIdea = retryResult.data.idea.trim();
+              if (!ideas.includes(retryIdea)) {
+                ideas.push(retryIdea);
+              } else {
+                // If still duplicate, use it anyway (better than missing an idea)
+                ideas.push(retryIdea);
+              }
+            }
+          }
+        } else {
+          errors.push(`Failed to generate idea ${i + 1}: ${result.error || 'Unknown error'}`);
+        }
+      } catch (error: any) {
+        errors.push(`Error generating idea ${i + 1}: ${error.message || 'Unknown error'}`);
+      }
+    }
+    
+    // If we got at least one idea, return success
+    if (ideas.length > 0) {
+      return {
+        success: true,
+        action: 'recommended-ideas',
+        data: { ideas: ideas.slice(0, 3) }, // Ensure max 3 ideas
+        meta: {
+          generationTime: `${Date.now() - startTime}ms`,
+          count: ideas.length,
+          errors: errors.length > 0 ? errors : undefined
+        }
+      };
+    } else {
+      // All attempts failed
+      return {
+        success: false,
+        error: `Failed to generate recommended ideas: ${errors.join('; ')}`,
+        data: { ideas: [] }
+      };
+    }
+  } catch (error: any) {
+    console.error('Error generating recommended ideas:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to generate recommended ideas',
+      data: { ideas: [] }
+    };
+  }
 }
 
 // buildAIImagePrompt is now imported from app/config/prompts.ts
@@ -1320,15 +1471,15 @@ async function generateNoteWithGemini(
       throw new Error(`Failed to parse Gemini response: ${parseError.message}`);
     }
     
-    if (!data.slides || !Array.isArray(data.slides) || data.slides.length < 4) {
+    if (!data.slides || !Array.isArray(data.slides) || data.slides.length < 5) {
       console.error('❌ Invalid note structure!');
       console.error('📊 Received data:', JSON.stringify(data, null, 2));
-      throw new Error(`Invalid note format: must have at least 4 carousels, got ${data.slides?.length || 0}`);
+      throw new Error(`Invalid note format: must have at least 5 carousels, got ${data.slides?.length || 0}`);
     }
     
-    if (data.slides.length > 9) {
-      console.warn(`⚠️  Note has ${data.slides.length} carousels (max 9), trimming...`);
-      data.slides = data.slides.slice(0, 9);
+    if (data.slides.length > 7) {
+      console.warn(`⚠️  Note has ${data.slides.length} carousels (max 7), trimming...`);
+      data.slides = data.slides.slice(0, 7);
     }
     
     // Remove asterisks from all carousel content
@@ -1497,6 +1648,8 @@ export async function POST(request: NextRequest) {
     }
     
     if (action === 'ideas') {
+      const { accountDescription, templateId, userVoice } = body;
+      
       if (!accountDescription || typeof accountDescription !== 'string' || accountDescription.trim().length === 0) {
         return NextResponse.json(
           { success: false, error: 'Missing or invalid accountDescription' },
@@ -1504,7 +1657,11 @@ export async function POST(request: NextRequest) {
         );
       }
       
-      const result = await generateIdeas(accountDescription.trim());
+      const result = await generateIdeas(
+        accountDescription.trim(),
+        userVoice,
+        templateId
+      );
       return NextResponse.json(result);
     }
     
@@ -1537,6 +1694,20 @@ export async function POST(request: NextRequest) {
         topics,
         vibe.trim()
       );
+      return NextResponse.json(result);
+    }
+    
+    if (action === 'recommended-ideas') {
+      const { userId } = body;
+      
+      if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'Missing or invalid userId' },
+          { status: 400 }
+        );
+      }
+      
+      const result = await generateRecommendedIdeas(userId.trim());
       return NextResponse.json(result);
     }
     

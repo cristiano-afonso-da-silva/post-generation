@@ -9,24 +9,85 @@
 
 /**
  * Prompt for generating 3 post ideas based on business description
+ * Follows the same structure as NOTE_PROMPT: User Voice > Template Layout > Global Rules
  */
-export const IDEAS_PROMPT = (accountDescription: string) => `
-You are an expert social media strategist with deep knowledge of viral content and engagement patterns.
+export const IDEAS_PROMPT = (
+  accountDescription: string,
+  userVoice: UserVoice = DEFAULT_USER_VOICE,
+  templateLayout: TemplateLayout = DEFAULT_TEMPLATE_LAYOUT
+) => {
+  // Build vocabulary section
+  const vocabularySection = userVoice.preferWords && userVoice.preferWords.length > 0
+    ? `- Prefer: ${userVoice.preferWords.join(', ')}`
+    : ''
+  
+  const avoidSection = userVoice.avoidWords && userVoice.avoidWords.length > 0
+    ? `- Avoid: ${userVoice.avoidWords.join(', ')}`
+    : ''
+  
+  const vocabularyBlock = vocabularySection || avoidSection
+    ? `- Vocabulary:\n  ${vocabularySection ? vocabularySection + '\n  ' : ''}${avoidSection || ''}`
+    : ''
+  
+  // Build reference snippets section
+  const referenceSection = userVoice.examples
+    ? `\n\nREFERENCE SNIPPETS (imitate these):\n"""\n${userVoice.examples}\n"""`
+    : ''
+  
+  // Determine title length from template layout
+  const titleMin = templateLayout.hookTitle?.min || 5
+  const titleMax = templateLayout.hookTitle?.max || 8
+  
+  return `
+🎯 TOP PRIORITY: MATCH THE USER'S VOICE
 
+You must generate ideas that match how this user likes to speak and write.
+
+User voice overrides template style and all other instructions
+except hard constraints like length limits.
+
+USER VOICE:
+- Tone: ${userVoice.tone}
+- Sentence style: ${userVoice.sentenceStyle}${vocabularyBlock ? '\n' + vocabularyBlock : ''}${referenceSection}
+
+If anything conflicts later in this prompt,
+the USER VOICE here wins for wording, phrasing, and tone.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEMPLATE LAYOUT (SECOND PRIORITY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The template controls the length constraints for idea titles:
+- Idea title length: ${titleMin}-${titleMax} words
+
+This ensures ideas will fit well within the selected template's structure.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GLOBAL RULES (THIRD PRIORITY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- No emojis
+- No numbering
+- No quotes
+- NO dashes (-) or semicolons (;) anywhere
+- Simple, clear language
+- Avoid complicated words - use day-to-day language that humans naturally use
+
+If a global rule conflicts with user voice,
+try to satisfy both. If impossible, follow the user voice
+for wording but still respect hard constraints like no emojis.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TASK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Generate 3 highly specific, compelling post idea titles for this account:
 "${accountDescription}"
 
 REQUIREMENTS
-✓ Each title must be 6-10 words maximum
+✓ Each title must be ${titleMin}-${titleMax} words maximum
 ✓ Titles should be specific and actionable (not vague)
 ✓ Cover diverse angles: how-to, mistakes, frameworks, case studies, experiments, myths, mindset shifts
-✓ No emojis, no numbering, no quotes
 ✓ Each must be clearly distinct from others (no semantic overlap)
-✓ Use plain, direct language
-✓ Avoid complicated words - use day-to-day language that humans naturally use
 ✓ Focus on value delivery and curiosity
-✓ NO dashes (-) or semicolons (;) anywhere in the generated content
+✓ TONE CHECK: Does each idea match "${userVoice.tone}"? Does it sound like the user would write it?
 
 EXAMPLES OF GOOD TITLES
 - "Why Your Morning Routine Is Sabotaging Your Productivity"
@@ -43,7 +104,9 @@ Return ONLY valid JSON matching this exact structure:
 }
 
 Think strategically about what would make someone stop scrolling and engage.
+Always ask yourself: "Does this idea sound like the user wrote it?"
 `.trim();
+}
 
 /**
  * Prompt for generating a single personalized post idea from onboarding data
@@ -84,6 +147,14 @@ EXAMPLES OF GOOD TITLES
 - "The Five Minute Framework That Doubled My Client Base"
 - "What I Learned Spending Six Months Without Social Media"
 - "The One Mistake That's Costing You Thousands of Followers"
+
+BAD EXAMPLES (DO NOT GENERATE THESE)
+- "Building a Startup First Steps Behind the Scenes" (BAD: Just disconnected words/phrases stacked together, not a coherent idea)
+- "Marketing Tips Growth Hacks Success Stories" (BAD: Random words that don't form a meaningful sentence)
+- "Productivity Tools Morning Routine Daily Habits" (BAD: Word salad, no coherent thought)
+- "Startup Journey Lessons Learned Key Insights" (BAD: Fragmented phrases, not a complete idea)
+
+A good title must be a COMPLETE, COHERENT SENTENCE that forms a single, clear idea. Avoid just listing related words or phrases.
 
 OUTPUT FORMAT
 Return ONLY valid JSON matching this exact structure:
@@ -329,7 +400,7 @@ IMPORTANT: The first slide (HOOK) MUST include topic, subtitle, and cta fields. 
 
 ${templateLayout.includeMiddleTitles ? 'Middle carousels MUST have both title and content.' : 'Middle carousels MUST have content but should have empty title ("").'}
 
-The "slides" array is REQUIRED and MUST contain at least 3 carousels.
+The "slides" array is REQUIRED and MUST contain at least 5 carousels (and no more than 7).
 Each carousel MUST have: title, content, and kind properties.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -387,13 +458,13 @@ Analyze this CTA carousel content and extract emphasis words:
 Content: "${content}"
 
 Instructions:
-- Extract 2-3 short phrases (2-4 words each) that are most important for emphasis
-- These phrases should be ACTION-ORIENTED and impactful
-- Return them comma-separated
+- Extract 1 single word or short phrase (1-3 words) that is the MOST IMPORTANT for emphasis
+- This should be ACTION-ORIENTED and impactful
+- Return only one word or phrase (no comma-separated list)
 - For highlight and imageSearch, return empty string (no highlights or images on CTA carousels)
 
 Return JSON with:
-- underline: "phrase 1, phrase 2, phrase 3" (2-3 phrases)
+- underline: "single word or phrase" (only one, not multiple)
 - highlight: "" (empty string for CTA carousels)
 - imageSearch: "" (empty string for CTA carousels)
 `.trim();
@@ -409,9 +480,9 @@ Analyze this middle carousel content and extract emphasis words and image search
 ${titleSection}Content: "${content}"
 
 CRITICAL INSTRUCTIONS:
-1. UNDERLINE: Extract 2-4 short phrases (2-4 words each) that are KEY CONCEPTS
-- Return them comma-separated
-   - Example: "breathable fabric, everyday comfort, lightweight design"
+1. UNDERLINE: Extract 1 single word or short phrase (1-3 words) that is the MOST IMPORTANT KEY CONCEPT
+- Return only one word or phrase (no comma-separated list)
+   - Example: "breathable fabric" or "comfort"
 
 2. HIGHLIGHT: Extract one MOST important single word
    - Must be without punctuation
@@ -426,7 +497,7 @@ CRITICAL INSTRUCTIONS:
 
 REQUIRED JSON FORMAT (ALL FIELDS MUST BE PRESENT):
 {
-  "underline": "phrase 1, phrase 2, phrase 3",
+  "underline": "single word or phrase",
   "highlight": "word",
   "imageSearch": "visual keyword1 keyword2 keyword3"
 }

@@ -210,15 +210,15 @@ export interface CarouselTemplate {
 export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   {
     id: 'template1',
-    name: 'Template 1 (Classic)',
+    name: 'Classic',
     fonts: {
       hook: {
         family: 'Poppins',
         weight: 'bold',
         style: 'normal',
-        cssFont: 'bold 130px Poppins, sans-serif',
-        lineHeight: 155,
-        size: 130
+        cssFont: 'bold 110px Poppins, sans-serif',
+        lineHeight: 131,
+        size: 110
       },
       title: {
         family: 'Poppins',
@@ -256,7 +256,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
       }
     },
     textColor: '#000000',  // Black text for light background
-    imagePrompt: 'modern clean photography of {input}, professional lighting, vibrant colors, high quality, 16:9 aspect ratio',  // Classic photo style
+    imagePrompt: 'Hand-drawn black-marker illustration of {input}. Minimal and clean line-art, smooth curves, no shading, no color, no gradients. Only thin black outlines. Remove background completely, transparent background, no white background, no background color, alpha channel, PNG with transparency. The subject should be the only visible element on a fully transparent background.',
     layout: {
       contentMaxWidth: 900,
       verticalAlign: 'center',
@@ -280,9 +280,9 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     writingStyle: {
       tone: 'friendly and conversational, like talking to a friend, warm and approachable',
       lengthConstraints: {
-        hookTitle: { min: 6, max: 12 },
-        middleTitle: { min: 2, max: 5 },
-        middleContent: { min: 18, max: 32 },
+        hookTitle: { min: 5, max: 8 },
+        middleTitle: { min: 1, max: 3 },
+        middleContent: { min: 12, max: 30 },
         caption: { min: 80, max: 120 }
       },
       structure: {
@@ -302,7 +302,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   },
   {
     id: 'template2',
-    name: 'Template 2 (Elegant)',
+    name: 'Elegant',
     fonts: {
       hook: {
         family: 'Playfair Display',
@@ -348,7 +348,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
       }
     },
     textColor: '#000000',  // Black text for light background
-    imagePrompt: 'elegant artistic photography of {input}, soft natural lighting, warm tones, sophisticated composition, fine art style, 16:9 aspect ratio',  // Elegant artistic style
+    imagePrompt: 'Hand-drawn black-marker illustration of {input}. Minimal and clean line-art, smooth curves, no shading, no color, no gradients. Only thin black outlines. Remove background completely, transparent background, no white background, no background color, alpha channel, PNG with transparency. The subject should be the only visible element on a fully transparent background.',
     layout: {
       contentMaxWidth: 850,
       verticalAlign: 'center',
@@ -372,9 +372,9 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     writingStyle: {
       tone: 'sophisticated and refined, elegant and thoughtful, with a touch of poetic grace',
       lengthConstraints: {
-        hookTitle: { min: 8, max: 14 },
-        middleTitle: { min: 3, max: 6 },
-        middleContent: { min: 25, max: 40 },
+        hookTitle: { min: 5, max: 8 },
+        middleTitle: { min: 1, max: 3 },
+        middleContent: { min: 12, max: 30 },
         caption: { min: 100, max: 150 }
       },
       structure: {
@@ -392,157 +392,10 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     },
     defaultColorThemeId: 'gold-green'
   },
-  {
-    id: 'template3',
-    name: 'Template 3 (Modern)',
-    fonts: {
-      hookTopic: {
-        family: 'Inter',
-        weight: '500',
-        style: 'normal',
-        cssFont: '500 28px Inter, sans-serif',
-        lineHeight: 36,
-        size: 28
-      },
-      hook: {
-        family: 'Inter',
-        weight: '500',
-        style: 'normal',
-        cssFont: '500 120px Inter, sans-serif',
-        lineHeight: 140,
-        size: 120
-      },
-      hookSubtitle: {
-        family: 'Inter',
-        weight: '500',
-        style: 'normal',
-        cssFont: '500 42px Inter, sans-serif',
-        lineHeight: 54,
-        size: 42
-      },
-      hookCTA: {
-        family: 'Mansalva',
-        weight: 'normal',
-        style: 'normal',
-        cssFont: '48px Mansalva, cursive',
-        lineHeight: 60,
-        size: 48
-      },
-      title: {
-        family: 'Inter',
-        weight: '500',
-        style: 'normal',
-        cssFont: '500 75px Inter, sans-serif',
-        lineHeight: 90,
-        size: 75
-      },
-      content: {
-        family: 'Inter',
-        weight: '500',
-        style: 'normal',
-        cssFont: '500 52px Inter, sans-serif',
-        lineHeight: 68,
-        size: 52
-      }
-    },
-    background: {
-      type: 'color',
-      value: '#fefbf8'
-    },
-    hookBackground: {
-      type: 'image',
-      src: '/templates/template3/bg.jpg',
-      opacity: 0.3
-    },
-    styles: {
-      letterSpacing: {
-        hookTopic: 2,
-        hook: -1,
-        hookSubtitle: 0,
-        hookCTA: 0,
-        title: -1,
-        content: 0,
-        cta: 0
-      },
-      textAlign: {
-        hookTopic: 'center',
-        hook: 'center',
-        hookSubtitle: 'center',
-        hookCTA: 'center',
-        title: 'center',
-        content: 'center',
-        cta: 'center'
-      },
-      ctaBox: {
-        useThemeColor: true,
-        paddingX: 32,
-        paddingY: 20,
-        borderRadius: 12
-      },
-      arrow: {
-        type: 'right',
-        color: 'theme',
-        width: 80,
-        height: 28,
-        lineWidth: 6,
-        offsetRight: 32,
-        offsetBottom: 0
-      }
-    },
-    hookLayout: {
-      showTopic: true,
-      showSubtitle: false,
-      showCTA: true
-    },
-    textColor: '#000000',  // Black text for light background
-    imagePrompt: 'contemporary minimalist photography of {input}, clean lines, bright natural lighting, modern aesthetic, geometric composition, 16:9 aspect ratio',  // Modern minimalist style
-    layout: {
-      contentMaxWidth: 820,
-      verticalAlign: 'center',
-      gapTitleToContent: 30
-    },
-    imageLayout: {
-      position: 'top',
-      maxHeightRatio: 0.3,
-      marginBottom: 30
-    },
-    footer: {
-      enabled: true,
-      height: 40,
-      paddingX: 48,
-      paddingY: 48,
-      leftText: '@postmynote',  // Default, can be overridden by user input
-      rightText: 'postmynote.app',  // Default, can be overridden by user input
-      fontRole: 'content',
-      fontSize: 28  // Smaller footer text (content font is 52px, footer will be 28px)
-    },
-    writingStyle: {
-      tone: 'casual and direct, modern and straightforward, no-nonsense approach',
-      lengthConstraints: {
-        hookTitle: { min: 6, max: 10 },
-        middleTitle: { min: 2, max: 4 },
-        middleContent: { min: 15, max: 28 },
-        caption: { min: 70, max: 110 }
-      },
-      structure: {
-        sentenceStyle: 'short',
-        paragraphStyle: 'single',
-        hookStyle: 'statement',
-        contentFlow: 'Get straight to the point. Use short, punchy sentences. Be direct and actionable. Cut the fluff.',
-        includeMiddleTitles: true
-      }
-    },
-    imagePlacement: {
-      hook: false,
-      content: true,
-      cta: false
-    },
-    defaultColorThemeId: 'gold-green'
-  },
   // NEW: Template 4 – Dark Retention-style
   {
     id: 'template4',
-    name: 'Template 4 (Dark Story)',
+    name: 'Dark',
     fonts: {
       // Smaller hook title for Template 4
       hook: {
@@ -597,8 +450,8 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
       useImage: true  // Hook slide should display an image above title/content
     },
     textColor: '#FFFFFF',  // White text for black background
-    imagePrompt: 'a white line drawing {input}, with #000000 black background, high contrast, detailed',  // Template-specific image style for middle slides
-    hookImagePrompt: 'a white line drawing illustration of {input}, vintage woodcut style, black background #000000, high contrast, detailed',  // Template-specific image style for hook slide
+    imagePrompt: 'Hand-drawn white-marker illustration of {input}. Minimal and clean line-art, smooth curves, no shading, no color, no gradients. Only thin white outlines on a black background, with a casual, friendly doodle look.',
+    hookImagePrompt: 'Hand-drawn white-marker illustration of {input}. Minimal and clean line-art, smooth curves, no shading, no color, no gradients. Only thin white outlines on a black background, with a casual, friendly doodle look.',
     layout: {
       contentMaxWidth: 820,  // Narrow centered column like Retentioned
       verticalAlign: 'top',  // Start from top, not center
@@ -625,9 +478,9 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     writingStyle: {
       tone: 'bold and dramatic, impactful and provocative, with a sense of urgency and intensity',
       lengthConstraints: {
-        hookTitle: { min: 4, max: 8 },
-        middleTitle: { min: 2, max: 4 },
-        middleContent: { min: 12, max: 25 },
+        hookTitle: { min: 5, max: 8 },
+        middleTitle: { min: 1, max: 3 },
+        middleContent: { min: 12, max: 30 },
         caption: { min: 60, max: 100 }
       },
       structure: {
@@ -647,7 +500,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   },
   {
     id: 'template5',
-    name: 'Template 5 (Serif Minimal)',
+    name: 'Serif',
     fonts: {
       hook: {
         family: 'Permanent Marker',
@@ -699,7 +552,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
       useImage: false
     },
     textColor: '#000000',
-    imagePrompt: 'a #C53030 line drawing {input}, with transparent background, high contrast, detailed',  // Template-specific image style for middle slides
+    imagePrompt: 'Hand-drawn black-marker illustration of {input}. Minimal and clean line-art, smooth curves, no shading, no color, no gradients. Only thin black outlines. Remove background completely, transparent background, no white background, no background color, alpha channel, PNG with transparency. The subject should be the only visible element on a fully transparent background.',
     roleColors: {
       hook: '#C53030',
       title: '#C53030',
@@ -741,19 +594,12 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
         contentMaxWidth: 820
       }
     },
-    safeArea: {
-      enabled: true,
-      top: 80,
-      bottom: 140,
-      left: 80,
-      right: 80
-    },
     writingStyle: {
       tone: 'gentle, sincere, reflective and calm',
       lengthConstraints: {
-        hookTitle: { min: 8, max: 16 },
-        middleTitle: { min: 1, max: 4 },
-        middleContent: { min: 30, max: 80 },
+        hookTitle: { min: 5, max: 8 },
+        middleTitle: { min: 1, max: 3 },
+        middleContent: { min: 12, max: 30 },
         caption: { min: 90, max: 180 }
       },
       structure: {
@@ -773,7 +619,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   },
   {
     id: 'template6',
-    name: 'Template 6 (Premium Grid)',
+    name: 'Premium',
     fonts: {
       hook: {
         family: 'Inter',
@@ -828,7 +674,7 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
       useImage: false
     },
     textColor: '#085C36',
-    imagePrompt: 'premium professional photography of {input}, high quality, vibrant colors, clean composition, 16:9 aspect ratio',
+    imagePrompt: 'Hand-drawn black-marker illustration of {input}. Minimal and clean line-art, smooth curves, no shading, no color, no gradients. Only thin black outlines. Remove background completely, transparent background, no white background, no background color, alpha channel, PNG with transparency. The subject should be the only visible element on a fully transparent background.',
     layout: {
       canvasWidth: 1080,
       canvasHeight: 1350,
@@ -864,19 +710,12 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
       body: { contentMaxWidth: 820 },
       outro: { contentMaxWidth: 820 }
     },
-    safeArea: {
-      enabled: true,
-      top: 140,
-      bottom: 140,
-      left: 120,
-      right: 120
-    },
     writingStyle: {
       tone: 'confident, calm and conversational, polished but friendly',
       lengthConstraints: {
-        hookTitle: { min: 3, max: 6 },
-        middleTitle: { min: 1, max: 4 },
-        middleContent: { min: 24, max: 50 },
+        hookTitle: { min: 5, max: 8 },
+        middleTitle: { min: 1, max: 3 },
+        middleContent: { min: 12, max: 30 },
         caption: { min: 80, max: 140 }
       },
       structure: {
@@ -897,60 +736,46 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
   },
   {
     id: 'template7',
-    name: 'Template 7 (Glow Center)',
+    name: 'Sentence',
     fonts: {
-      // Used for the main hook text on the first slide
       hook: {
-        family: 'Inter',
-        weight: '700',
-        style: 'normal',
-        cssFont: '700 120px Inter, sans-serif',
-        lineHeight: 140,
-        size: 120
-      },
-      // Optional subtitle under the hook title (script-like serif)
-      hookSubtitle: {
-        family: 'Playfair Display',
+        family: 'EB Garamond',
         weight: 'normal',
-        style: 'italic',
-        cssFont: 'italic 52px "Playfair Display", serif',
-        lineHeight: 70,
-        size: 52
+        style: 'normal',
+        cssFont: '35px "EB Garamond", serif',
+        lineHeight: 42,
+        size: 35
       },
       title: {
-        // Used for middle slide titles (same serif italic look)
-        family: 'Playfair Display',
+        family: 'EB Garamond',
         weight: 'normal',
-        style: 'italic',
-        cssFont: 'italic 52px "Playfair Display", serif',
-        lineHeight: 70,
-        size: 52
+        style: 'normal',
+        cssFont: '35px "EB Garamond", serif',
+        lineHeight: 42,
+        size: 35
       },
       content: {
-        // Used for short supporting line under the title
-        family: 'Inter',
-        weight: '500',
+        family: 'EB Garamond',
+        weight: 'normal',
         style: 'normal',
-        cssFont: '500 40px Inter, sans-serif',
-        lineHeight: 56,
-        size: 40
+        cssFont: '35px "EB Garamond", serif',
+        lineHeight: 42,
+        size: 35
       }
     },
     background: {
-      type: 'color',
-      value: '#F6F7F3' // soft off-white paper
+      type: 'image',
+      src: '/backgrounds/background.jpg'
     },
     styles: {
       letterSpacing: {
         hook: 0,
-        hookSubtitle: 0,
         title: 0,
         content: 0,
         cta: 0
       },
       textAlign: {
         hook: 'center',
-        hookSubtitle: 'center',
         title: 'center',
         content: 'center',
         cta: 'center'
@@ -958,92 +783,54 @@ export const CAROUSEL_TEMPLATES: CarouselTemplate[] = [
     },
     hookLayout: {
       showTopic: false,
-      showSubtitle: true,
+      showSubtitle: false,
       showCTA: false,
-      useImage: true // hook slide has icon + glow as well
+      useImage: false
     },
-    textColor: '#000000',
-    // Icon style for middle slides – theme color will be used for the glow circle,
-    // this prompt just focuses on the central illustration.
-    imagePrompt:
-      'simple flat vector illustration of {input}, clean lines, minimal shading, soft pastel accent color, centered on a light background, modern icon style',
-    hookImagePrompt:
-      'flat vector illustration of {input}, clean lines, soft pastel accent color, centered, modern icon style, works on a light background',
+    textColor: '#333333',  // Dark gray text
+    imagePrompt: 'Hand-drawn black-marker illustration of {input}. Minimal and clean line-art, smooth curves, no shading, no color, no gradients. Only thin black outlines. Remove background completely, transparent background, no white background, no background color, alpha channel, PNG with transparency. The subject should be the only visible element on a fully transparent background.',
     layout: {
-      canvasWidth: 1080,
-      canvasHeight: 1350,
-      contentMaxWidth: 720,
+      contentMaxWidth: 900,
       verticalAlign: 'center',
-      hookPadding: { top: 260, right: 120, bottom: 260, left: 120 },
-      titlePadding: { top: 520, right: 120, bottom: 0, left: 120 },
-      contentPadding: { top: 620, right: 120, bottom: 0, left: 120 },
-      gapTitleToContent: 24
+      gapTitleToContent: 0  // No gap since no titles on content slides
     },
     imageLayout: {
-      // Icon sits in the middle of the glow, with text just above or below
-      position: 'center',
-      maxHeightRatio: 0.26,
-      marginBottom: 24
+      position: 'top',
+      maxHeightRatio: 0.4,
+      marginBottom: 40
     },
     footer: {
-      enabled: true,
+      enabled: false,
       height: 40,
       paddingX: 48,
       paddingY: 48,
-      leftText: '@postmynote',  // Default, can be overridden by user input
-      rightText: 'postmynote.app',  // Default, can be overridden by user input
+      leftText: '@postmynote',
+      rightText: 'postmynote.app',
       fontRole: 'content',
-      fontSize: 24  // Smaller footer text (content font is 40px, footer will be 24px)
-    },
-    roleColors: {
-      // Text stays dark; glow color comes from the color theme's primary color
-      hook: '#000000',
-      title: '#000000',
-      content: '#000000',
-      cta: '#000000'
-    },
-    perSlideType: {
-      hook: {
-        contentMaxWidth: 720,
-        gapTitleToContent: 18
-      },
-      body: {
-        contentMaxWidth: 720
-      },
-      outro: {
-        contentMaxWidth: 720
-      }
-    },
-    safeArea: {
-      enabled: true,
-      top: 120,
-      bottom: 180,
-      left: 80,
-      right: 80
+      fontSize: 28
     },
     writingStyle: {
-      tone: 'simple, positive and encouraging, clear and easy to digest',
+      tone: 'concise, direct, simple, clear',
       lengthConstraints: {
-        hookTitle: { min: 2, max: 5 },        // short hook like “5 Habits”
-        middleTitle: { min: 3, max: 7 },      // one short phrase
-        middleContent: { min: 6, max: 20 },   // 1–2 short lines
-        caption: { min: 60, max: 120 }
+        hookTitle: { min: 5, max: 8 },
+        middleTitle: { min: 1, max: 3 },
+        middleContent: { min: 6, max: 12 },
+        caption: { min: 80, max: 120 }
       },
       structure: {
         sentenceStyle: 'short',
         paragraphStyle: 'single',
-        hookStyle: 'statement',
-        contentFlow:
-          'One central hook slide followed by several icon + title + short support-line slides. Keep wording tight, scannable and straightforward. Maximum 10 words.',
-        includeMiddleTitles: true
+        hookStyle: 'mixed',
+        contentFlow: 'Write one clear, direct sentence per slide. Be concise and impactful.',
+        includeMiddleTitles: false
       }
     },
     imagePlacement: {
-      hook: true,
+      hook: false,
       content: true,
       cta: false
     },
-    defaultColorThemeId: 'glowGreen' // theme primary color used for the radial glow circle
+    defaultColorThemeId: 'transparent'
   }
   
   // Add more templates here in the future
@@ -1168,9 +955,9 @@ export function extractTemplateLayout(template: CarouselTemplate): TemplateLayou
   if (!template.writingStyle) {
     // Fallback to defaults if template has no writing style
     return {
-      hookTitle: { min: 6, max: 12 },
-      middleTitle: { min: 2, max: 5 },
-      middleContent: { min: 18, max: 32 },
+      hookTitle: { min: 5, max: 8 },
+      middleTitle: { min: 1, max: 3 },
+      middleContent: { min: 12, max: 30 },
       caption: { min: 80, max: 120 },
       includeMiddleTitles: true
     }

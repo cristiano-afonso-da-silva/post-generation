@@ -1817,7 +1817,7 @@ function PostPageContent() {
                                         </label>
                                         <input
                                           className="input"
-                                          value={kind === 'HOOK' && note ? (note.ideaTitle ?? '') : (carousel.title ?? '')}
+                                          value={carousel.title ?? ''}
                                           onChange={(e) => handleCarouselFieldChange(index, 'title', e.target.value)}
                                           placeholder="Enter carousel title"
                                           style={{ width: '100%', fontSize: isMobile ? '13px' : undefined }}

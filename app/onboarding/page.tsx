@@ -116,8 +116,9 @@ export default function OnboardingPage() {
       saveProgress({ firstName: formData.firstName })
       setCurrentStep(2)
     } else if (currentStep === 2) {
-      if (!formData.brandName || !formData.brandName.trim()) return
-      saveProgress({ brandName: formData.brandName, brandHandle: formData.brandHandle })
+      // brandName is optional, so we can proceed even if it's empty
+      const trimmedBrandName = formData.brandName ? formData.brandName.trim() : ''
+      saveProgress({ brandName: trimmedBrandName || '', brandHandle: formData.brandHandle || '' })
       setCurrentStep(3)
     } else if (currentStep === 3) {
       if (!formData.brandIntention.trim()) return
@@ -215,8 +216,10 @@ export default function OnboardingPage() {
       }
       
       // Map data: brandName goes to accountName (footer left), brandHandle goes to website (footer right)
-      const accountName = formData.brandName || formData.firstName || null
-      const website = formData.brandHandle || null
+      // Only use brandName if it's not empty, otherwise use firstName or null
+      const trimmedBrandName = formData.brandName ? formData.brandName.trim() : ''
+      const accountName = trimmedBrandName || formData.firstName || null
+      const website = formData.brandHandle && formData.brandHandle.trim() ? formData.brandHandle.trim() : null
       
       try {
         localStorage.removeItem('postGeneration_contentHash')
@@ -267,7 +270,30 @@ export default function OnboardingPage() {
       // Store generationId for redirect
       localStorage.setItem('postGeneration_generationId', saveResult.generationId)
       
-      // Step 6: Redirect to post page
+      // Step 6: Save user preferences to database
+      if (user?.id) {
+        try {
+          await fetch('/api/user/profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: user.id,
+              firstName: formData.firstName,
+              brandName: formData.brandName && formData.brandName.trim() ? formData.brandName.trim() : null,
+              brandHandle: formData.brandHandle && formData.brandHandle.trim() ? formData.brandHandle.trim() : null,
+              brandIntention: formData.brandIntention,
+              topics: formData.topics,
+              templateStyle: formData.templateStyle,
+              copyTone: formData.copyTone,
+            })
+          })
+        } catch (prefError) {
+          console.error('Error saving preferences:', prefError)
+          // Don't block onboarding completion if preferences save fails
+        }
+      }
+      
+      // Step 7: Redirect to post page
       // Use window.location for a hard redirect to ensure URL parameters are properly set
       const redirectUrl = `/dashboard?view=post&id=${saveResult.generationId}`
       console.log('🚀 Redirecting to:', redirectUrl)
@@ -296,11 +322,10 @@ export default function OnboardingPage() {
   }
 
   const handleCopyToneSelect = (tone: string) => {
+    // Only allow one selection - toggle if clicking the same one, otherwise replace
     const tones = formData.copyTone.includes(tone)
-      ? formData.copyTone.filter(t => t !== tone)
-      : formData.copyTone.length < 2
-      ? [...formData.copyTone, tone]
-      : formData.copyTone
+      ? [] // Deselect if clicking the selected one
+      : [tone] // Replace with new selection
     
     saveProgress({ copyTone: tones })
   }
@@ -311,11 +336,11 @@ export default function OnboardingPage() {
 
   const canProceed = () => {
     if (currentStep === 1) return formData.firstName.trim().length > 0
-    if (currentStep === 2) return formData.brandName && formData.brandName.trim().length > 0
+    if (currentStep === 2) return true // brandName is optional, so we can always proceed
     if (currentStep === 3) return formData.brandIntention.trim().length > 0
     if (currentStep === 4) return formData.topics.length > 0
     if (currentStep === 5) return formData.templateStyle.length > 0
-    if (currentStep === 6) return formData.copyTone.length > 0 && formData.copyTone.length <= 2
+    if (currentStep === 6) return formData.copyTone.length === 1
     return false
   }
 
@@ -431,14 +456,13 @@ export default function OnboardingPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '24px' }}>
               <div>
                 <label htmlFor="brandName" style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#000000', marginBottom: '8px', textAlign: 'left' }}>
-                  Brand or account name
+                  Account name
                 </label>
                 <input
                   id="brandName"
                   type="text"
                   value={formData.brandName || ''}
                   onChange={(e) => setFormData({ ...formData, brandName: e.target.value })}
-                  required
                   className="input"
                   placeholder="Bright Studio"
                   autoComplete="off"
@@ -446,7 +470,7 @@ export default function OnboardingPage() {
               </div>
               <div>
                 <label htmlFor="brandHandle" style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#000000', marginBottom: '8px', textAlign: 'left' }}>
-                  Handle or website (optional)
+                  Website (optional)
                 </label>
                 <input
                   id="brandHandle"
@@ -454,7 +478,7 @@ export default function OnboardingPage() {
                   value={formData.brandHandle || ''}
                   onChange={(e) => setFormData({ ...formData, brandHandle: e.target.value })}
                   className="input"
-                  placeholder="@brightstudio or brightstudio.com"
+                  placeholder="brightstudio.com"
                   autoComplete="off"
                 />
               </div>
@@ -469,7 +493,7 @@ export default function OnboardingPage() {
               What are you working on?
             </h1>
             <p style={{ color: '#666666', marginBottom: '8px', fontSize: '15px', textAlign: 'left' }}>
-              One short sentence.
+              We'll recommend ideas.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '24px' }}>
               <div>
@@ -489,23 +513,24 @@ export default function OnboardingPage() {
                     type="button"
                     onClick={() => handleExampleClick(example)}
                     style={{
-                      padding: '12px 16px',
+                      padding: '16px 20px',
                       background: '#ffffff',
-                      border: '1px solid #e0e0e0',
-                      borderRadius: '8px',
-                      fontSize: '14px',
+                      border: '2px solid #e5e5e5',
+                      borderRadius: '12px',
+                      fontSize: '16px',
+                      fontWeight: '500',
                       color: '#666666',
                       textAlign: 'left',
                       cursor: 'pointer',
                       transition: 'all 0.2s ease'
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#f5f5f5'
+                      e.currentTarget.style.background = '#fff9ed'
                       e.currentTarget.style.borderColor = '#ffbd59'
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.background = '#ffffff'
-                      e.currentTarget.style.borderColor = '#e0e0e0'
+                      e.currentTarget.style.borderColor = '#e5e5e5'
                     }}
                   >
                     {example}
@@ -540,7 +565,7 @@ export default function OnboardingPage() {
                       background: isSelected ? '#ffbd59' : '#ffffff',
                       border: `2px solid ${isSelected ? '#ffbd59' : '#e5e5e5'}`,
                       borderRadius: '24px',
-                      fontSize: '14px',
+                      fontSize: '16px',
                       fontWeight: '500',
                       color: isSelected ? '#000000' : '#666666',
                       cursor: isDisabled ? 'not-allowed' : 'pointer',
@@ -630,7 +655,7 @@ export default function OnboardingPage() {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '24px' }}>
               {COPY_TONE_OPTIONS.map((tone) => {
                 const isSelected = formData.copyTone.includes(tone)
-                const isDisabled = !isSelected && formData.copyTone.length >= 2
+                const isDisabled = !isSelected && formData.copyTone.length >= 1
                 return (
                   <button
                     key={tone}
@@ -642,7 +667,7 @@ export default function OnboardingPage() {
                       background: isSelected ? '#ffbd59' : '#ffffff',
                       border: `2px solid ${isSelected ? '#ffbd59' : '#e5e5e5'}`,
                       borderRadius: '24px',
-                      fontSize: '14px',
+                      fontSize: '16px',
                       fontWeight: '500',
                       color: isSelected ? '#000000' : '#666666',
                       cursor: isDisabled ? 'not-allowed' : 'pointer',

@@ -16,3 +16,4 @@ ON public.user_credits(user_id, template_generation_used);
 
 
 
+

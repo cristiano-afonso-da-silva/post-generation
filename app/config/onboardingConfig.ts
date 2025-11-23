@@ -23,7 +23,7 @@ export function getTemplateStyleMapping(templateStyle: string): VibeMapping {
       colorThemeId: 'orange-black'
     },
     'Bold & punchy': {
-      templateId: 'template3',
+      templateId: 'template4',
       fontCombinationId: 'combination-1',
       colorThemeId: 'pink-black'
     },
