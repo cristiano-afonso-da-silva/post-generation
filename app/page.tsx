@@ -148,11 +148,11 @@ function SlideCarousel() {
   const slides = exampleSlides.slice(0, 9)
   
   // Duplicate slides multiple times for seamless infinite loop
-  const duplicatedSlides = [...slides, ...slides, ...slides, ...slides]
+  const duplicatedSlides = [...slides, ...slides, ...slides, ...slides, ...slides, ...slides]
   
   // Calculate total width for animation
-  const slideWidth = 320
-  const slideGap = 24
+  const slideWidth = 450
+  const slideGap = 32
   const slideTotalWidth = slideWidth + slideGap
   const totalWidth = duplicatedSlides.length * slideTotalWidth
   const animationDuration = 60 // seconds for full cycle (slower animation)
@@ -161,9 +161,11 @@ function SlideCarousel() {
     <div
       style={{
         width: '100%',
-        padding: '80px 24px',
+        padding: '120px 24px 120px 24px',
+        minHeight: '600px',
         position: 'relative',
         overflow: 'hidden',
+        background: '#ffffff',
       }}
     >
       {/* Edge Fade Gradients */}
@@ -174,7 +176,7 @@ function SlideCarousel() {
           top: 0,
           bottom: 0,
           width: '200px',
-          background: 'linear-gradient(90deg, #F5F5F5 0%, transparent 100%)',
+          background: 'linear-gradient(90deg, #ffffff 0%, transparent 100%)',
           zIndex: 10,
           pointerEvents: 'none',
         }}
@@ -186,7 +188,7 @@ function SlideCarousel() {
           top: 0,
           bottom: 0,
           width: '200px',
-          background: 'linear-gradient(270deg, #F5F5F5 0%, transparent 100%)',
+          background: 'linear-gradient(270deg, #ffffff 0%, transparent 100%)',
           zIndex: 10,
           pointerEvents: 'none',
         }}
@@ -267,7 +269,6 @@ export default function LandingPage() {
     <div style={{ minHeight: '100vh', background: '#ffffff' }}>
       {/* Header */}
       <header style={{
-        borderBottom: '1px solid #e5e5e5',
         padding: '12px 0',
         background: '#ffffff',
         position: 'absolute',
@@ -339,418 +340,6 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section
-        className="hero-section"
-        style={{
-          minHeight: '110vh',
-          display: 'none !important', // Hidden for now
-          gridTemplateColumns: '1fr 1fr',
-          alignItems: 'center',
-          padding: '0',
-          position: 'relative',
-          overflow: 'hidden',
-          background: '#ffffff',
-          visibility: 'hidden',
-        }}
-      >
-        {/* Left Column - Content */}
-        <div className="hero-content" style={{ position: 'relative', zIndex: 10, paddingRight: '64px', paddingLeft: '48px', paddingTop: '120px', paddingBottom: '120px' }}>
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '10px',
-              padding: '6px 18px',
-              background: '#fff9ed',
-              border: '1px solid #ffbd59',
-              borderRadius: '999px',
-              fontSize: isMobile ? '10px' : 'clamp(11px, 2.5vw, 13px)',
-              fontWeight: '600',
-              color: '#000000',
-              marginBottom: '32px',
-            }}
-          >
-            <span aria-hidden="true" style={{ color: '#ffbd59', letterSpacing: '2px' }}>★★★★★</span>
-            <span>Trusted by creators with 99 drafts</span>
-          </div>
-          <h1
-            style={{
-              fontSize: 'clamp(36px, 6vw, 64px)',
-              fontWeight: '800',
-              lineHeight: '1.1',
-              letterSpacing: '-1px',
-              color: '#000000',
-              marginBottom: '24px',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
-              textAlign: 'left',
-            }}
-          >
-            Turn Ideas Into Content That <span style={{ fontFamily: 'var(--font-playfair-display), serif', fontStyle: 'italic' }}>Sells</span>
-          </h1>
-          <p
-            className="hero-description"
-            style={{
-              fontSize: 'clamp(18px, 2.5vw, 22px)',
-              color: '#666666',
-              marginBottom: '48px',
-              lineHeight: '1.6',
-              maxWidth: '600px',
-              textAlign: 'left',
-            }}
-          >
-            Make clean, on-brand posts instantly with zero design work.
-          </p>
-          <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <Link
-              href={user ? "/dashboard" : "/desktop-only"}
-              className="cta-button"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '14px 28px',
-                borderRadius: '12px',
-                background: '#ffbd59',
-                color: '#000000',
-                fontSize: '16px',
-                fontWeight: '600',
-                textDecoration: 'none',
-                border: '1px solid rgba(0, 0, 0, 0.1)',
-                transition: 'all 0.2s ease',
-              }}
-            >
-              {user ? "Go to app" : "Get Started Free"}
-              <ArrowRight size={18} />
-            </Link>
-          </div>
-        </div>
-
-        {/* Right Column - Carousel */}
-        <div
-          className="hero-carousel-container"
-          style={{
-            position: 'absolute',
-            top: '0',
-            right: '0',
-            width: '50%',
-            height: '100%',
-            overflow: 'hidden',
-            paddingLeft: '64px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-evenly',
-          }}
-        >
-          {/* Row 2 - 15° diagonal */}
-          <div
-            className="scroll-row-diagonal-2"
-            style={{
-              display: 'flex',
-              gap: '24px',
-              marginBottom: '24px',
-              width: 'fit-content',
-              animation: 'scrollHorizontal15 35s linear infinite',
-            }}
-          >
-            {[...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
-              <div
-                key={`diag2-${index}`}
-                className="carousel-card"
-                style={{
-                  flexShrink: 0,
-                  width: 'clamp(180px, 25vw, 320px)',
-                  height: 'auto',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                }}
-              >
-                <Image
-                  src={slide.src}
-                  alt={slide.alt}
-                  width={360}
-                  height={460}
-                  unoptimized
-                  style={{
-                    width: '100%',
-                    height: 'auto',
-                    borderRadius: '24px',
-                    objectFit: 'cover',
-                    boxShadow: '0 20px 40px rgba(17, 24, 39, 0.15), 0 8px 16px rgba(0, 0, 0, 0.1)',
-                    border: '5px solid #ffffff',
-                    background: '#ffffff',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-
-          {/* Row 3 - 15° diagonal */}
-          <div
-            className="scroll-row-diagonal-3"
-            style={{
-              display: 'flex',
-              gap: '24px',
-              marginBottom: '24px',
-              width: 'fit-content',
-              animation: 'scrollHorizontal15 40s linear infinite reverse',
-            }}
-          >
-            {[...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
-              <div
-                key={`diag3-${index}`}
-                className="carousel-card"
-                style={{
-                  flexShrink: 0,
-                  width: 'clamp(180px, 25vw, 320px)',
-                  height: 'auto',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                }}
-              >
-                <Image
-                  src={slide.src}
-                  alt={slide.alt}
-                  width={360}
-                  height={460}
-                  unoptimized
-                  style={{
-                    width: '100%',
-                    height: 'auto',
-                    borderRadius: '24px',
-                    objectFit: 'cover',
-                    boxShadow: '0 20px 40px rgba(17, 24, 39, 0.15), 0 8px 16px rgba(0, 0, 0, 0.1)',
-                    border: '5px solid #ffffff',
-                    background: '#ffffff',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-
-          {/* Row 4 - 15° diagonal */}
-          <div
-            className="scroll-row-diagonal-4"
-            style={{
-              display: 'flex',
-              gap: '24px',
-              marginBottom: '24px',
-              width: 'fit-content',
-              animation: 'scrollHorizontal15 45s linear infinite',
-            }}
-          >
-            {[...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
-              <div
-                key={`diag4-${index}`}
-                className="carousel-card"
-                style={{
-                  flexShrink: 0,
-                  width: 'clamp(180px, 25vw, 320px)',
-                  height: 'auto',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                }}
-              >
-                <Image
-                  src={slide.src}
-                  alt={slide.alt}
-                  width={360}
-                  height={460}
-                  unoptimized
-                  style={{
-                    width: '100%',
-                    height: 'auto',
-                    borderRadius: '24px',
-                    objectFit: 'cover',
-                    boxShadow: '0 20px 40px rgba(17, 24, 39, 0.15), 0 8px 16px rgba(0, 0, 0, 0.1)',
-                    border: '5px solid #ffffff',
-                    background: '#ffffff',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-
-          {/* Row 5 - 15° diagonal */}
-          <div
-            className="scroll-row-diagonal-5"
-            style={{
-              display: 'flex',
-              gap: '24px',
-              marginBottom: '24px',
-              width: 'fit-content',
-              animation: 'scrollHorizontal15 50s linear infinite reverse',
-            }}
-          >
-            {[...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
-              <div
-                key={`diag5-${index}`}
-                className="carousel-card"
-                style={{
-                  flexShrink: 0,
-                  width: 'clamp(180px, 25vw, 320px)',
-                  height: 'auto',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                }}
-              >
-                <Image
-                  src={slide.src}
-                  alt={slide.alt}
-                  width={360}
-                  height={460}
-                  unoptimized
-                  style={{
-                    width: '100%',
-                    height: 'auto',
-                    borderRadius: '24px',
-                    objectFit: 'cover',
-                    boxShadow: '0 20px 40px rgba(17, 24, 39, 0.15), 0 8px 16px rgba(0, 0, 0, 0.1)',
-                    border: '5px solid #ffffff',
-                    background: '#ffffff',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-
-          {/* Row 6 - 15° diagonal */}
-          <div
-            className="scroll-row-diagonal-6"
-            style={{
-              display: 'flex',
-              gap: '24px',
-              marginBottom: '24px',
-              width: 'fit-content',
-              animation: 'scrollHorizontal15 55s linear infinite',
-            }}
-          >
-            {[...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
-              <div
-                key={`diag6-${index}`}
-                className="carousel-card"
-                style={{
-                  flexShrink: 0,
-                  width: 'clamp(180px, 25vw, 320px)',
-                  height: 'auto',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                }}
-              >
-                <Image
-                  src={slide.src}
-                  alt={slide.alt}
-                  width={360}
-                  height={460}
-                  unoptimized
-                  style={{
-                    width: '100%',
-                    height: 'auto',
-                    borderRadius: '24px',
-                    objectFit: 'cover',
-                    boxShadow: '0 20px 40px rgba(17, 24, 39, 0.15), 0 8px 16px rgba(0, 0, 0, 0.1)',
-                    border: '5px solid #ffffff',
-                    background: '#ffffff',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-
-          {/* Row 7 - 15° diagonal */}
-          <div
-            className="scroll-row-diagonal-7"
-            style={{
-              display: 'flex',
-              gap: '24px',
-              marginBottom: '24px',
-              width: 'fit-content',
-              animation: 'scrollHorizontal15 60s linear infinite reverse',
-            }}
-          >
-            {[...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
-              <div
-                key={`diag7-${index}`}
-                className="carousel-card"
-                style={{
-                  flexShrink: 0,
-                  width: 'clamp(180px, 25vw, 320px)',
-                  height: 'auto',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                }}
-              >
-                <Image
-                  src={slide.src}
-                  alt={slide.alt}
-                  width={360}
-                  height={460}
-                  unoptimized
-                  style={{
-                    width: '100%',
-                    height: 'auto',
-                    borderRadius: '24px',
-                    objectFit: 'cover',
-                    boxShadow: '0 20px 40px rgba(17, 24, 39, 0.15), 0 8px 16px rgba(0, 0, 0, 0.1)',
-                    border: '5px solid #ffffff',
-                    background: '#ffffff',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-
-          {/* Row 8 - 15° diagonal */}
-          <div
-            className="scroll-row-diagonal-8"
-            style={{
-              display: 'flex',
-              gap: '24px',
-              width: 'fit-content',
-              animation: 'scrollHorizontal15 65s linear infinite',
-            }}
-          >
-            {[...exampleSlides, ...exampleSlides, ...exampleSlides].map((slide, index) => (
-              <div
-                key={`diag8-${index}`}
-                className="carousel-card"
-                style={{
-                  flexShrink: 0,
-                  width: 'clamp(180px, 25vw, 320px)',
-                  height: 'auto',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                }}
-              >
-                <Image
-                  src={slide.src}
-                  alt={slide.alt}
-                  width={360}
-                  height={460}
-                  unoptimized
-                  style={{
-                    width: '100%',
-                    height: 'auto',
-                    borderRadius: '24px',
-                    objectFit: 'cover',
-                    boxShadow: '0 20px 40px rgba(17, 24, 39, 0.15), 0 8px 16px rgba(0, 0, 0, 0.1)',
-                    border: '5px solid #ffffff',
-                    background: '#ffffff',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* Hero Section - Centered Copy (No Animation) */}
       <section
         style={{
@@ -759,7 +348,7 @@ export default function LandingPage() {
           alignItems: 'center',
           justifyContent: 'center',
           padding: '120px 24px',
-          background: '#F5F5F5',
+          background: '#ffffff',
         }}
       >
         <div style={{ 
@@ -815,7 +404,7 @@ export default function LandingPage() {
           >
             Make clean, on-brand posts instantly with zero design work.
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', marginBottom: '64px' }}>
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: '16px', marginBottom: '64px', flexWrap: 'wrap' }}>
             <Link
               href={user ? "/dashboard?view=create" : "/desktop-only"}
               className="cta-button"
@@ -824,7 +413,7 @@ export default function LandingPage() {
                 alignItems: 'center',
                 gap: '10px',
                 padding: '16px 32px',
-                borderRadius: '12px',
+                borderRadius: '999px',
                 background: '#ffbd59',
                 color: '#000000',
                 fontSize: '18px',
@@ -853,24 +442,25 @@ export default function LandingPage() {
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '6px',
-                color: '#666666',
-                fontSize: '14px',
-                fontWeight: '500',
-                textDecoration: 'underline',
+                gap: '10px',
+                padding: '16px 32px',
+                borderRadius: '999px',
+                background: '#e5e5e5',
+                color: '#000000',
+                fontSize: '18px',
+                fontWeight: '600',
+                textDecoration: 'none',
+                border: 'none',
                 transition: 'all 0.2s ease',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.color = '#ffbd59'
+                e.currentTarget.style.background = '#d1d5db'
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.color = '#666666'
+                e.currentTarget.style.background = '#e5e5e5'
               }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.007-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928-1.793 8.018-1.793 11.886 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
-              </svg>
-              Give Feedback, Get Lifetime Access
+              Get Free Lifetime Access
             </a>
           </div>
 
@@ -883,7 +473,7 @@ export default function LandingPage() {
       <section
         style={{
           padding: '100px 24px',
-          background: '#F5F5F5',
+          background: '#ffffff',
         }}
       >
         <div
@@ -1171,7 +761,7 @@ export default function LandingPage() {
       <section
         style={{
           padding: '100px 24px',
-          background: '#F5F5F5',
+          background: '#ffffff',
         }}
       >
         <div
@@ -1369,7 +959,7 @@ export default function LandingPage() {
         className="features-section-scale"
         style={{
           padding: '100px 24px',
-          background: '#F5F5F5',
+          background: '#ffffff',
         }}
       >
         <div
@@ -1874,7 +1464,7 @@ export default function LandingPage() {
       <section
         style={{
           padding: '120px 24px',
-          background: '#F5F5F5',
+          background: '#ffffff',
         }}
       >
         <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
@@ -1917,7 +1507,7 @@ export default function LandingPage() {
                 display: 'grid',
                 gridTemplateColumns: '1fr 1fr 1fr',
                 padding: '0',
-                background: '#fafafa',
+                background: '#ffffff',
                 fontWeight: '700',
                 fontSize: 'clamp(12px, 2vw, 18px)',
                 color: '#000000',
@@ -2177,7 +1767,7 @@ export default function LandingPage() {
               alignItems: 'center',
               gap: '8px',
               padding: '14px 28px',
-              borderRadius: '12px',
+              borderRadius: '999px',
               background: '#ffbd59',
               color: '#000000',
               fontSize: '16px',
@@ -2224,21 +1814,6 @@ export default function LandingPage() {
         </div>
       </footer>
       <style jsx global>{`
-        .hero-section {
-          display: none !important;
-        }
-
-        @media (max-width: 768px) {
-          .hero-section {
-            display: none !important;
-          }
-        }
-
-        @media (max-width: 1024px) {
-          .hero-section {
-            display: none !important;
-          }
-        }
 
         @keyframes fadeInUp {
           from {
@@ -2308,15 +1883,6 @@ export default function LandingPage() {
           animation-play-state: paused;
         }
 
-        .hero-carousel-container:hover .scroll-row-diagonal-2,
-        .hero-carousel-container:hover .scroll-row-diagonal-3,
-        .hero-carousel-container:hover .scroll-row-diagonal-4,
-        .hero-carousel-container:hover .scroll-row-diagonal-5,
-        .hero-carousel-container:hover .scroll-row-diagonal-6,
-        .hero-carousel-container:hover .scroll-row-diagonal-7,
-        .hero-carousel-container:hover .scroll-row-diagonal-8 {
-          animation-play-state: paused;
-        }
 
         @keyframes carouselPop {
           0% {
@@ -2831,57 +2397,6 @@ export default function LandingPage() {
             gap: 24px !important;
           }
 
-          /* Hero section mobile layout - Hidden */
-          .hero-section {
-            display: none !important;
-          }
-
-          .hero-content {
-            padding: 80px 24px !important;
-            padding-top: 80px !important;
-            padding-bottom: 160px !important;
-            order: 1;
-            width: 100% !important;
-            text-align: center !important;
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: center !important;
-          }
-
-          .hero-content h1 {
-            text-align: center !important;
-          }
-
-          .hero-content p,
-          .hero-content .hero-description {
-            text-align: center !important;
-            margin-left: auto !important;
-            margin-right: auto !important;
-            font-size: clamp(16px, 2vw, 18px) !important;
-          }
-
-          .hero-content > div:first-of-type {
-            margin-left: auto !important;
-            margin-right: auto !important;
-          }
-
-          .hero-content > div:last-of-type {
-            justify-content: center !important;
-            width: 100% !important;
-          }
-
-          .hero-carousel-container {
-            position: relative !important;
-            width: 100% !important;
-            height: 500px !important;
-            padding-left: 0 !important;
-            padding-right: 0 !important;
-            padding-top: 24px !important;
-            padding-bottom: 48px !important;
-            top: auto !important;
-            right: auto !important;
-            order: 2;
-          }
 
           /* Features section mobile layout */
           section[style*="background: rgb(250, 248, 245)"],
