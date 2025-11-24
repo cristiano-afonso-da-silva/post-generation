@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '../context/AuthContext'
 import { SquarePen, ChevronLeft, Menu, Send } from 'lucide-react'
 import Image from 'next/image'
-import AccountModal from './AccountModal'
 
 interface SidebarProps {
   activeView: 'create' | 'post' | 'generate-template' | 'extreme-generate-template'
@@ -19,8 +18,7 @@ interface SidebarProps {
 
 export default function Sidebar({ activeView, onViewChange, isCollapsed = false, isMobile = false, isMobileOpen = false, onClose, onOpen }: SidebarProps) {
   const router = useRouter()
-  const { user, credits } = useAuth()
-  const [showAccountModal, setShowAccountModal] = useState(false)
+  const { user } = useAuth()
   const [isLogoHovered, setIsLogoHovered] = useState(false)
 
   const menuItems = [
@@ -258,7 +256,12 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
       {/* User Info */}
       {user && (
         <button
-          onClick={() => setShowAccountModal(true)}
+          onClick={() => {
+            router.push('/account')
+            if (isMobile && onClose) {
+              onClose()
+            }
+          }}
           style={{
             padding: shouldShowCollapsed ? '16px 8px' : '16px',
             background: '#ffffff',
@@ -274,7 +277,7 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
             flexShrink: 0,
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#ffffff'
+            e.currentTarget.style.background = '#f5f5f5'
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.background = '#ffffff'
@@ -323,17 +326,6 @@ export default function Sidebar({ activeView, onViewChange, isCollapsed = false,
             </div>
           )}
         </button>
-      )}
-
-      {/* Account Modal */}
-      {showAccountModal && (
-        <AccountModal
-          isOpen={showAccountModal}
-          onClose={() => setShowAccountModal(false)}
-          credits={credits?.credits_remaining ?? 0}
-          subscriptionStatus={credits?.subscription_status ?? null}
-          currentPlan={credits?.current_plan ?? null}
-        />
       )}
     </div>
   )

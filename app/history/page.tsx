@@ -158,11 +158,7 @@ export default function HistoryPage() {
                 >
                   <History size={18} color="#000000" />
                 </Link>
-                <AccountButton
-                  credits={credits.credits_remaining}
-                  subscriptionStatus={credits.subscription_status}
-                  currentPlan={credits.current_plan}
-                />
+                <AccountButton />
               </>
             )}
           </div>

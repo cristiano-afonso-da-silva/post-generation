@@ -172,11 +172,7 @@ export default function LandingPage() {
           </Link>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             {user ? (
-              <AccountButton
-                credits={credits?.credits_remaining ?? 0}
-                subscriptionStatus={credits?.subscription_status ?? null}
-                currentPlan={credits?.current_plan ?? null}
-              />
+              <AccountButton />
             ) : (
               <Link
                 href="/signup"
