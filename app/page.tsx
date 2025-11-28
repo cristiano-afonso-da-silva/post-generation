@@ -87,6 +87,19 @@ export default function Home() {
     },
   ]
 
+  const teamMembers = [
+    {
+      name: 'Cristiano Afonso da Silva',
+      image: '/founders/cristiano.jpg',
+      quote: 'Minimalism is an appreciation of space.',
+    },
+    {
+      name: 'Joshua Lei',
+      image: '/founders/joshua.jpg',
+      quote: 'Less is more.',
+    },
+  ]
+
   const getCurrentImageIndex = (folder: string) => {
     return currentImageIndex[folder] || 0
   }
@@ -152,15 +165,16 @@ export default function Home() {
       {/* Header */}
       <header className="agency-header">
         <div className="header-brand">
-          <Image
-            src="/logo.png"
-            alt="Post My Note logo"
-            width={120}
-            height={36}
-            priority
-            className="header-logo"
-            style={{ height: '36px', width: 'auto' }}
-          />
+          <div className="header-logo-wrapper">
+            <Image
+              src="/logo.png"
+              alt="Post My Note logo"
+              width={36}
+              height={36}
+              priority
+              className="header-logo"
+            />
+          </div>
         </div>
         <a href="#contact" className="header-button">Contact us</a>
       </header>
@@ -258,6 +272,33 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Team Section */}
+      <section className="team-section">
+        <div className="projects-container">
+          <div className="team-heading">
+            <h2>Our Team</h2>
+          </div>
+          <div className="team-grid">
+            {teamMembers.map((member) => (
+              <div key={member.name} className="team-card">
+                <div className="team-avatar">
+                  <Image
+                    src={member.image}
+                    alt={`${member.name} portrait`}
+                    fill
+                    sizes="200px"
+                    style={{ objectFit: 'cover' }}
+                  />
+                </div>
+                <div className="team-name">{member.name}</div>
+                {member.quote && <p className="team-quote">“{member.quote}”</p>}
+              </div>
+            ))}
+          </div>
+          <div className="projects-divider"></div>
+        </div>
+      </section>
+
       {/* Contact Section */}
       <section id="contact" className="contact-section">
         <div className="contact-container">
@@ -338,10 +379,18 @@ export default function Home() {
           gap: 12px;
         }
 
-        .header-logo {
+        .header-logo-wrapper {
+          width: 36px;
           height: 36px;
-          width: auto;
+          display: flex;
+          align-items: center;
+        }
+
+        .header-logo {
+          width: 36px;
+          height: 36px;
           object-fit: contain;
+          display: block;
         }
 
         .header-link {
@@ -476,6 +525,7 @@ export default function Home() {
         .projects-divider {
           border-top: 1px solid #eee;
           width: 100%;
+          margin: 0 auto;
         }
 
         .project-item {
@@ -525,6 +575,62 @@ export default function Home() {
         .project-description + .project-description {
           margin-top: 12px;
         }
+
+        /* Team */
+        .team-section {
+          padding: 0 400px;
+          padding-top: 40px;
+          padding-bottom: 60px;
+          box-sizing: border-box;
+        }
+
+        .team-heading {
+          margin: 80px 0 40px;
+          text-align: center;
+        }
+
+        .team-heading h2 {
+          font-size: 32px;
+          font-weight: 600;
+        }
+
+        .team-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(180px, 1fr));
+          gap: 16px 32px;
+          margin-bottom: 80px;
+        }
+
+        .team-card {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 16px;
+        }
+
+        .team-avatar {
+          width: 180px;
+          height: 180px;
+          border-radius: 999px;
+          border: 2px solid #000;
+          overflow: hidden;
+          position: relative;
+        }
+
+        .team-name {
+          font-size: 18px;
+          font-weight: 600;
+          text-align: center;
+        }
+
+        .team-quote {
+          font-size: 15px;
+          color: #555;
+          font-style: italic;
+          text-align: center;
+          max-width: 240px;
+        }
+
 
         .project-images-wrapper {
           width: 100%;
@@ -719,6 +825,24 @@ export default function Home() {
           .projects-section {
             padding: 0 24px;
             padding-top: 40px;
+          }
+
+          .team-section {
+            padding: 0 24px;
+            padding-top: 40px;
+          }
+
+          .team-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .team-avatar {
+            width: 150px;
+            height: 150px;
+          }
+
+          .team-quote {
+            max-width: 220px;
           }
 
           .contact-section {
