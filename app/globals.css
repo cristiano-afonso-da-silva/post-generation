@@ -24,17 +24,37 @@ body {
   min-height: 100vh;
 }
 
+@font-face {
+  font-family: 'Niteclub';
+  src: url('/fonts/NITECLUB.TTF') format('truetype');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Amoresa';
+  src: url('/fonts/Amoresa.ttf') format('truetype');
+  font-display: swap;
+}
+
 /* Prevent FOUC - Ensure smooth loading */
 html {
   visibility: visible;
   opacity: 1;
 }
 
-/* Prevent flash during page transitions */
-body > * {
-  animation: fadeIn 0.15s ease-in;
+/* Prevent FOUC - Hide content until styles are loaded */
+html:not(.js-ready) body {
+  opacity: 0;
+  visibility: hidden;
 }
 
+html.js-ready body {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.2s ease-in;
+}
+
+/* Prevent flash during page transitions */
 @keyframes fadeIn {
   from {
     opacity: 0;

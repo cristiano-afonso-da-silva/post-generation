@@ -22,6 +22,11 @@ export default function Home() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [projectImages, setProjectImages] = useState<ProjectImages>({})
   const [currentImageIndex, setCurrentImageIndex] = useState<{ [key: string]: number }>({})
+  const [isMounted, setIsMounted] = useState(false)
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -42,28 +47,44 @@ export default function Home() {
   const projects = [
     {
       name: 'Post My Note',
-      description: 'Our social media main account.',
+      tagline: 'Our own social media playground.',
+      description: [
+        'We use @postmynote as our main testing ground — experimenting with hooks, layouts, and posting rhythms before applying what works to our clients.',
+        'Every strategy we use for others is battle-tested on our own account first.',
+      ],
       folder: 'postmynote',
-      accountUrl: ''
+      accountUrl: '',
     },
     {
       name: 'Vista Dourada',
-      description: 'A wine delivery business looking to reach audience in a sense of educating about wine.',
+      tagline: 'Educating before selling the wine.',
+      description: [
+        'Vista Dourada is a wine delivery brand that doesn’t just want to sell bottles — they want to teach people how to enjoy them.',
+        'We built educational carousels around tasting basics, wine myths, and pairing tips so their audience learns, saves, and naturally discovers the offer.',
+      ],
       folder: 'vistadourada',
-      accountUrl: ''
+      accountUrl: '',
     },
     {
       name: 'Selvra',
-      description: 'A meditation app focusing on user calm down in 60 seconds, looking to build a community who seek calmness and peace.',
+      tagline: '60 seconds to calm — and a community around it.',
+      description: [
+        'Selvra is a meditation app that helps users calm down in 60 seconds and wants to attract people who crave peace in a busy day.',
+        'We created soft, simple carousels that walk through quick calming practices, paired with gentle CTAs to join a community of people seeking quiet, not hustle.',
+      ],
       folder: 'selvra',
-      accountUrl: ''
+      accountUrl: '',
     },
     {
       name: 'Doit',
-      description: 'A minimalist to do list app, looking to build a community who loves productivity.',
+      tagline: 'Minimalist productivity, visualised.',
+      description: [
+        'Doit is a minimalist to-do list app for people who care about productivity without clutter.',
+        'We designed clean, focused carousels that share tiny productivity rituals, real workflows, and before/after use cases — helping Doit attract users who love both structure and simplicity.',
+      ],
       folder: 'doit',
-      accountUrl: ''
-    }
+      accountUrl: '',
+    },
   ]
 
   const getCurrentImageIndex = (folder: string) => {
@@ -122,11 +143,25 @@ export default function Home() {
     fetchImages()
   }, [])
 
+  if (!isMounted) {
+    return null
+  }
+
   return (
     <div className={`agency-onboarding-page ${ebGaramond.variable}`}>
       {/* Header */}
       <header className="agency-header">
-        <div className="header-brand">Post My Note</div>
+        <div className="header-brand">
+          <Image
+            src="/logo.png"
+            alt="Post My Note logo"
+            width={120}
+            height={36}
+            priority
+            className="header-logo"
+            style={{ height: '36px', width: 'auto' }}
+          />
+        </div>
         <a href="#contact" className="header-button">Contact us</a>
       </header>
 
@@ -135,9 +170,9 @@ export default function Home() {
         <div className="hero-container">
           <div className="hero-content-wrapper">
             <h1 className="hero-title">
-              <span className="hero-line-main">Post My Note</span>
-              <span className="hero-line-main">is your next</span>
-              <span className="hero-line-main">marketing choice</span>
+              <span className="hero-line hero-line-post">Post My Note</span>
+              <span className="hero-line hero-line-next">Is Your Next</span>
+              <span className="hero-line hero-line-choice">Marketing Choice</span>
             </h1>
           </div>
           
@@ -165,6 +200,9 @@ export default function Home() {
                 <div className="project-header">
                   <h2 className="project-title">{project.name}</h2>
                 </div>
+                {project.tagline && (
+                  <p className="project-tagline">{project.tagline}</p>
+                )}
                 
 
                 <div className="project-images-wrapper">
@@ -209,7 +247,11 @@ export default function Home() {
                   )}
                 </div>
 
-                <p className="project-description">{project.description}</p>
+                {project.description?.map((paragraph, idx) => (
+                  <p key={idx} className="project-description">
+                    {paragraph}
+                  </p>
+                ))}
               </div>
             )
           })}
@@ -267,6 +309,8 @@ export default function Home() {
           padding: 0;
           box-sizing: border-box;
           overflow-x: hidden;
+          opacity: 1;
+          visibility: visible;
         }
 
         /* Header */
@@ -280,17 +324,24 @@ export default function Home() {
           left: 0;
           right: 0;
           z-index: 50;
-          mix-blend-mode: difference;
-          color: #fff;
-          background: transparent;
+          color: #000;
+          background: rgba(255, 255, 255, 0.95);
+          mix-blend-mode: normal;
+          backdrop-filter: blur(10px);
           height: 72px;
           box-sizing: border-box;
         }
 
         .header-brand {
-          font-size: 14px;
-          font-weight: 600;
-          letter-spacing: -0.5px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .header-logo {
+          height: 36px;
+          width: auto;
+          object-fit: contain;
         }
 
         .header-link {
@@ -304,12 +355,12 @@ export default function Home() {
           font-size: 14px;
           font-weight: 600;
           text-decoration: none;
-          background: #000 !important;
-          color: #fff !important;
+          background: #000000 !important;
+          color: #ffffff !important;
           padding: 10px 24px;
           border-radius: 999px;
           transition: all 0.2s ease;
-          border: none;
+          border: 1px solid #000000 !important;
           cursor: pointer;
           display: inline-block;
           mix-blend-mode: normal !important;
@@ -317,7 +368,8 @@ export default function Home() {
         }
 
         .header-button:hover {
-          background: #333 !important;
+          background: #333333 !important;
+          border-color: #333333 !important;
         }
 
         /* Hero Section */
@@ -347,6 +399,8 @@ export default function Home() {
           align-items: center;
           justify-content: center;
           width: 100%;
+          padding-top: 0;
+          margin-top: -80px;
         }
 
         .hero-title {
@@ -360,14 +414,30 @@ export default function Home() {
           padding: 0;
         }
 
-        .hero-line-main {
+        .hero-line {
           display: block;
           color: #000;
         }
 
-        .hero-line {
-          display: block;
-          color: #999;
+        .hero-line-post {
+          font-family: var(--font-eb-garamond), 'EB Garamond', serif;
+          font-size: clamp(36px, 6vw, 72px);
+        }
+
+        .hero-line-next {
+          font-family: 'Niteclub', var(--font-eb-garamond), serif;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          font-size: clamp(64px, 11vw, 140px);
+        }
+
+        .hero-line-choice {
+          font-family: 'Amoresa', var(--font-eb-garamond), serif;
+          letter-spacing: 0.02em;
+          font-size: clamp(52px, 8vw, 96px);
+          text-shadow: -3px -3px 0 #fff, 3px -3px 0 #fff, -3px 3px 0 #fff, 3px 3px 0 #fff,
+                       -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff,
+                       -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
         }
 
         .hero-footer-wrapper {
@@ -433,13 +503,27 @@ export default function Home() {
         }
 
 
+        .project-tagline {
+          font-size: 18px;
+          line-height: 1.6;
+          color: #555;
+          font-style: italic;
+          margin: 8px auto 0;
+          max-width: 600px;
+          text-align: center;
+        }
+
         .project-description {
           font-size: 18px;
           line-height: 1.6;
           color: #333;
-          margin: 0;
+          margin: 16px auto 0;
           max-width: 400px;
           text-align: center;
+        }
+
+        .project-description + .project-description {
+          margin-top: 12px;
         }
 
         .project-images-wrapper {

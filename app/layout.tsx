@@ -12,6 +12,11 @@ const playfairDisplay = Playfair_Display({
 export const metadata: Metadata = {
   title: 'Post My Note - Social Media Content Creator',
   description: 'Generate high-quality Instagram note posts using AI',
+  icons: {
+    icon: '/favicon.png',
+    shortcut: '/favicon.png',
+    apple: '/favicon.png',
+  },
 }
 
 export default function RootLayout({
@@ -21,6 +26,16 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={playfairDisplay.variable} suppressHydrationWarning>
+      <head>
+        <link rel="icon" href="/favicon.png" sizes="any" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              document.documentElement.classList.add('js-ready');
+            `,
+          }}
+        />
+      </head>
       <body suppressHydrationWarning>
         <AuthProvider>{children}</AuthProvider>
       </body>
