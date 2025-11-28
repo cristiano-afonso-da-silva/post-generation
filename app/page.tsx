@@ -269,32 +269,28 @@ export default function Home() {
               </div>
             )
           })}
-        </div>
-      </section>
 
-      {/* Team Section */}
-      <section className="team-section">
-        <div className="projects-container">
-          <div className="team-heading">
-            <h2>Our Team</h2>
-          </div>
-          <div className="team-grid">
-            {teamMembers.map((member) => (
-              <div key={member.name} className="team-card">
-                <div className="team-avatar">
-                  <Image
-                    src={member.image}
-                    alt={`${member.name} portrait`}
-                    fill
-                    sizes="200px"
-                    style={{ objectFit: 'cover' }}
-                  />
+          <div className="team-block">
+            <h2 className="team-heading">Our Team</h2>
+            <div className="team-grid">
+              {teamMembers.map((member) => (
+                <div key={member.name} className="team-card">
+                  <div className="team-avatar">
+                    <Image
+                      src={member.image}
+                      alt={`${member.name} portrait`}
+                      fill
+                      sizes="220px"
+                      style={{ objectFit: 'cover' }}
+                    />
+                  </div>
+                  <div className="team-name">{member.name}</div>
+                  {member.quote && <p className="team-quote">“{member.quote}”</p>}
                 </div>
-                <div className="team-name">{member.name}</div>
-                {member.quote && <p className="team-quote">“{member.quote}”</p>}
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
+
           <div className="projects-divider"></div>
         </div>
       </section>
@@ -577,28 +573,22 @@ export default function Home() {
         }
 
         /* Team */
-        .team-section {
-          padding: 0 400px;
-          padding-top: 40px;
-          padding-bottom: 60px;
-          box-sizing: border-box;
-        }
-
-        .team-heading {
-          margin: 80px 0 40px;
+        .team-block {
+          padding: 80px 0 20px;
           text-align: center;
         }
 
-        .team-heading h2 {
+        .team-heading {
           font-size: 32px;
           font-weight: 600;
+          margin-bottom: 40px;
         }
 
         .team-grid {
           display: grid;
-          grid-template-columns: repeat(2, minmax(180px, 1fr));
-          gap: 16px 32px;
-          margin-bottom: 80px;
+          grid-template-columns: repeat(2, minmax(160px, 1fr));
+          gap: 12px 24px;
+          margin-bottom: 60px;
         }
 
         .team-card {
@@ -609,8 +599,8 @@ export default function Home() {
         }
 
         .team-avatar {
-          width: 180px;
-          height: 180px;
+          width: 200px;
+          height: 200px;
           border-radius: 999px;
           border: 2px solid #000;
           overflow: hidden;
@@ -827,18 +817,13 @@ export default function Home() {
             padding-top: 40px;
           }
 
-          .team-section {
-            padding: 0 24px;
-            padding-top: 40px;
-          }
-
           .team-grid {
             grid-template-columns: 1fr;
           }
 
           .team-avatar {
-            width: 150px;
-            height: 150px;
+            width: 160px;
+            height: 160px;
           }
 
           .team-quote {
