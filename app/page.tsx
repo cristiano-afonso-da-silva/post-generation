@@ -649,9 +649,15 @@ export default function Home() {
           background: transparent;
           color: #000;
           font-size: 16px;
+          font-family: var(--font-eb-garamond), 'EB Garamond', serif;
           outline: none;
           text-align: center;
           box-sizing: border-box;
+        }
+
+        .form-input::placeholder {
+          font-family: var(--font-eb-garamond), 'EB Garamond', serif;
+          color: #777;
         }
 
         .form-button {
@@ -661,6 +667,7 @@ export default function Home() {
           color: #fff;
           font-size: 16px;
           font-weight: 600;
+          font-family: var(--font-eb-garamond), 'EB Garamond', serif;
           border: none;
           cursor: pointer;
           opacity: 1;
