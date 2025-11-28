@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { ArrowRight, ArrowLeft, ArrowDown } from 'lucide-react'
+import { ArrowRight, ArrowLeft, ArrowDown, Linkedin } from 'lucide-react'
 import { EB_Garamond } from 'next/font/google'
 import { submitLead } from './agencyonboarding/actions'
 
@@ -47,40 +47,39 @@ export default function Home() {
   const projects = [
     {
       name: 'Post My Note',
-      tagline: 'Our own social media playground.',
+      tagline: 'Where we share ideas that help you grow.',
       description: [
-        'We use @postmynote as our main testing ground — experimenting with hooks, layouts, and posting rhythms before applying what works to our clients.',
-        'Every strategy we use for others is battle-tested on our own account first.',
+        'Our main account shares simple lessons on marketing, content, and productivity — the same principles we use to help brands show up with confidence and consistency.',
       ],
       folder: 'postmynote',
       accountUrl: '',
     },
     {
       name: 'Vista Dourada',
-      tagline: 'Educating before selling the wine.',
+      tagline: 'Enhancing your wine experience, one post at a time.',
       description: [
-        'Vista Dourada is a wine delivery brand that doesn’t just want to sell bottles — they want to teach people how to enjoy them.',
-        'We built educational carousels around tasting basics, wine myths, and pairing tips so their audience learns, saves, and naturally discovers the offer.',
+        'A wine delivery brand that wants people to actually understand what they\'re drinking.',
+        'We create clear, friendly carousels about tasting basics, myths, and pairings.',
       ],
       folder: 'vistadourada',
       accountUrl: '',
     },
     {
       name: 'Selvra',
-      tagline: '60 seconds to calm — and a community around it.',
+      tagline: 'A calm place in a loud world.',
       description: [
-        'Selvra is a meditation app that helps users calm down in 60 seconds and wants to attract people who crave peace in a busy day.',
-        'We created soft, simple carousels that walk through quick calming practices, paired with gentle CTAs to join a community of people seeking quiet, not hustle.',
+        'Selvra is an IOS app that helps people slow down in under a minute.',
+        'We share soft, minimal content that feels like a breath out, this include insights, quotes that make people feel better.',
       ],
       folder: 'selvra',
       accountUrl: '',
     },
     {
       name: 'Doit',
-      tagline: 'Minimalist productivity, visualised.',
+      tagline: 'Productivity, without the noise.',
       description: [
-        'Doit is a minimalist to-do list app for people who care about productivity without clutter.',
-        'We designed clean, focused carousels that share tiny productivity rituals, real workflows, and before/after use cases — helping Doit attract users who love both structure and simplicity.',
+        'Doit is a minimalist to-do app, and we match that energy.',
+        'Sharing simple habits, clear workflows, and tiny rituals that make you more productive.',
       ],
       folder: 'doit',
       accountUrl: '',
@@ -92,11 +91,13 @@ export default function Home() {
       name: 'Cristiano Afonso da Silva',
       image: '/founders/cristiano.jpg',
       quote: 'Minimalism is an appreciation of space.',
+      linkedinUrl: 'https://www.linkedin.com/in/cristianoafonsodasilva/',
     },
     {
       name: 'Joshua Lei',
       image: '/founders/joshua.jpg',
       quote: 'Less is more.',
+      linkedinUrl: 'https://www.linkedin.com/in/joshua-l-41766813b/',
     },
   ]
 
@@ -185,7 +186,7 @@ export default function Home() {
           <div className="hero-content-wrapper">
             <h1 className="hero-title">
               <span className="hero-line hero-line-post">Post My Note</span>
-              <span className="hero-line hero-line-next">Is Your Next</span>
+              <span className="hero-line hero-line-next">Is Your</span>
               <span className="hero-line hero-line-choice">Marketing Choice</span>
             </h1>
           </div>
@@ -285,7 +286,18 @@ export default function Home() {
                     />
                   </div>
                   <div className="team-name">{member.name}</div>
-                  {member.quote && <p className="team-quote">“{member.quote}”</p>}
+                  {member.quote && <p className="team-quote">"{member.quote}"</p>}
+                  {member.linkedinUrl && (
+                    <a
+                      href={member.linkedinUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="team-linkedin"
+                      aria-label={`${member.name} LinkedIn`}
+                    >
+                      <Linkedin size={20} />
+                    </a>
+                  )}
                 </div>
               ))}
             </div>
@@ -480,9 +492,12 @@ export default function Home() {
           font-family: 'Amoresa', var(--font-eb-garamond), serif;
           letter-spacing: 0.02em;
           font-size: clamp(52px, 8vw, 96px);
-          text-shadow: -3px -3px 0 #fff, 3px -3px 0 #fff, -3px 3px 0 #fff, 3px 3px 0 #fff,
+          text-shadow: -5px -5px 0 #fff, 5px -5px 0 #fff, -5px 5px 0 #fff, 5px 5px 0 #fff,
+                       -4px -4px 0 #fff, 4px -4px 0 #fff, -4px 4px 0 #fff, 4px 4px 0 #fff,
+                       -3px -3px 0 #fff, 3px -3px 0 #fff, -3px 3px 0 #fff, 3px 3px 0 #fff,
                        -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff,
                        -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
+          margin-top: 8px;
         }
 
         .hero-footer-wrapper {
@@ -564,7 +579,7 @@ export default function Home() {
           line-height: 1.6;
           color: #333;
           margin: 16px auto 0;
-          max-width: 400px;
+          max-width: 360px;
           text-align: center;
         }
 
@@ -586,9 +601,10 @@ export default function Home() {
 
         .team-grid {
           display: grid;
-          grid-template-columns: repeat(2, minmax(160px, 1fr));
-          gap: 12px 24px;
+          grid-template-columns: repeat(2, 200px);
+          gap: 12px 169px;
           margin-bottom: 60px;
+          justify-content: center;
         }
 
         .team-card {
@@ -619,6 +635,20 @@ export default function Home() {
           font-style: italic;
           text-align: center;
           max-width: 240px;
+        }
+
+        .team-linkedin {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #000;
+          margin-top: 12px;
+          transition: color 0.2s ease;
+          text-decoration: none;
+        }
+
+        .team-linkedin:hover {
+          color: #0077b5;
         }
 
 
