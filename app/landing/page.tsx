@@ -4,7 +4,6 @@ import Image from 'next/image'
 import { Check, ArrowRight, Zap, Palette, Download } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import AccountButton from '../components/AccountButton'
-import '../globals.css'
 
 const exampleSlides = [
   { src: '/slide1.png', alt: 'Example carousel slide 1' },
@@ -120,7 +119,7 @@ export default function LandingPage() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#ffffff' }}>
         <div className="loading">
           <div className="spinner"></div>
           <span style={{ color: '#000000' }}>Loading...</span>
@@ -130,7 +129,7 @@ export default function LandingPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#ffffff' }}>
+    <div style={{ minHeight: '100vh', background: '#ffffff', opacity: 1 }}>
       {/* Navigation */}
       <nav
         style={{

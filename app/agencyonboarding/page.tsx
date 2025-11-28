@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { ArrowRight, ArrowLeft, ArrowDown } from 'lucide-react'
 import { EB_Garamond } from 'next/font/google'
-import { submitLead } from './agencyonboarding/actions'
+import { submitLead } from './actions'
 
 const ebGaramond = EB_Garamond({
   subsets: ['latin'],
@@ -16,7 +16,7 @@ interface ProjectImages {
   [key: string]: string[]
 }
 
-export default function Home() {
+export default function AgencyOnboarding() {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<{ error?: string; success?: boolean; message?: string } | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -127,7 +127,7 @@ export default function Home() {
       {/* Header */}
       <header className="agency-header">
         <div className="header-brand">Post My Note</div>
-        <a href="#contact" className="header-button">Contact us</a>
+        <a href="#contact" className="header-link">Contact us</a>
       </header>
 
       {/* Hero Section */}
@@ -283,8 +283,6 @@ export default function Home() {
           mix-blend-mode: difference;
           color: #fff;
           background: transparent;
-          height: 72px;
-          box-sizing: border-box;
         }
 
         .header-brand {
@@ -300,33 +298,12 @@ export default function Home() {
           color: inherit;
         }
 
-        .header-button {
-          font-size: 14px;
-          font-weight: 600;
-          text-decoration: none;
-          background: #000 !important;
-          color: #fff !important;
-          padding: 10px 24px;
-          border-radius: 999px;
-          transition: all 0.2s ease;
-          border: none;
-          cursor: pointer;
-          display: inline-block;
-          mix-blend-mode: normal !important;
-          isolation: isolate;
-        }
-
-        .header-button:hover {
-          background: #333 !important;
-        }
-
         /* Hero Section */
         .hero-section {
           min-height: 100vh;
           display: flex;
           flex-direction: column;
           padding: 120px 400px 40px;
-          padding-top: calc(120px + 72px);
           box-sizing: border-box;
           justify-content: space-between;
         }
@@ -393,7 +370,6 @@ export default function Home() {
         /* Projects Section */
         .projects-section {
           padding: 0 400px;
-          padding-top: 40px;
           box-sizing: border-box;
         }
 
@@ -438,7 +414,7 @@ export default function Home() {
           line-height: 1.6;
           color: #333;
           margin: 0;
-          max-width: 400px;
+          max-width: 800px;
           text-align: center;
         }
 
@@ -457,7 +433,6 @@ export default function Home() {
           width: 100%;
           max-width: 1200px;
           gap: 24px;
-          box-sizing: border-box;
         }
 
         .carousel-arrow {
@@ -622,12 +597,10 @@ export default function Home() {
 
           .hero-section {
             padding: 120px 24px 40px;
-            padding-top: calc(120px + 72px);
           }
 
           .projects-section {
             padding: 0 24px;
-            padding-top: 40px;
           }
 
           .contact-section {
@@ -645,48 +618,22 @@ export default function Home() {
           }
 
           .project-carousel {
-            flex-direction: row;
-            gap: 8px;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            max-width: 100%;
-            position: relative;
-            padding: 0 8px;
-            box-sizing: border-box;
+            flex-direction: column;
+            gap: 16px;
           }
 
           .carousel-arrow {
-            width: 36px;
-            height: 36px;
-            flex-shrink: 0;
-            position: static;
-            min-width: 36px;
-          }
-
-          .carousel-arrow-left {
-            order: 1;
+            width: 40px;
+            height: 40px;
           }
 
           .project-image-container {
-            order: 2;
             min-height: auto;
-            flex: 0 1 auto;
-            max-width: calc(100% - 88px);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-          }
-
-          .carousel-arrow-right {
-            order: 3;
           }
 
           .project-image {
-            max-width: 100%;
+            max-width: 120px;
             max-height: 120px;
-            width: auto;
-            height: auto;
           }
         }
 

@@ -20,8 +20,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={playfairDisplay.variable}>
-      <body>
+    <html lang="en" className={playfairDisplay.variable} suppressHydrationWarning>
+      <body suppressHydrationWarning>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
