@@ -834,7 +834,7 @@ export default function Home() {
         /* Responsive Design */
         @media (max-width: 767px) {
           .agency-header {
-            padding: 24px;
+            padding: 24px 24px !important;
           }
 
           .hero-section {
