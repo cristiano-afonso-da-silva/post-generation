@@ -48,15 +48,6 @@ export default function Home() {
     {
       name: 'Post My Note',
       tagline: 'Where we share ideas that help you grow.',
-      stats: {
-        startDate: '2025-11-26', // e.g. '2024-10-01'
-        followers: 42,
-        views: 3583,
-        likes: 141,
-        comments: 3,
-        reposts: 12,
-        shares: 7,
-      },
       description: [
         'Our main account shares simple lessons on marketing, content, and productivity — the same principles we use to help brands show up with confidence and consistency.',
       ],
@@ -66,15 +57,6 @@ export default function Home() {
     {
       name: 'Vista Dourada',
       tagline: 'Enhancing your wine experience, one post at a time.',
-      stats: {
-        startDate: '2025-11-26',
-        followers: 60,
-        views: 3122,
-        likes: 192,
-        comments: 2,
-        reposts: 14,
-        shares: 33,
-      },
       description: [
         'A wine delivery brand that wants people to actually understand what they\'re drinking.',
         'We create clear, friendly carousels about tasting basics, myths, and pairings.',
@@ -85,15 +67,6 @@ export default function Home() {
     {
       name: 'Hoop Tale',
       tagline: 'Embracing basketball player stories, statistics, and career success.',
-      stats: {
-        startDate: '2025-12-01',
-        followers: 0,
-        views: 0,
-        likes: 0,
-        comments: 0,
-        reposts: 0,
-        shares: 0,
-      },
       description: [
         'A social media account dedicated to celebrating basketball players and their journeys.',
         'We share player stories, career statistics, and highlight their success stories to inspire and engage basketball fans.',
@@ -169,38 +142,6 @@ export default function Home() {
     setCurrentImageIndexForFolder(folder, newIndex)
   }
 
-  const formatNumber = (value: number | undefined) => {
-    if (value == null) return '-'
-    return value.toLocaleString()
-  }
-
-  const getDaysActive = (startDate?: string) => {
-    if (!startDate) return '-'
-    const start = new Date(startDate)
-    if (Number.isNaN(start.getTime())) return '-'
-    const today = new Date()
-    const diffTime = today.getTime() - start.getTime()
-    const days = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1
-    return days > 0 ? `${days}` : '1'
-  }
-
-  const getEngagementRate = (stats?: {
-    views?: number
-    likes?: number
-    comments?: number
-    reposts?: number
-    shares?: number
-  }) => {
-    if (!stats || !stats.views || stats.views <= 0) return '-'
-    const totalEngagements =
-      (stats.likes || 0) +
-      (stats.comments || 0) +
-      (stats.reposts || 0) +
-      (stats.shares || 0)
-    const rate = (totalEngagements / stats.views) * 100
-    if (!Number.isFinite(rate)) return '-'
-    return `${rate.toFixed(1)}%`
-  }
 
   useEffect(() => {
     // Fetch images for each project folder
@@ -296,58 +237,6 @@ export default function Home() {
                   />
                   <h2 className="project-title">{project.name}</h2>
                 </div>
-                {project.stats && (
-                  <div className="project-stats">
-                    <div className="project-stat">
-                      <div className="project-stat-label">Days</div>
-                      <div className="project-stat-value">
-                        {getDaysActive(project.stats.startDate)}
-                      </div>
-                    </div>
-                    <div className="project-stat">
-                      <div className="project-stat-label">Followers</div>
-                      <div className="project-stat-value">
-                        {formatNumber(project.stats.followers)}
-                      </div>
-                    </div>
-                    <div className="project-stat">
-                      <div className="project-stat-label">Views</div>
-                      <div className="project-stat-value">
-                        {formatNumber(project.stats.views)}
-                      </div>
-                    </div>
-                    <div className="project-stat">
-                      <div className="project-stat-label">Likes</div>
-                      <div className="project-stat-value">
-                        {formatNumber(project.stats.likes)}
-                      </div>
-                    </div>
-                    <div className="project-stat">
-                      <div className="project-stat-label">Comments</div>
-                      <div className="project-stat-value">
-                        {formatNumber(project.stats.comments)}
-                      </div>
-                    </div>
-                    <div className="project-stat">
-                      <div className="project-stat-label">Reposts</div>
-                      <div className="project-stat-value">
-                        {formatNumber(project.stats.reposts)}
-                      </div>
-                    </div>
-                    <div className="project-stat">
-                      <div className="project-stat-label">Shares</div>
-                      <div className="project-stat-value">
-                        {formatNumber(project.stats.shares)}
-                      </div>
-                    </div>
-                    <div className="project-stat">
-                      <div className="project-stat-label">Engagement</div>
-                      <div className="project-stat-value">
-                        {getEngagementRate(project.stats)}
-                      </div>
-                    </div>
-                  </div>
-                )}
                 {project.tagline && (
                   <p className="project-tagline">{project.tagline}</p>
                 )}
@@ -773,38 +662,6 @@ export default function Home() {
           margin: 8px auto 0;
           max-width: 600px;
           text-align: center;
-        }
-
-        .project-stats {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(90px, 1fr));
-          gap: 8px 16px;
-          margin: 16px auto 4px;
-          max-width: 720px;
-        }
-
-        .project-stat {
-          text-align: center;
-        }
-
-        .project-stat-label {
-          font-size: 11px;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          color: #999;
-          margin-bottom: 2px;
-        }
-
-        .project-stat-value {
-          font-size: 14px;
-          font-weight: 600;
-          color: #111;
-        }
-
-        @media (max-width: 767px) {
-          .project-stats {
-            grid-template-columns: repeat(2, minmax(90px, 1fr));
-          }
         }
 
         .project-description {
