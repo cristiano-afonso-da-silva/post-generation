@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { ArrowRight, ArrowLeft, ArrowDown, Linkedin } from 'lucide-react'
+import { ArrowRight, ArrowLeft, ArrowDown, Linkedin, Instagram } from 'lucide-react'
 import { EB_Garamond } from 'next/font/google'
 import { submitLead } from './agencyonboarding/actions'
 
@@ -48,20 +48,57 @@ export default function Home() {
     {
       name: 'Post My Note',
       tagline: 'Where we share ideas that help you grow.',
+      stats: {
+        startDate: '2025-11-26', // e.g. '2024-10-01'
+        followers: 42,
+        views: 3583,
+        likes: 141,
+        comments: 3,
+        reposts: 12,
+        shares: 7,
+      },
       description: [
         'Our main account shares simple lessons on marketing, content, and productivity — the same principles we use to help brands show up with confidence and consistency.',
       ],
       folder: 'postmynote',
-      accountUrl: '',
+      accountUrl: 'https://www.threads.com/@postmynote?igshid=NTc4MTIwNjQ2YQ==',
     },
     {
       name: 'Vista Dourada',
       tagline: 'Enhancing your wine experience, one post at a time.',
+      stats: {
+        startDate: '2025-11-26',
+        followers: 60,
+        views: 3122,
+        likes: 192,
+        comments: 2,
+        reposts: 14,
+        shares: 33,
+      },
       description: [
         'A wine delivery brand that wants people to actually understand what they\'re drinking.',
         'We create clear, friendly carousels about tasting basics, myths, and pairings.',
       ],
       folder: 'vistadourada',
+      accountUrl: 'https://www.threads.com/@vistadourda?igshid=NTc4MTIwNjQ2YQ==',
+    },
+    {
+      name: 'Hoop Tale',
+      tagline: 'Embracing basketball player stories, statistics, and career success.',
+      stats: {
+        startDate: '2025-12-01',
+        followers: 0,
+        views: 0,
+        likes: 0,
+        comments: 0,
+        reposts: 0,
+        shares: 0,
+      },
+      description: [
+        'A social media account dedicated to celebrating basketball players and their journeys.',
+        'We share player stories, career statistics, and highlight their success stories to inspire and engage basketball fans.',
+      ],
+      folder: 'hooptale',
       accountUrl: '',
     },
     {
@@ -92,12 +129,16 @@ export default function Home() {
       image: '/founders/cristiano.jpg',
       quote: 'Minimalism is an appreciation of space.',
       linkedinUrl: 'https://www.linkedin.com/in/cristianoafonsodasilva/',
+      instagramUrl: 'https://www.instagram.com/cristiano_a.silva?igsh=dHl1eHRseWp2ZmQ%3D&utm_source=qr',
+      threadsUrl: 'https://www.threads.com/@cristiano_a.silva?igshid=NTc4MTIwNjQ2YQ==',
     },
     {
       name: 'Joshua Lei',
       image: '/founders/joshua.jpg',
       quote: 'Less is more.',
       linkedinUrl: 'https://www.linkedin.com/in/joshua-l-41766813b/',
+      instagramUrl: 'https://www.instagram.com/joshua_lih?igsh=MXYycW5odmZvazFncw==',
+      threadsUrl: 'https://www.threads.com/@joshua_lih?igshid=NTc4MTIwNjQ2YQ==',
     },
   ]
 
@@ -128,12 +169,45 @@ export default function Home() {
     setCurrentImageIndexForFolder(folder, newIndex)
   }
 
+  const formatNumber = (value: number | undefined) => {
+    if (value == null) return '-'
+    return value.toLocaleString()
+  }
+
+  const getDaysActive = (startDate?: string) => {
+    if (!startDate) return '-'
+    const start = new Date(startDate)
+    if (Number.isNaN(start.getTime())) return '-'
+    const today = new Date()
+    const diffTime = today.getTime() - start.getTime()
+    const days = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1
+    return days > 0 ? `${days}` : '1'
+  }
+
+  const getEngagementRate = (stats?: {
+    views?: number
+    likes?: number
+    comments?: number
+    reposts?: number
+    shares?: number
+  }) => {
+    if (!stats || !stats.views || stats.views <= 0) return '-'
+    const totalEngagements =
+      (stats.likes || 0) +
+      (stats.comments || 0) +
+      (stats.reposts || 0) +
+      (stats.shares || 0)
+    const rate = (totalEngagements / stats.views) * 100
+    if (!Number.isFinite(rate)) return '-'
+    return `${rate.toFixed(1)}%`
+  }
+
   useEffect(() => {
     // Fetch images for each project folder
     const fetchImages = async () => {
       const imagesMap: ProjectImages = {}
       
-      const projectFolders = ['postmynote', 'vistadourada', 'selvra', 'doit']
+      const projectFolders = ['postmynote', 'vistadourada', 'selvra', 'doit', 'hooptale']
       
       for (const folder of projectFolders) {
         try {
@@ -213,8 +287,67 @@ export default function Home() {
             return (
               <div key={index} className="project-item">
                 <div className="project-header">
+                  <Image
+                    src={`/sections/${project.folder}/logo.svg`}
+                    alt={`${project.name} icon`}
+                    width={32}
+                    height={32}
+                    className="project-icon"
+                  />
                   <h2 className="project-title">{project.name}</h2>
                 </div>
+                {project.stats && (
+                  <div className="project-stats">
+                    <div className="project-stat">
+                      <div className="project-stat-label">Days</div>
+                      <div className="project-stat-value">
+                        {getDaysActive(project.stats.startDate)}
+                      </div>
+                    </div>
+                    <div className="project-stat">
+                      <div className="project-stat-label">Followers</div>
+                      <div className="project-stat-value">
+                        {formatNumber(project.stats.followers)}
+                      </div>
+                    </div>
+                    <div className="project-stat">
+                      <div className="project-stat-label">Views</div>
+                      <div className="project-stat-value">
+                        {formatNumber(project.stats.views)}
+                      </div>
+                    </div>
+                    <div className="project-stat">
+                      <div className="project-stat-label">Likes</div>
+                      <div className="project-stat-value">
+                        {formatNumber(project.stats.likes)}
+                      </div>
+                    </div>
+                    <div className="project-stat">
+                      <div className="project-stat-label">Comments</div>
+                      <div className="project-stat-value">
+                        {formatNumber(project.stats.comments)}
+                      </div>
+                    </div>
+                    <div className="project-stat">
+                      <div className="project-stat-label">Reposts</div>
+                      <div className="project-stat-value">
+                        {formatNumber(project.stats.reposts)}
+                      </div>
+                    </div>
+                    <div className="project-stat">
+                      <div className="project-stat-label">Shares</div>
+                      <div className="project-stat-value">
+                        {formatNumber(project.stats.shares)}
+                      </div>
+                    </div>
+                    <div className="project-stat">
+                      <div className="project-stat-label">Engagement</div>
+                      <div className="project-stat-value">
+                        {getEngagementRate(project.stats)}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {project.tagline && (
                   <p className="project-tagline">{project.tagline}</p>
                 )}
@@ -267,6 +400,33 @@ export default function Home() {
                     {paragraph}
                   </p>
                 ))}
+                {(project.name === 'Post My Note' ||
+                  project.name === 'Vista Dourada') &&
+                  project.accountUrl && (
+                    <a
+                      href={project.accountUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="project-account-link"
+                    >
+                      <span>See account</span>
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M7 17L17 7" />
+                        <polyline points="7 7 17 7 17 17" />
+                      </svg>
+                    </a>
+                  )}
               </div>
             )
           })}
@@ -276,28 +436,61 @@ export default function Home() {
             <div className="team-grid">
               {teamMembers.map((member) => (
                 <div key={member.name} className="team-card">
-                  <div className="team-avatar">
-                    <Image
-                      src={member.image}
-                      alt={`${member.name} portrait`}
-                      fill
-                      sizes="220px"
-                      style={{ objectFit: 'cover' }}
-                    />
+                <div className="team-avatar">
+                  <Image
+                    src={member.image}
+                    alt={`${member.name} portrait`}
+                    fill
+                    sizes="220px"
+                    style={{ objectFit: 'cover' }}
+                  />
+                </div>
+                <div className="team-name">{member.name}</div>
+                {member.quote && <p className="team-quote">"{member.quote}"</p>}
+                {(member.instagramUrl || member.threadsUrl || member.linkedinUrl) && (
+                  <div className="team-social">
+                    {member.instagramUrl && (
+                      <a
+                        href={member.instagramUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="team-social-link"
+                        aria-label={`${member.name} Instagram`}
+                      >
+                        <Instagram size={20} />
+                      </a>
+                    )}
+                    {member.threadsUrl && (
+                      <a
+                        href={member.threadsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="team-social-link"
+                        aria-label={`${member.name} Threads`}
+                      >
+                        <div className="threads-icon">
+                          <Image
+                            src="/icon/threads.png"
+                            alt="Threads icon"
+                            width={20}
+                            height={20}
+                          />
+                        </div>
+                      </a>
+                    )}
+                    {member.linkedinUrl && (
+                      <a
+                        href={member.linkedinUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="team-social-link"
+                        aria-label={`${member.name} LinkedIn`}
+                      >
+                        <Linkedin size={20} />
+                      </a>
+                    )}
                   </div>
-                  <div className="team-name">{member.name}</div>
-                  {member.quote && <p className="team-quote">"{member.quote}"</p>}
-                  {member.linkedinUrl && (
-                    <a
-                      href={member.linkedinUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="team-linkedin"
-                      aria-label={`${member.name} LinkedIn`}
-                    >
-                      <Linkedin size={20} />
-                    </a>
-                  )}
+                )}
                 </div>
               ))}
             </div>
@@ -554,6 +747,7 @@ export default function Home() {
           justify-content: center;
           align-items: center;
           width: 100%;
+          gap: 12px;
         }
 
         .project-title {
@@ -561,6 +755,13 @@ export default function Home() {
           font-weight: 600;
           margin: 0;
           text-align: center;
+        }
+
+        .project-icon {
+          width: 32px;
+          height: 32px;
+          display: block;
+          object-fit: contain;
         }
 
 
@@ -574,6 +775,38 @@ export default function Home() {
           text-align: center;
         }
 
+        .project-stats {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(90px, 1fr));
+          gap: 8px 16px;
+          margin: 16px auto 4px;
+          max-width: 720px;
+        }
+
+        .project-stat {
+          text-align: center;
+        }
+
+        .project-stat-label {
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: #999;
+          margin-bottom: 2px;
+        }
+
+        .project-stat-value {
+          font-size: 14px;
+          font-weight: 600;
+          color: #111;
+        }
+
+        @media (max-width: 767px) {
+          .project-stats {
+            grid-template-columns: repeat(2, minmax(90px, 1fr));
+          }
+        }
+
         .project-description {
           font-size: 18px;
           line-height: 1.6;
@@ -585,6 +818,25 @@ export default function Home() {
 
         .project-description + .project-description {
           margin-top: 12px;
+        }
+
+        .project-account-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          margin-top: 16px;
+          color: #111;
+          font-size: 16px;
+          font-weight: 600;
+          text-decoration: none;
+        }
+
+        .project-account-link svg {
+          display: block;
+        }
+
+        .project-account-link:hover {
+          text-decoration: underline;
         }
 
         /* Team */
@@ -637,18 +889,41 @@ export default function Home() {
           max-width: 240px;
         }
 
-        .team-linkedin {
+        .team-social {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          margin-top: 10px;
+        }
+
+        .team-social-link {
           display: flex;
           align-items: center;
           justify-content: center;
           color: #000;
-          margin-top: 12px;
-          transition: color 0.2s ease;
           text-decoration: none;
+          transition: color 0.2s ease, opacity 0.2s ease;
         }
 
-        .team-linkedin:hover {
+        .team-social-link:hover {
           color: #0077b5;
+          opacity: 0.9;
+        }
+
+        .team-social-link img {
+          width: 20px;
+          height: 20px;
+          display: block;
+        }
+
+        .threads-icon {
+          background: #ffffff;
+          border-radius: 999px;
+          padding: 3px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
 
 
