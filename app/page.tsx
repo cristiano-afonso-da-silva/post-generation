@@ -46,23 +46,30 @@ export default function Home() {
 
   const projects = [
     {
+      name: 'Vista Dourada',
+      tagline: 'Enhancing your wine experience, one post at a time.',
+      stats: {
+        startDate: '2025-11-28',
+        followers: 2127,
+        views: 149200,
+      },
+      description: [
+        'A wine delivery brand that wants people to actually understand what they\'re drinking.',
+        'We create clear, friendly carousels about tasting basics, myths, and pairings.',
+      ],
+      folder: 'vistadourada',
+      instagramUrl: '',
+      threadsUrl: '',
+    },
+    {
       name: 'Post My Note',
       tagline: 'Where we share ideas that help you grow.',
       description: [
         'Our main account shares simple lessons on marketing, content, and productivity — the same principles we use to help brands show up with confidence and consistency.',
       ],
       folder: 'postmynote',
-      accountUrl: 'https://www.threads.com/@postmynote?igshid=NTc4MTIwNjQ2YQ==',
-    },
-    {
-      name: 'Vista Dourada',
-      tagline: 'Enhancing your wine experience, one post at a time.',
-      description: [
-        'A wine delivery brand that wants people to actually understand what they\'re drinking.',
-        'We create clear, friendly carousels about tasting basics, myths, and pairings.',
-      ],
-      folder: 'vistadourada',
-      accountUrl: 'https://www.threads.com/@vistadourda?igshid=NTc4MTIwNjQ2YQ==',
+      instagramUrl: '',
+      threadsUrl: '',
     },
     {
       name: 'Hoop Tale',
@@ -72,7 +79,8 @@ export default function Home() {
         'We share player stories, career statistics, and highlight their success stories to inspire and engage basketball fans.',
       ],
       folder: 'hooptale',
-      accountUrl: '',
+      instagramUrl: '',
+      threadsUrl: '',
     },
     {
       name: 'Selvra',
@@ -82,7 +90,8 @@ export default function Home() {
         'We share soft, minimal content that feels like a breath out, this include insights, quotes that make people feel better.',
       ],
       folder: 'selvra',
-      accountUrl: '',
+      instagramUrl: '',
+      threadsUrl: '',
     },
     {
       name: 'Doit',
@@ -92,7 +101,8 @@ export default function Home() {
         'Sharing simple habits, clear workflows, and tiny rituals that make you more productive.',
       ],
       folder: 'doit',
-      accountUrl: '',
+      instagramUrl: '',
+      threadsUrl: '',
     },
   ]
 
@@ -114,6 +124,24 @@ export default function Home() {
       threadsUrl: 'https://www.threads.com/@joshua_lih?igshid=NTc4MTIwNjQ2YQ==',
     },
   ]
+
+  const formatNumber = (num: number): string => {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1) + 'M'
+    }
+    if (num >= 1000) {
+      return (num / 1000).toFixed(1) + 'K'
+    }
+    return num.toString()
+  }
+
+  const getDaysActive = (startDate: string): number => {
+    const start = new Date(startDate)
+    const now = new Date()
+    const diffTime = Math.abs(now.getTime() - start.getTime())
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return diffDays
+  }
 
   const getCurrentImageIndex = (folder: string) => {
     return currentImageIndex[folder] || 0
@@ -240,7 +268,28 @@ export default function Home() {
                 {project.tagline && (
                   <p className="project-tagline">{project.tagline}</p>
                 )}
-                
+                {project.stats && (
+                  <div className="project-stats">
+                    <div className="project-stat">
+                      <div className="project-stat-label">Views</div>
+                      <div className="project-stat-value">
+                        {formatNumber(project.stats.views)}
+                      </div>
+                    </div>
+                    <div className="project-stat">
+                      <div className="project-stat-label">Followers</div>
+                      <div className="project-stat-value">
+                        {formatNumber(project.stats.followers)}
+                      </div>
+                    </div>
+                    <div className="project-stat">
+                      <div className="project-stat-label">Days</div>
+                      <div className="project-stat-value">
+                        {getDaysActive(project.stats.startDate)}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="project-images-wrapper">
                   {images.length > 0 ? (
@@ -289,33 +338,39 @@ export default function Home() {
                     {paragraph}
                   </p>
                 ))}
-                {(project.name === 'Post My Note' ||
-                  project.name === 'Vista Dourada') &&
-                  project.accountUrl && (
-                    <a
-                      href={project.accountUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="project-account-link"
-                    >
-                      <span>See account</span>
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
+                {(project.instagramUrl || project.threadsUrl) && (
+                  <div className="project-social">
+                    {project.instagramUrl && (
+                      <a
+                        href={project.instagramUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="project-social-link"
+                        aria-label={`${project.name} Instagram`}
                       >
-                        <path d="M7 17L17 7" />
-                        <polyline points="7 7 17 7 17 17" />
-                      </svg>
-                    </a>
-                  )}
+                        <Instagram size={20} />
+                      </a>
+                    )}
+                    {project.threadsUrl && (
+                      <a
+                        href={project.threadsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="project-social-link"
+                        aria-label={`${project.name} Threads`}
+                      >
+                        <div className="threads-icon">
+                          <Image
+                            src="/icon/threads.png"
+                            alt="Threads icon"
+                            width={20}
+                            height={20}
+                          />
+                        </div>
+                      </a>
+                    )}
+                  </div>
+                )}
               </div>
             )
           })}
@@ -664,6 +719,38 @@ export default function Home() {
           text-align: center;
         }
 
+        .project-stats {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(90px, 1fr));
+          gap: 8px 16px;
+          margin: 16px auto 4px;
+          max-width: 540px;
+        }
+
+        .project-stat {
+          text-align: center;
+        }
+
+        .project-stat-label {
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: #999;
+          margin-bottom: 2px;
+        }
+
+        .project-stat-value {
+          font-size: 20px;
+          font-weight: 600;
+          color: #000;
+        }
+
+        @media (max-width: 768px) {
+          .project-stats {
+            grid-template-columns: repeat(2, minmax(90px, 1fr));
+          }
+        }
+
         .project-description {
           font-size: 18px;
           line-height: 1.6;
@@ -677,23 +764,32 @@ export default function Home() {
           margin-top: 12px;
         }
 
-        .project-account-link {
-          display: inline-flex;
+        .project-social {
+          display: flex;
           align-items: center;
-          gap: 6px;
+          justify-content: center;
+          gap: 10px;
           margin-top: 16px;
-          color: #111;
-          font-size: 16px;
-          font-weight: 600;
+        }
+
+        .project-social-link {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #000;
           text-decoration: none;
+          transition: color 0.2s ease, opacity 0.2s ease;
         }
 
-        .project-account-link svg {
+        .project-social-link:hover {
+          color: #0077b5;
+          opacity: 0.9;
+        }
+
+        .project-social-link img {
+          width: 20px;
+          height: 20px;
           display: block;
-        }
-
-        .project-account-link:hover {
-          text-decoration: underline;
         }
 
         /* Team */
