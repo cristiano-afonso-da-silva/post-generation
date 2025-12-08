@@ -361,7 +361,7 @@ export default function Home() {
             />
           </div>
         </div>
-        <a href="#contact" className="header-button">Contact us</a>
+        <a href="#contact" className="header-button">Contact</a>
       </header>
 
       {/* Hero Section */}
@@ -370,8 +370,8 @@ export default function Home() {
           <div className="hero-content-wrapper">
             <h1 className="hero-title">
               <span className="hero-line hero-line-post">Post My Note</span>
-              <span className="hero-line hero-line-next">Is Your</span>
-              <span className="hero-line hero-line-choice">Marketing Choice</span>
+              <span className="hero-line hero-line-next">Marketing that Earns</span>
+              <span className="hero-line hero-line-choice">Trust</span>
             </h1>
           </div>
           
@@ -397,7 +397,7 @@ export default function Home() {
             return (
               <div key={index} className="project-item">
                 <div className="project-header">
-                  <Image
+                  <img
                     src={`/sections/${project.folder}/logo.svg`}
                     alt={`${project.name} icon`}
                     width={project.folder === 'vistadourada' ? 48 : 32}
@@ -894,6 +894,9 @@ export default function Home() {
           height: 32px;
           display: block;
           object-fit: contain;
+          image-rendering: auto;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
         }
 
         .project-icon-large {
@@ -1403,6 +1406,11 @@ export default function Home() {
             max-height: 120px;
             width: auto;
             height: auto;
+          }
+
+          .project-icon {
+            width: 32px;
+            height: 32px;
           }
 
           .project-icon-large {
