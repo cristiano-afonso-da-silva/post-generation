@@ -23,6 +23,7 @@ export default function Home() {
   const [projectImages, setProjectImages] = useState<ProjectImages>({})
   const [currentImageIndex, setCurrentImageIndex] = useState<{ [key: string]: number }>({})
   const [isMounted, setIsMounted] = useState(false)
+  const [isTransitioning, setIsTransitioning] = useState<{ [key: string]: boolean }>({})
 
   useEffect(() => {
     setIsMounted(true)
@@ -157,6 +158,9 @@ export default function Home() {
   const navigateImage = (folder: string, direction: 'prev' | 'next') => {
     const images = projectImages[folder] || []
     if (images.length === 0) return
+    
+    // Prevent rapid clicking during transition
+    if (isTransitioning[folder]) return
 
     const currentIndex = getCurrentImageIndex(folder)
     let newIndex: number
@@ -167,7 +171,17 @@ export default function Home() {
       newIndex = currentIndex < images.length - 1 ? currentIndex + 1 : 0
     }
 
-    setCurrentImageIndexForFolder(folder, newIndex)
+    // Start transition
+    setIsTransitioning(prev => ({ ...prev, [folder]: true }))
+    
+    // Update index after fade out
+    setTimeout(() => {
+      setCurrentImageIndexForFolder(folder, newIndex)
+      // Fade in after a brief moment
+      setTimeout(() => {
+        setIsTransitioning(prev => ({ ...prev, [folder]: false }))
+      }, 10)
+    }, 250)
   }
 
 
@@ -259,9 +273,9 @@ export default function Home() {
                   <Image
                     src={`/sections/${project.folder}/logo.svg`}
                     alt={`${project.name} icon`}
-                    width={32}
-                    height={32}
-                    className="project-icon"
+                    width={project.folder === 'vistadourada' ? 48 : 32}
+                    height={project.folder === 'vistadourada' ? 48 : 32}
+                    className={`project-icon ${project.folder === 'vistadourada' ? 'project-icon-large' : ''}`}
                   />
                   <h2 className="project-title">{project.name}</h2>
                 </div>
@@ -305,15 +319,17 @@ export default function Home() {
                       )}
                       
                       <div className="project-image-container">
-                        <Image 
-                          src={currentImage} 
-                          alt={`${project.name} - Image ${currentIndex + 1}`}
-                          width={1200}
-                          height={1200}
-                          className="project-image"
-                          unoptimized
-                          style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: '50vh' }}
-                        />
+                        <div className={`project-image-wrapper ${isTransitioning[project.folder] ? 'fade-out' : 'fade-in'}`}>
+                          <Image 
+                            src={currentImage} 
+                            alt={`${project.name} - Image ${currentIndex + 1}`}
+                            width={1200}
+                            height={1200}
+                            className="project-image"
+                            unoptimized
+                            style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: '50vh' }}
+                          />
+                        </div>
                       </div>
                       
                       {images.length > 1 && (
@@ -708,6 +724,11 @@ export default function Home() {
           object-fit: contain;
         }
 
+        .project-icon-large {
+          width: 48px !important;
+          height: 48px !important;
+        }
+
 
         .project-tagline {
           font-size: 18px;
@@ -720,34 +741,70 @@ export default function Home() {
         }
 
         .project-stats {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(90px, 1fr));
-          gap: 8px 16px;
-          margin: 16px auto 4px;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          gap: 48px;
+          margin: 20px auto 8px;
           max-width: 540px;
+          width: 100%;
+          padding: 0;
+          box-sizing: border-box;
         }
 
         .project-stat {
           text-align: center;
+          flex: 0 0 auto;
+          min-width: 0;
+          overflow: hidden;
         }
 
         .project-stat-label {
-          font-size: 11px;
+          font-size: 10px;
           text-transform: uppercase;
-          letter-spacing: 0.08em;
+          letter-spacing: 0.1em;
           color: #999;
-          margin-bottom: 2px;
+          margin-bottom: 4px;
+          font-weight: 500;
         }
 
         .project-stat-value {
-          font-size: 20px;
+          font-size: 18px;
           font-weight: 600;
           color: #000;
+          line-height: 1.2;
+          white-space: nowrap;
         }
 
         @media (max-width: 768px) {
           .project-stats {
-            grid-template-columns: repeat(2, minmax(90px, 1fr));
+            gap: 16px;
+            max-width: 100%;
+            padding: 0 16px;
+          }
+
+          .project-stat-value {
+            font-size: 16px;
+          }
+
+          .project-stat-label {
+            font-size: 9px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .project-stats {
+            gap: 12px;
+            padding: 0 12px;
+          }
+
+          .project-stat-value {
+            font-size: 15px;
+          }
+
+          .project-stat-label {
+            font-size: 8px;
+            margin-bottom: 3px;
           }
         }
 
@@ -932,6 +989,27 @@ export default function Home() {
           overflow: visible;
           width: fit-content;
           height: fit-content;
+          position: relative;
+        }
+
+        .project-image-wrapper {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+          will-change: opacity, transform;
+        }
+
+        .project-image-wrapper.fade-in {
+          opacity: 1;
+          transform: scale(1);
+        }
+
+        .project-image-wrapper.fade-out {
+          opacity: 0;
+          transform: scale(0.98);
         }
 
         .project-image {
@@ -1145,6 +1223,11 @@ export default function Home() {
             max-height: 120px;
             width: auto;
             height: auto;
+          }
+
+          .project-icon-large {
+            width: 40px !important;
+            height: 40px !important;
           }
         }
 
