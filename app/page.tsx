@@ -744,67 +744,99 @@ export default function Home() {
           display: flex;
           justify-content: center;
           align-items: center;
-          gap: 48px;
-          margin: 20px auto 8px;
-          max-width: 540px;
+          gap: 0;
+          margin: 24px auto 12px;
+          max-width: 400px;
           width: 100%;
-          padding: 0;
+          padding: 20px 0;
           box-sizing: border-box;
         }
 
         .project-stat {
           text-align: center;
-          flex: 0 0 auto;
+          flex: 1;
           min-width: 0;
           overflow: hidden;
+          position: relative;
+          padding: 0 20px;
+        }
+
+        .project-stat:not(:last-child)::after {
+          content: '';
+          position: absolute;
+          right: 0;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 1px;
+          height: 32px;
+          background: #e5e5e5;
         }
 
         .project-stat-label {
-          font-size: 10px;
+          font-size: 11px;
           text-transform: uppercase;
-          letter-spacing: 0.1em;
-          color: #999;
-          margin-bottom: 4px;
+          letter-spacing: 0.12em;
+          color: #888;
+          margin-bottom: 6px;
           font-weight: 500;
         }
 
         .project-stat-value {
-          font-size: 18px;
-          font-weight: 600;
+          font-size: 24px;
+          font-weight: 700;
           color: #000;
-          line-height: 1.2;
+          line-height: 1.1;
           white-space: nowrap;
+          letter-spacing: -0.02em;
         }
 
         @media (max-width: 768px) {
           .project-stats {
-            gap: 16px;
+            gap: 0;
             max-width: 100%;
-            padding: 0 16px;
+            padding: 16px 0;
+            margin: 20px auto 10px;
+          }
+
+          .project-stat {
+            padding: 0 12px;
+          }
+
+          .project-stat:not(:last-child)::after {
+            height: 28px;
           }
 
           .project-stat-value {
-            font-size: 16px;
+            font-size: 20px;
           }
 
           .project-stat-label {
-            font-size: 9px;
+            font-size: 10px;
+            margin-bottom: 5px;
           }
         }
 
         @media (max-width: 480px) {
           .project-stats {
-            gap: 12px;
-            padding: 0 12px;
+            padding: 12px 0;
+            margin: 16px auto 8px;
+          }
+
+          .project-stat {
+            padding: 0 8px;
+          }
+
+          .project-stat:not(:last-child)::after {
+            height: 24px;
           }
 
           .project-stat-value {
-            font-size: 15px;
+            font-size: 18px;
           }
 
           .project-stat-label {
-            font-size: 8px;
-            margin-bottom: 3px;
+            font-size: 9px;
+            margin-bottom: 4px;
           }
         }
 
