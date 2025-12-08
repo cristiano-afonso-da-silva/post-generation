@@ -1,8 +1,22 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { ArrowRight, ArrowLeft, ArrowDown, Linkedin, Instagram } from 'lucide-react'
+import { ArrowDown, Linkedin, Instagram } from 'lucide-react'
+
+// Facebook Icon Component
+const FacebookIcon = ({ size = 24 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+  </svg>
+)
+
+// TikTok Icon Component
+const TikTokIcon = ({ size = 24 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
+  </svg>
+)
 import { EB_Garamond } from 'next/font/google'
 import { submitLead } from './agencyonboarding/actions'
 
@@ -23,11 +37,18 @@ export default function Home() {
   const [projectImages, setProjectImages] = useState<ProjectImages>({})
   const [currentImageIndex, setCurrentImageIndex] = useState<{ [key: string]: number }>({})
   const [isMounted, setIsMounted] = useState(false)
-  const [isTransitioning, setIsTransitioning] = useState<{ [key: string]: boolean }>({})
+  const autoPlayIntervals = useRef<{ [key: string]: NodeJS.Timeout }>({})
+  const resumeTimeouts = useRef<{ [key: string]: NodeJS.Timeout }>({})
+  const touchStartX = useRef<{ [key: string]: number }>({})
+  const isDragging = useRef<{ [key: string]: boolean }>({})
 
   useEffect(() => {
     setIsMounted(true)
   }, [])
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -48,62 +69,73 @@ export default function Home() {
   const projects = [
     {
       name: 'Vista Dourada',
-      tagline: 'Enhancing your wine experience, one post at a time.',
       stats: {
         startDate: '2025-11-28',
         followers: 2127,
         views: 149200,
       },
       description: [
-        'A wine delivery brand that wants people to actually understand what they\'re drinking.',
-        'We create clear, friendly carousels about tasting basics, myths, and pairings.',
+        'A wine delivery brand built on clarity and education. We create precise, approachable breakdowns of tasting fundamentals, common misconceptions, and thoughtful pairings — helping people understand what they\'re drinking, not just buying it.',
       ],
       folder: 'vistadourada',
-      instagramUrl: '',
-      threadsUrl: '',
+      instagramUrl: 'https://www.instagram.com/vistadourda/',
+      threadsUrl: 'https://www.threads.com/@vistadourda',
+      facebookUrl: '',
+      linkedinUrl: '',
+      tiktokUrl: '',
     },
     {
       name: 'Post My Note',
-      tagline: 'Where we share ideas that help you grow.',
       description: [
-        'Our main account shares simple lessons on marketing, content, and productivity — the same principles we use to help brands show up with confidence and consistency.',
+        'Our flagship account distills proven marketing, content strategy, and productivity principles into clear, practical lessons.',
+        'These are the same frameworks we use to help brands communicate with consistency, build trust, and grow with intention.',
       ],
       folder: 'postmynote',
-      instagramUrl: '',
-      threadsUrl: '',
+      instagramUrl: 'https://www.instagram.com/postmynote/',
+      threadsUrl: 'https://www.threads.com/@postmynote',
+      facebookUrl: 'https://www.facebook.com/profile.php?id=61584678028847',
+      linkedinUrl: 'https://www.linkedin.com/company/post-my-note',
+      tiktokUrl: '',
     },
     {
       name: 'Hoop Tale',
-      tagline: 'Embracing basketball player stories, statistics, and career success.',
       description: [
-        'A social media account dedicated to celebrating basketball players and their journeys.',
-        'We share player stories, career statistics, and highlight their success stories to inspire and engage basketball fans.',
+        'A storytelling-driven basketball channel dedicated to showcasing players with accuracy and respect.',
+        'We highlight journeys, career milestones, and defining moments — crafted to inspire fans and honour the integrity of the sport.',
       ],
       folder: 'hooptale',
-      instagramUrl: '',
-      threadsUrl: '',
+      instagramUrl: 'https://www.instagram.com/hoop.tale/',
+      threadsUrl: 'https://www.threads.com/@hoop.tale',
+      facebookUrl: '',
+      linkedinUrl: '',
+      tiktokUrl: 'https://www.tiktok.com/@hoop.tale',
     },
     {
       name: 'Selvra',
-      tagline: 'A calm place in a loud world.',
       description: [
-        'Selvra is an IOS app that helps people slow down in under a minute.',
-        'We share soft, minimal content that feels like a breath out, this include insights, quotes that make people feel better.',
+        'Selvra is an iOS app designed to help people reset in under a minute.',
+        'Our content reflects this purpose: minimal, grounded, and restorative.',
+        'Every insight and line is created to offer calm, emotional clarity, and genuine support.',
       ],
       folder: 'selvra',
       instagramUrl: '',
       threadsUrl: '',
+      facebookUrl: '',
+      linkedinUrl: '',
+      tiktokUrl: '',
     },
     {
       name: 'Doit',
-      tagline: 'Productivity, without the noise.',
       description: [
-        'Doit is a minimalist to-do app, and we match that energy.',
-        'Sharing simple habits, clear workflows, and tiny rituals that make you more productive.',
+        'Doit is a minimalist to-do app built for disciplined simplicity.',
+        'We share evidence-backed habits, streamlined workflows, and small systems that help people stay organised with clarity and intent.',
       ],
       folder: 'doit',
       instagramUrl: '',
-      threadsUrl: '',
+      threadsUrl: 'https://www.threads.com/@cristiano_a.silva/post/DQdN1rADiXT',
+      facebookUrl: '',
+      linkedinUrl: '',
+      tiktokUrl: '',
     },
   ]
 
@@ -111,7 +143,7 @@ export default function Home() {
     {
       name: 'Cristiano Afonso da Silva',
       image: '/founders/cristiano.jpg',
-      quote: 'Minimalism is an appreciation of space.',
+      quote: 'Consistency beats hype',
       linkedinUrl: 'https://www.linkedin.com/in/cristianoafonsodasilva/',
       instagramUrl: 'https://www.instagram.com/cristiano_a.silva?igsh=dHl1eHRseWp2ZmQ%3D&utm_source=qr',
       threadsUrl: 'https://www.threads.com/@cristiano_a.silva?igshid=NTc4MTIwNjQ2YQ==',
@@ -155,33 +187,93 @@ export default function Home() {
     }))
   }
 
-  const navigateImage = (folder: string, direction: 'prev' | 'next') => {
+  const goToNextImage = (folder: string) => {
     const images = projectImages[folder] || []
     if (images.length === 0) return
     
-    // Prevent rapid clicking during transition
-    if (isTransitioning[folder]) return
-
     const currentIndex = getCurrentImageIndex(folder)
-    let newIndex: number
+    const newIndex = currentIndex < images.length - 1 ? currentIndex + 1 : 0
+    setCurrentImageIndexForFolder(folder, newIndex)
+  }
 
-    if (direction === 'prev') {
-      newIndex = currentIndex > 0 ? currentIndex - 1 : images.length - 1
-    } else {
-      newIndex = currentIndex < images.length - 1 ? currentIndex + 1 : 0
+  const goToPrevImage = (folder: string) => {
+    const images = projectImages[folder] || []
+    if (images.length === 0) return
+    
+    const currentIndex = getCurrentImageIndex(folder)
+    const newIndex = currentIndex > 0 ? currentIndex - 1 : images.length - 1
+    setCurrentImageIndexForFolder(folder, newIndex)
+  }
+
+  const pauseAutoPlay = (folder: string) => {
+    if (autoPlayIntervals.current[folder]) {
+      clearInterval(autoPlayIntervals.current[folder])
+      delete autoPlayIntervals.current[folder]
+    }
+  }
+
+  const resumeAutoPlay = (folder: string) => {
+    const images = projectImages[folder] || []
+    if (images.length <= 1) return
+
+    // Clear any existing resume timeout
+    if (resumeTimeouts.current[folder]) {
+      clearTimeout(resumeTimeouts.current[folder])
     }
 
-    // Start transition
-    setIsTransitioning(prev => ({ ...prev, [folder]: true }))
+    // Resume after 2 seconds
+    resumeTimeouts.current[folder] = setTimeout(() => {
+      startAutoPlay(folder)
+    }, 2000)
+  }
+
+  const startAutoPlay = (folder: string) => {
+    const images = projectImages[folder] || []
+    if (images.length <= 1) return
+
+    // Clear existing interval if any
+    pauseAutoPlay(folder)
+
+    // Start new interval
+    autoPlayIntervals.current[folder] = setInterval(() => {
+      goToNextImage(folder)
+    }, 4000)
+  }
+
+  const handleTouchStart = (folder: string, e: React.TouchEvent | React.MouseEvent) => {
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    touchStartX.current[folder] = clientX
+    isDragging.current[folder] = true
+    pauseAutoPlay(folder)
+  }
+
+  const handleTouchMove = (folder: string, e: React.TouchEvent | React.MouseEvent) => {
+    if (!isDragging.current[folder]) return
+    e.preventDefault()
+  }
+
+  const handleTouchEnd = (folder: string, e: React.TouchEvent | React.MouseEvent) => {
+    if (!isDragging.current[folder]) return
     
-    // Update index after fade out
-    setTimeout(() => {
-      setCurrentImageIndexForFolder(folder, newIndex)
-      // Fade in after a brief moment
-      setTimeout(() => {
-        setIsTransitioning(prev => ({ ...prev, [folder]: false }))
-      }, 10)
-    }, 250)
+    const clientX = 'changedTouches' in e ? e.changedTouches[0].clientX : e.clientX
+    const touchEndX = clientX
+    const startX = touchStartX.current[folder]
+    
+    if (startX !== undefined) {
+      const swipeDistance = Math.abs(touchEndX - startX)
+      const minSwipeDistance = 50
+
+      if (swipeDistance >= minSwipeDistance) {
+        if (touchEndX < startX) {
+          goToNextImage(folder)
+        } else {
+          goToPrevImage(folder)
+        }
+      }
+    }
+
+    isDragging.current[folder] = false
+    resumeAutoPlay(folder)
   }
 
 
@@ -214,6 +306,41 @@ export default function Home() {
     fetchImages()
   }, [])
 
+  // Start auto-play for all carousels when images are loaded
+  useEffect(() => {
+    Object.keys(projectImages).forEach(folder => {
+      const images = projectImages[folder] || []
+      if (images.length > 1) {
+        // Clear existing interval if any
+        if (autoPlayIntervals.current[folder]) {
+          clearInterval(autoPlayIntervals.current[folder])
+        }
+
+        // Start new interval
+        autoPlayIntervals.current[folder] = setInterval(() => {
+          setCurrentImageIndex(prev => {
+            const currentIndex = prev[folder] || 0
+            const newIndex = currentIndex < images.length - 1 ? currentIndex + 1 : 0
+            return {
+              ...prev,
+              [folder]: newIndex
+            }
+          })
+        }, 4000)
+      }
+    })
+
+    // Cleanup on unmount
+    return () => {
+      Object.values(autoPlayIntervals.current).forEach(interval => {
+        if (interval) clearInterval(interval)
+      })
+      Object.values(resumeTimeouts.current).forEach(timeout => {
+        if (timeout) clearTimeout(timeout)
+      })
+    }
+  }, [projectImages])
+
   if (!isMounted) {
     return null
   }
@@ -223,7 +350,7 @@ export default function Home() {
       {/* Header */}
       <header className="agency-header">
         <div className="header-brand">
-          <div className="header-logo-wrapper">
+          <div className="header-logo-wrapper" onClick={scrollToTop} style={{ cursor: 'pointer' }}>
             <Image
               src="/logo.png"
               alt="Post My Note logo"
@@ -279,67 +406,75 @@ export default function Home() {
                   />
                   <h2 className="project-title">{project.name}</h2>
                 </div>
-                {project.tagline && (
-                  <p className="project-tagline">{project.tagline}</p>
-                )}
                 {project.stats && (
                   <div className="project-stats">
                     <div className="project-stat">
-                      <div className="project-stat-label">Views</div>
                       <div className="project-stat-value">
                         {formatNumber(project.stats.views)}
                       </div>
+                      <div className="project-stat-label">Views</div>
                     </div>
                     <div className="project-stat">
-                      <div className="project-stat-label">Followers</div>
                       <div className="project-stat-value">
                         {formatNumber(project.stats.followers)}
                       </div>
+                      <div className="project-stat-label">Followers</div>
                     </div>
                     <div className="project-stat">
-                      <div className="project-stat-label">Days</div>
                       <div className="project-stat-value">
                         {getDaysActive(project.stats.startDate)}
                       </div>
+                      <div className="project-stat-label">Days</div>
                     </div>
                   </div>
                 )}
 
                 <div className="project-images-wrapper">
                   {images.length > 0 ? (
-                    <div className="project-carousel">
-                      {images.length > 1 && (
-                        <button
-                          className="carousel-arrow carousel-arrow-left"
-                          onClick={() => navigateImage(project.folder, 'prev')}
-                          aria-label="Previous image"
-                        >
-                          <ArrowLeft size={24} />
-                        </button>
-                      )}
-                      
-                      <div className="project-image-container">
-                        <div className={`project-image-wrapper ${isTransitioning[project.folder] ? 'fade-out' : 'fade-in'}`}>
-                          <Image 
-                            src={currentImage} 
-                            alt={`${project.name} - Image ${currentIndex + 1}`}
-                            width={1200}
-                            height={1200}
-                            className="project-image"
-                            unoptimized
-                            style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: '50vh' }}
-                          />
+                    <div className="project-carousel-container">
+                      <div 
+                        className="project-carousel"
+                        onTouchStart={(e) => handleTouchStart(project.folder, e)}
+                        onTouchMove={(e) => handleTouchMove(project.folder, e)}
+                        onTouchEnd={(e) => handleTouchEnd(project.folder, e)}
+                        onMouseDown={(e) => handleTouchStart(project.folder, e)}
+                        onMouseMove={(e) => handleTouchMove(project.folder, e)}
+                        onMouseUp={(e) => handleTouchEnd(project.folder, e)}
+                        onMouseLeave={(e) => {
+                          if (isDragging.current[project.folder]) {
+                            handleTouchEnd(project.folder, e)
+                          }
+                        }}
+                      >
+                        <div className="project-image-container">
+                          <div className="project-image-wrapper">
+                            <Image 
+                              src={currentImage} 
+                              alt={`${project.name} - Image ${currentIndex + 1}`}
+                              width={1200}
+                              height={1200}
+                              className="project-image"
+                              unoptimized
+                              style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: '50vh' }}
+                            />
+                          </div>
                         </div>
                       </div>
-                      
                       {images.length > 1 && (
-                        <button
-                          className="carousel-arrow carousel-arrow-right"
-                          onClick={() => navigateImage(project.folder, 'next')}
-                          aria-label="Next image"
-                        >
-                          <ArrowRight size={24} />
-                        </button>
+                        <div className="carousel-indicators">
+                          {images.map((_, index) => (
+                            <button
+                              key={index}
+                              className={`carousel-indicator ${index === currentIndex ? 'carousel-indicator-active' : ''}`}
+                              onClick={() => {
+                                setCurrentImageIndexForFolder(project.folder, index)
+                                pauseAutoPlay(project.folder)
+                                resumeAutoPlay(project.folder)
+                              }}
+                              aria-label={`Go to image ${index + 1}`}
+                            />
+                          ))}
+                        </div>
                       )}
                     </div>
                   ) : (
@@ -349,12 +484,16 @@ export default function Home() {
                   )}
                 </div>
 
-                {project.description?.map((paragraph, idx) => (
-                  <p key={idx} className="project-description">
-                    {paragraph}
-                  </p>
-                ))}
-                {(project.instagramUrl || project.threadsUrl) && (
+                {project.description && project.description.length > 0 && (
+                  <div className="project-description-wrapper">
+                    {project.description.map((paragraph, idx) => (
+                      <p key={idx} className="project-description">
+                        {paragraph}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {(project.instagramUrl || project.threadsUrl || project.facebookUrl || project.linkedinUrl || project.tiktokUrl) && (
                   <div className="project-social">
                     {project.instagramUrl && (
                       <a
@@ -364,7 +503,7 @@ export default function Home() {
                         className="project-social-link"
                         aria-label={`${project.name} Instagram`}
                       >
-                        <Instagram size={20} />
+                        <Instagram size={24} />
                       </a>
                     )}
                     {project.threadsUrl && (
@@ -379,10 +518,43 @@ export default function Home() {
                           <Image
                             src="/icon/threads.png"
                             alt="Threads icon"
-                            width={20}
-                            height={20}
+                            width={24}
+                            height={24}
                           />
                         </div>
+                      </a>
+                    )}
+                    {project.facebookUrl && (
+                      <a
+                        href={project.facebookUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="project-social-link"
+                        aria-label={`${project.name} Facebook`}
+                      >
+                        <FacebookIcon size={24} />
+                      </a>
+                    )}
+                    {project.linkedinUrl && (
+                      <a
+                        href={project.linkedinUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="project-social-link"
+                        aria-label={`${project.name} LinkedIn`}
+                      >
+                        <Linkedin size={24} />
+                      </a>
+                    )}
+                    {project.tiktokUrl && (
+                      <a
+                        href={project.tiktokUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="project-social-link"
+                        aria-label={`${project.name} TikTok`}
+                      >
+                        <TikTokIcon size={24} />
                       </a>
                     )}
                   </div>
@@ -417,7 +589,7 @@ export default function Home() {
                         className="team-social-link"
                         aria-label={`${member.name} Instagram`}
                       >
-                        <Instagram size={20} />
+                        <Instagram size={24} />
                       </a>
                     )}
                     {member.threadsUrl && (
@@ -432,8 +604,8 @@ export default function Home() {
                           <Image
                             src="/icon/threads.png"
                             alt="Threads icon"
-                            width={20}
-                            height={20}
+                            width={24}
+                            height={24}
                           />
                         </div>
                       </a>
@@ -446,7 +618,7 @@ export default function Home() {
                         className="team-social-link"
                         aria-label={`${member.name} LinkedIn`}
                       >
-                        <Linkedin size={20} />
+                        <Linkedin size={24} />
                       </a>
                     )}
                   </div>
@@ -465,7 +637,7 @@ export default function Home() {
         <div className="contact-container">
           <h2 className="contact-title">Work with us</h2>
           <p className="contact-subtitle">
-            Have a project in mind? Let's build something great together.
+            Let's make something that lasts.
           </p>
           
           <form onSubmit={handleSubmit} className="contact-form">
@@ -485,7 +657,7 @@ export default function Home() {
               disabled={isSubmitting}
               className="form-button"
             >
-              {isSubmitting ? 'Sending...' : 'Get in touch'}
+              {isSubmitting ? 'Sending...' : 'Contact us'}
             </button>
 
             {status && (
@@ -730,16 +902,6 @@ export default function Home() {
         }
 
 
-        .project-tagline {
-          font-size: 18px;
-          line-height: 1.6;
-          color: #555;
-          font-style: italic;
-          margin: 8px auto 0;
-          max-width: 600px;
-          text-align: center;
-        }
-
         .project-stats {
           display: flex;
           justify-content: center;
@@ -773,16 +935,15 @@ export default function Home() {
         }
 
         .project-stat-label {
-          font-size: 11px;
-          text-transform: uppercase;
+          font-size: 20px;
           letter-spacing: 0.12em;
           color: #888;
-          margin-bottom: 6px;
+          margin-top: 6px;
           font-weight: 500;
         }
 
         .project-stat-value {
-          font-size: 24px;
+          font-size: 32px;
           font-weight: 700;
           color: #000;
           line-height: 1.1;
@@ -807,12 +968,12 @@ export default function Home() {
           }
 
           .project-stat-value {
-            font-size: 20px;
+            font-size: 28px;
           }
 
           .project-stat-label {
-            font-size: 10px;
-            margin-bottom: 5px;
+            font-size: 18px;
+            margin-top: 5px;
           }
         }
 
@@ -831,12 +992,12 @@ export default function Home() {
           }
 
           .project-stat-value {
-            font-size: 18px;
+            font-size: 24px;
           }
 
           .project-stat-label {
-            font-size: 9px;
-            margin-bottom: 4px;
+            font-size: 16px;
+            margin-top: 4px;
           }
         }
 
@@ -844,13 +1005,13 @@ export default function Home() {
           font-size: 18px;
           line-height: 1.6;
           color: #333;
-          margin: 16px auto 0;
-          max-width: 360px;
+          margin: 0 auto;
+          max-width: 600px;
           text-align: center;
         }
 
         .project-description + .project-description {
-          margin-top: 12px;
+          margin-top: 16px;
         }
 
         .project-social {
@@ -876,8 +1037,8 @@ export default function Home() {
         }
 
         .project-social-link img {
-          width: 20px;
-          height: 20px;
+          width: 24px;
+          height: 24px;
           display: block;
         }
 
@@ -896,7 +1057,7 @@ export default function Home() {
         .team-grid {
           display: grid;
           grid-template-columns: repeat(2, 200px);
-          gap: 12px 169px;
+          gap: 32px 169px;
           margin-bottom: 60px;
           justify-content: center;
         }
@@ -906,6 +1067,7 @@ export default function Home() {
           flex-direction: column;
           align-items: center;
           gap: 16px;
+          margin-bottom: 8px;
         }
 
         .team-avatar {
@@ -954,8 +1116,8 @@ export default function Home() {
         }
 
         .team-social-link img {
-          width: 20px;
-          height: 20px;
+          width: 24px;
+          height: 24px;
           display: block;
         }
 
@@ -974,6 +1136,24 @@ export default function Home() {
           display: flex;
           justify-content: center;
           align-items: center;
+          margin: 24px 0;
+        }
+
+        .project-description-wrapper {
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          margin: 32px auto 0;
+          max-width: 600px;
+        }
+
+        .project-carousel-container {
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 16px;
         }
 
         .project-carousel {
@@ -983,32 +1163,14 @@ export default function Home() {
           justify-content: center;
           width: 100%;
           max-width: 1200px;
-          gap: 24px;
           box-sizing: border-box;
+          cursor: grab;
+          user-select: none;
+          touch-action: pan-x pan-y;
         }
 
-        .carousel-arrow {
-          background: transparent;
-          border: 1px solid #ddd;
-          border-radius: 50%;
-          width: 48px;
-          height: 48px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          transition: all 0.2s;
-          flex-shrink: 0;
-          color: #000;
-        }
-
-        .carousel-arrow:hover {
-          background: #f5f5f5;
-          border-color: #000;
-        }
-
-        .carousel-arrow:active {
-          transform: scale(0.95);
+        .project-carousel:active {
+          cursor: grabbing;
         }
 
         .project-image-container {
@@ -1030,18 +1192,37 @@ export default function Home() {
           display: flex;
           justify-content: center;
           align-items: center;
-          transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-          will-change: opacity, transform;
+          transition: opacity 0.3s ease-in-out;
         }
 
-        .project-image-wrapper.fade-in {
-          opacity: 1;
-          transform: scale(1);
+        .carousel-indicators {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 0;
         }
 
-        .project-image-wrapper.fade-out {
-          opacity: 0;
-          transform: scale(0.98);
+        .carousel-indicator {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          border: none;
+          background: #ddd;
+          cursor: pointer;
+          padding: 0;
+          transition: all 0.2s ease;
+        }
+
+        .carousel-indicator:hover {
+          background: #bbb;
+          transform: scale(1.2);
+        }
+
+        .carousel-indicator-active {
+          background: #000;
+          width: 10px;
+          height: 10px;
         }
 
         .project-image {
@@ -1213,41 +1394,8 @@ export default function Home() {
           }
 
           .project-carousel {
-            flex-direction: row;
-            gap: 8px;
-            align-items: center;
-            justify-content: center;
             width: 100%;
             max-width: 100%;
-            position: relative;
-            padding: 0 8px;
-            box-sizing: border-box;
-          }
-
-          .carousel-arrow {
-            width: 36px;
-            height: 36px;
-            flex-shrink: 0;
-            position: static;
-            min-width: 36px;
-          }
-
-          .carousel-arrow-left {
-            order: 1;
-          }
-
-          .project-image-container {
-            order: 2;
-            min-height: auto;
-            flex: 0 1 auto;
-            max-width: calc(100% - 88px);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-          }
-
-          .carousel-arrow-right {
-            order: 3;
           }
 
           .project-image {
@@ -1260,6 +1408,15 @@ export default function Home() {
           .project-icon-large {
             width: 40px !important;
             height: 40px !important;
+          }
+
+          .project-description-wrapper {
+            margin: 24px auto 0;
+            padding: 0 16px;
+          }
+
+          .project-images-wrapper {
+            margin: 20px 0;
           }
         }
 

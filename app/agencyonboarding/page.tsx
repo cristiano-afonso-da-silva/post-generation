@@ -241,7 +241,7 @@ export default function AgencyOnboarding() {
               disabled={isSubmitting}
               className="form-button"
             >
-              {isSubmitting ? 'Sending...' : 'Get in touch'}
+              {isSubmitting ? 'Sending...' : 'Contact us'}
             </button>
 
             {status && (

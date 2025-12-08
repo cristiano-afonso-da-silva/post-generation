@@ -103,13 +103,13 @@ h6[style*="font-family"][style*="serif"],
    ════════════════════════════════════════════════════════════════════════════ */
 
 ::selection {
-  background-color: #fff9ed;
-  color: #000000;
+  background-color: #000000;
+  color: #ffffff;
 }
 
 ::-moz-selection {
-  background-color: #fff9ed;
-  color: #000000;
+  background-color: #000000;
+  color: #ffffff;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
