@@ -26,3 +26,4 @@ create policy "Enable read access for authenticated users only" on public.leads
 
 
 
+

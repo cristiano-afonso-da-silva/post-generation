@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { ArrowDown, Linkedin, Instagram } from 'lucide-react'
 
 // Facebook Icon Component
@@ -37,8 +38,6 @@ export default function Home() {
   const [projectImages, setProjectImages] = useState<ProjectImages>({})
   const [currentImageIndex, setCurrentImageIndex] = useState<{ [key: string]: number }>({})
   const [isMounted, setIsMounted] = useState(false)
-  const autoPlayIntervals = useRef<{ [key: string]: NodeJS.Timeout }>({})
-  const resumeTimeouts = useRef<{ [key: string]: NodeJS.Timeout }>({})
   const touchStartX = useRef<{ [key: string]: number }>({})
   const isDragging = useRef<{ [key: string]: boolean }>({})
 
@@ -205,46 +204,10 @@ export default function Home() {
     setCurrentImageIndexForFolder(folder, newIndex)
   }
 
-  const pauseAutoPlay = (folder: string) => {
-    if (autoPlayIntervals.current[folder]) {
-      clearInterval(autoPlayIntervals.current[folder])
-      delete autoPlayIntervals.current[folder]
-    }
-  }
-
-  const resumeAutoPlay = (folder: string) => {
-    const images = projectImages[folder] || []
-    if (images.length <= 1) return
-
-    // Clear any existing resume timeout
-    if (resumeTimeouts.current[folder]) {
-      clearTimeout(resumeTimeouts.current[folder])
-    }
-
-    // Resume after 2 seconds
-    resumeTimeouts.current[folder] = setTimeout(() => {
-      startAutoPlay(folder)
-    }, 2000)
-  }
-
-  const startAutoPlay = (folder: string) => {
-    const images = projectImages[folder] || []
-    if (images.length <= 1) return
-
-    // Clear existing interval if any
-    pauseAutoPlay(folder)
-
-    // Start new interval
-    autoPlayIntervals.current[folder] = setInterval(() => {
-      goToNextImage(folder)
-    }, 4000)
-  }
-
   const handleTouchStart = (folder: string, e: React.TouchEvent | React.MouseEvent) => {
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
     touchStartX.current[folder] = clientX
     isDragging.current[folder] = true
-    pauseAutoPlay(folder)
   }
 
   const handleTouchMove = (folder: string, e: React.TouchEvent | React.MouseEvent) => {
@@ -273,7 +236,6 @@ export default function Home() {
     }
 
     isDragging.current[folder] = false
-    resumeAutoPlay(folder)
   }
 
 
@@ -306,41 +268,6 @@ export default function Home() {
     fetchImages()
   }, [])
 
-  // Start auto-play for all carousels when images are loaded
-  useEffect(() => {
-    Object.keys(projectImages).forEach(folder => {
-      const images = projectImages[folder] || []
-      if (images.length > 1) {
-        // Clear existing interval if any
-        if (autoPlayIntervals.current[folder]) {
-          clearInterval(autoPlayIntervals.current[folder])
-        }
-
-        // Start new interval
-        autoPlayIntervals.current[folder] = setInterval(() => {
-          setCurrentImageIndex(prev => {
-            const currentIndex = prev[folder] || 0
-            const newIndex = currentIndex < images.length - 1 ? currentIndex + 1 : 0
-            return {
-              ...prev,
-              [folder]: newIndex
-            }
-          })
-        }, 4000)
-      }
-    })
-
-    // Cleanup on unmount
-    return () => {
-      Object.values(autoPlayIntervals.current).forEach(interval => {
-        if (interval) clearInterval(interval)
-      })
-      Object.values(resumeTimeouts.current).forEach(timeout => {
-        if (timeout) clearTimeout(timeout)
-      })
-    }
-  }, [projectImages])
-
   if (!isMounted) {
     return null
   }
@@ -369,9 +296,7 @@ export default function Home() {
         <div className="hero-container">
           <div className="hero-content-wrapper">
             <h1 className="hero-title">
-              <span className="hero-line hero-line-post">Post My Note</span>
-              <span className="hero-line hero-line-next">Marketing that Earns</span>
-              <span className="hero-line hero-line-choice">Trust</span>
+              <span className="hero-line hero-line-post">Marketing that Earns Trust</span>
             </h1>
           </div>
           
@@ -387,15 +312,32 @@ export default function Home() {
       {/* Projects Section */}
       <section className="projects-section">
         <div className="projects-container">
-          <div className="projects-divider"></div>
-          
           {projects.map((project, index) => {
             const images = projectImages[project.folder] || []
             const currentIndex = getCurrentImageIndex(project.folder)
             const currentImage = images[currentIndex]
             
             return (
-              <div key={index} className="project-item">
+              <Link key={index} href={`/project/${project.folder}`} className="project-item">
+                <div className="project-images-wrapper">
+                  {images.length > 0 ? (
+                    <div className="project-image-container">
+                      <Image 
+                        src={images[0]} 
+                        alt={`${project.name}`}
+                        width={1200}
+                        height={1200}
+                        className="project-image"
+                        unoptimized
+                        style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: '50vh' }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="project-image-placeholder">
+                      No images available
+                    </div>
+                  )}
+                </div>
                 <div className="project-header">
                   <img
                     src={`/sections/${project.folder}/logo.svg`}
@@ -406,7 +348,7 @@ export default function Home() {
                   />
                   <h2 className="project-title">{project.name}</h2>
                 </div>
-                {project.stats && (
+                {project.stats && project.folder !== 'vistadourada' && (
                   <div className="project-stats">
                     <div className="project-stat">
                       <div className="project-stat-value">
@@ -428,141 +370,15 @@ export default function Home() {
                     </div>
                   </div>
                 )}
-
-                <div className="project-images-wrapper">
-                  {images.length > 0 ? (
-                    <div className="project-carousel-container">
-                      <div 
-                        className="project-carousel"
-                        onTouchStart={(e) => handleTouchStart(project.folder, e)}
-                        onTouchMove={(e) => handleTouchMove(project.folder, e)}
-                        onTouchEnd={(e) => handleTouchEnd(project.folder, e)}
-                        onMouseDown={(e) => handleTouchStart(project.folder, e)}
-                        onMouseMove={(e) => handleTouchMove(project.folder, e)}
-                        onMouseUp={(e) => handleTouchEnd(project.folder, e)}
-                        onMouseLeave={(e) => {
-                          if (isDragging.current[project.folder]) {
-                            handleTouchEnd(project.folder, e)
-                          }
-                        }}
-                      >
-                        <div className="project-image-container">
-                          <div className="project-image-wrapper">
-                            <Image 
-                              src={currentImage} 
-                              alt={`${project.name} - Image ${currentIndex + 1}`}
-                              width={1200}
-                              height={1200}
-                              className="project-image"
-                              unoptimized
-                              style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: '50vh' }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                      {images.length > 1 && (
-                        <div className="carousel-indicators">
-                          {images.map((_, index) => (
-                            <button
-                              key={index}
-                              className={`carousel-indicator ${index === currentIndex ? 'carousel-indicator-active' : ''}`}
-                              onClick={() => {
-                                setCurrentImageIndexForFolder(project.folder, index)
-                                pauseAutoPlay(project.folder)
-                                resumeAutoPlay(project.folder)
-                              }}
-                              aria-label={`Go to image ${index + 1}`}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="project-image-placeholder">
-                      No images available
-                    </div>
-                  )}
-                </div>
-
-                {project.description && project.description.length > 0 && (
-                  <div className="project-description-wrapper">
-                    {project.description.map((paragraph, idx) => (
-                      <p key={idx} className="project-description">
-                        {paragraph}
-                      </p>
-                    ))}
-                  </div>
-                )}
-                {(project.instagramUrl || project.threadsUrl || project.facebookUrl || project.linkedinUrl || project.tiktokUrl) && (
-                  <div className="project-social">
-                    {project.instagramUrl && (
-                      <a
-                        href={project.instagramUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="project-social-link"
-                        aria-label={`${project.name} Instagram`}
-                      >
-                        <Instagram size={24} />
-                      </a>
-                    )}
-                    {project.threadsUrl && (
-                      <a
-                        href={project.threadsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="project-social-link"
-                        aria-label={`${project.name} Threads`}
-                      >
-                        <div className="threads-icon">
-                          <Image
-                            src="/icon/threads.png"
-                            alt="Threads icon"
-                            width={24}
-                            height={24}
-                          />
-                        </div>
-                      </a>
-                    )}
-                    {project.facebookUrl && (
-                      <a
-                        href={project.facebookUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="project-social-link"
-                        aria-label={`${project.name} Facebook`}
-                      >
-                        <FacebookIcon size={24} />
-                      </a>
-                    )}
-                    {project.linkedinUrl && (
-                      <a
-                        href={project.linkedinUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="project-social-link"
-                        aria-label={`${project.name} LinkedIn`}
-                      >
-                        <Linkedin size={24} />
-                      </a>
-                    )}
-                    {project.tiktokUrl && (
-                      <a
-                        href={project.tiktokUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="project-social-link"
-                        aria-label={`${project.name} TikTok`}
-                      >
-                        <TikTokIcon size={24} />
-                      </a>
-                    )}
-                  </div>
-                )}
-              </div>
+              </Link>
             )
           })}
+        </div>
+      </section>
 
+      {/* Team Section */}
+      <section className="team-section">
+        <div className="team-container">
           <div className="team-block">
             <h2 className="team-heading">Our Team</h2>
             <div className="team-grid">
@@ -627,8 +443,6 @@ export default function Home() {
               ))}
             </div>
           </div>
-
-          <div className="projects-divider"></div>
         </div>
       </section>
 
@@ -825,6 +639,23 @@ export default function Home() {
           margin-top: 8px;
         }
 
+        .hero-line-that {
+          font-family: var(--font-eb-garamond), 'EB Garamond', serif;
+          font-size: clamp(14px, 2vw, 20px);
+          font-weight: 400;
+          display: inline-block;
+          margin: 0 8px;
+        }
+
+        .hero-line-earns-trust {
+          font-family: var(--font-eb-garamond), 'EB Garamond', serif;
+          font-size: clamp(56px, 9vw, 110px);
+          font-weight: 700;
+          font-style: italic;
+          letter-spacing: 0.02em;
+          display: inline-block;
+        }
+
         .hero-footer-wrapper {
           display: flex;
           justify-content: center;
@@ -847,31 +678,45 @@ export default function Home() {
 
         /* Projects Section */
         .projects-section {
-          padding: 0 400px;
-          padding-top: 40px;
+          padding: 80px 0;
           box-sizing: border-box;
+          width: 100%;
+          max-width: 100vw;
+          overflow-x: hidden;
         }
 
         .projects-container {
-          max-width: 1400px;
-          margin: 0 auto;
           width: 100%;
+          max-width: 1600px;
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 24px;
+          margin: 0 auto;
+          padding: 0 80px;
+          box-sizing: border-box;
         }
 
         .projects-divider {
-          border-top: 1px solid #eee;
-          width: 100%;
-          margin: 0 auto;
+          display: none;
         }
 
         .project-item {
-          padding: 100px 0;
-          border-bottom: 1px solid #eee;
+          padding: 0;
+          margin-bottom: 100px;
           display: flex;
           flex-direction: column;
           align-items: center;
           width: 100%;
-          gap: 40px;
+          gap: 32px;
+          box-sizing: border-box;
+          text-decoration: none;
+          color: inherit;
+          cursor: pointer;
+          transition: opacity 0.2s ease;
+        }
+
+        .project-item:hover {
+          opacity: 0.7;
         }
 
         .project-header {
@@ -879,29 +724,32 @@ export default function Home() {
           justify-content: center;
           align-items: center;
           width: 100%;
-          gap: 12px;
+          gap: 16px;
+          order: 2;
         }
 
         .project-title {
-          font-size: 32px;
-          font-weight: 600;
+          font-size: 20px;
+          font-weight: 500;
           margin: 0;
           text-align: center;
+          letter-spacing: -0.01em;
         }
 
         .project-icon {
-          width: 32px;
-          height: 32px;
+          width: 28px;
+          height: 28px;
           display: block;
           object-fit: contain;
           image-rendering: auto;
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
+          opacity: 0.8;
         }
 
         .project-icon-large {
-          width: 48px !important;
-          height: 48px !important;
+          width: 36px !important;
+          height: 36px !important;
         }
 
 
@@ -909,120 +757,86 @@ export default function Home() {
           display: flex;
           justify-content: center;
           align-items: center;
-          gap: 0;
-          margin: 24px auto 12px;
-          max-width: 400px;
+          gap: 32px;
+          margin: 0;
+          max-width: 100%;
           width: 100%;
-          padding: 20px 0;
+          padding: 0;
           box-sizing: border-box;
         }
 
         .project-stat {
           text-align: center;
-          flex: 1;
+          flex: 0 0 auto;
           min-width: 0;
           overflow: hidden;
-          position: relative;
-          padding: 0 20px;
-        }
-
-        .project-stat:not(:last-child)::after {
-          content: '';
-          position: absolute;
-          right: 0;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 1px;
-          height: 32px;
-          background: #e5e5e5;
         }
 
         .project-stat-label {
-          font-size: 20px;
-          letter-spacing: 0.12em;
-          color: #888;
+          font-size: 10px;
+          letter-spacing: 0.08em;
+          color: #999;
           margin-top: 6px;
-          font-weight: 500;
+          font-weight: 400;
+          text-transform: uppercase;
         }
 
         .project-stat-value {
-          font-size: 32px;
-          font-weight: 700;
+          font-size: 18px;
+          font-weight: 600;
           color: #000;
-          line-height: 1.1;
+          line-height: 1.2;
           white-space: nowrap;
           letter-spacing: -0.02em;
         }
 
         @media (max-width: 768px) {
           .project-stats {
-            gap: 0;
-            max-width: 100%;
-            padding: 16px 0;
-            margin: 20px auto 10px;
-          }
-
-          .project-stat {
-            padding: 0 12px;
-          }
-
-          .project-stat:not(:last-child)::after {
-            height: 28px;
+            gap: 24px;
           }
 
           .project-stat-value {
-            font-size: 28px;
+            font-size: 16px;
           }
 
           .project-stat-label {
-            font-size: 18px;
-            margin-top: 5px;
+            font-size: 9px;
           }
         }
 
         @media (max-width: 480px) {
           .project-stats {
-            padding: 12px 0;
-            margin: 16px auto 8px;
-          }
-
-          .project-stat {
-            padding: 0 8px;
-          }
-
-          .project-stat:not(:last-child)::after {
-            height: 24px;
+            gap: 20px;
           }
 
           .project-stat-value {
-            font-size: 24px;
+            font-size: 15px;
           }
 
           .project-stat-label {
-            font-size: 16px;
-            margin-top: 4px;
+            font-size: 8px;
           }
         }
 
         .project-description {
-          font-size: 18px;
+          font-size: 14px;
           line-height: 1.6;
           color: #333;
-          margin: 0 auto;
-          max-width: 600px;
-          text-align: center;
+          margin: 0;
+          max-width: 100%;
+          text-align: left;
         }
 
         .project-description + .project-description {
-          margin-top: 16px;
+          margin-top: 12px;
         }
 
         .project-social {
           display: flex;
           align-items: center;
-          justify-content: center;
+          justify-content: flex-start;
           gap: 10px;
-          margin-top: 16px;
+          margin-top: 8px;
         }
 
         .project-social-link {
@@ -1045,9 +859,20 @@ export default function Home() {
           display: block;
         }
 
-        /* Team */
+        /* Team Section */
+        .team-section {
+          padding: 80px 400px;
+          box-sizing: border-box;
+        }
+
+        .team-container {
+          max-width: 1400px;
+          margin: 0 auto;
+          width: 100%;
+        }
+
         .team-block {
-          padding: 80px 0 20px;
+          padding: 0;
           text-align: center;
         }
 
@@ -1139,101 +964,27 @@ export default function Home() {
           display: flex;
           justify-content: center;
           align-items: center;
-          margin: 24px 0;
-        }
-
-        .project-description-wrapper {
-          width: 100%;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          margin: 32px auto 0;
-          max-width: 600px;
-        }
-
-        .project-carousel-container {
-          width: 100%;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 16px;
-        }
-
-        .project-carousel {
-          position: relative;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 100%;
-          max-width: 1200px;
-          box-sizing: border-box;
-          cursor: grab;
-          user-select: none;
-          touch-action: pan-x pan-y;
-        }
-
-        .project-carousel:active {
-          cursor: grabbing;
+          margin: 0;
+          padding: 20px 0;
+          order: 1;
         }
 
         .project-image-container {
-          display: inline-flex;
+          width: 100%;
+          display: flex;
           justify-content: center;
           align-items: center;
           background: transparent;
-          padding: 0;
-          max-width: 100%;
-          overflow: visible;
-          width: fit-content;
-          height: fit-content;
-          position: relative;
-        }
-
-        .project-image-wrapper {
-          width: 100%;
-          height: 100%;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          transition: opacity 0.3s ease-in-out;
-        }
-
-        .carousel-indicators {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          gap: 8px;
-          padding: 8px 0;
-        }
-
-        .carousel-indicator {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          border: none;
-          background: #ddd;
-          cursor: pointer;
-          padding: 0;
-          transition: all 0.2s ease;
-        }
-
-        .carousel-indicator:hover {
-          background: #bbb;
-          transform: scale(1.2);
-        }
-
-        .carousel-indicator-active {
-          background: #000;
-          width: 10px;
-          height: 10px;
+          padding: 20px;
+          margin: 0;
         }
 
         .project-image {
           display: block;
           width: auto;
           height: auto;
-          max-width: 120px;
-          max-height: 120px;
+          max-width: 100%;
+          max-height: 140px;
           object-fit: contain;
           margin: 0;
         }
@@ -1365,8 +1116,54 @@ export default function Home() {
           }
 
           .projects-section {
-            padding: 0 24px;
+            padding: 0;
             padding-top: 40px;
+          }
+
+          .team-section {
+            padding: 60px 24px;
+          }
+
+          .projects-section {
+            padding: 60px 0;
+          }
+
+          .projects-container {
+            grid-template-columns: 1fr;
+            padding: 0 24px;
+            gap: 0;
+          }
+
+          .project-item {
+            gap: 20px;
+            margin-bottom: 80px;
+            align-items: center;
+          }
+
+          .project-item:last-child {
+            margin-bottom: 0;
+          }
+
+          .project-header {
+            flex-direction: row;
+            gap: 12px;
+            justify-content: center;
+            order: 1 !important;
+            margin-bottom: 0;
+          }
+
+          .project-images-wrapper {
+            order: 2 !important;
+            padding: 0;
+            margin: 0;
+          }
+
+          .project-stats {
+            order: 3 !important;
+          }
+
+          .project-title {
+            text-align: center;
           }
 
           .team-grid {
@@ -1384,21 +1181,6 @@ export default function Home() {
 
           .contact-section {
             padding: 120px 24px;
-          }
-
-          .project-item {
-            gap: 32px;
-            padding: 60px 0;
-          }
-
-          .project-header {
-            flex-direction: column;
-            gap: 16px;
-          }
-
-          .project-carousel {
-            width: 100%;
-            max-width: 100%;
           }
 
           .project-image {
@@ -1428,6 +1210,30 @@ export default function Home() {
           }
         }
 
+        @media (min-width: 768px) and (max-width: 1023px) {
+          .projects-container {
+            grid-template-columns: repeat(2, 1fr);
+            padding: 0 40px;
+            gap: 20px;
+          }
+
+          .project-item {
+            margin-bottom: 90px;
+          }
+        }
+
+        @media (min-width: 1024px) and (max-width: 1399px) {
+          .projects-container {
+            grid-template-columns: repeat(3, 1fr);
+            padding: 0 60px;
+            gap: 22px;
+          }
+
+          .project-item {
+            margin-bottom: 95px;
+          }
+        }
+
         @media (min-width: 768px) and (max-width: 1399px) {
           .agency-header {
             padding: 24px 200px !important;
@@ -1438,7 +1244,15 @@ export default function Home() {
           }
 
           .projects-section {
-            padding: 0 200px !important;
+            padding: 80px 0 !important;
+          }
+
+          .projects-container {
+            padding: 0 80px !important;
+          }
+
+          .team-section {
+            padding: 80px 200px !important;
           }
 
           .contact-section {
@@ -1456,7 +1270,15 @@ export default function Home() {
           }
 
           .projects-section {
-            padding: 0 400px !important;
+            padding: 80px 0 !important;
+          }
+
+          .projects-container {
+            padding: 0 80px !important;
+          }
+
+          .team-section {
+            padding: 80px 400px !important;
           }
 
           .contact-section {
