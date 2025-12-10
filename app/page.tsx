@@ -274,29 +274,29 @@ export default function Home() {
 
   return (
     <div className={`agency-onboarding-page ${ebGaramond.variable}`}>
-      {/* Header */}
-      <header className="agency-header">
-        <div className="header-brand">
-          <div className="header-logo-wrapper" onClick={scrollToTop} style={{ cursor: 'pointer' }}>
+      {/* Hero Section */}
+      <section className="hero-section">
+        {/* Header */}
+        <header className="agency-header">
+          <div className="header-brand">
             <Image
-              src="/logo.png"
+              src="/logo_copy.svg"
               alt="Post My Note logo"
               width={36}
               height={36}
               priority
               className="header-logo"
+              onClick={scrollToTop}
+              style={{ cursor: 'pointer' }}
             />
           </div>
-        </div>
-        <a href="#contact" className="header-button">Contact</a>
-      </header>
+          <a href="#contact" className="header-button">Contact</a>
+        </header>
 
-      {/* Hero Section */}
-      <section className="hero-section">
         <div className="hero-container">
           <div className="hero-content-wrapper">
             <h1 className="hero-title">
-              <span className="hero-line hero-line-post">Marketing that Earns Trust</span>
+              <span className="hero-line hero-line-post">Marketing that Earns <span className="hero-line-trust">Trust</span></span>
             </h1>
           </div>
           
@@ -503,20 +503,16 @@ export default function Home() {
 
         /* Header */
         .agency-header {
-          padding: 24px 400px;
+          padding: 0 0 16px 0;
+          margin-top: -20px;
           display: flex;
           justify-content: space-between;
           align-items: center;
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          z-index: 50;
+          position: relative;
+          z-index: 10;
           color: #000;
-          background: rgba(255, 255, 255, 0.95);
-          mix-blend-mode: normal;
-          backdrop-filter: blur(10px);
-          height: 72px;
+          background: transparent;
+          width: 100%;
           box-sizing: border-box;
         }
 
@@ -526,18 +522,15 @@ export default function Home() {
           gap: 12px;
         }
 
-        .header-logo-wrapper {
-          width: 36px;
-          height: 36px;
-          display: flex;
-          align-items: center;
-        }
-
         .header-logo {
-          width: 36px;
+          width: auto;
           height: 36px;
           object-fit: contain;
           display: block;
+          background: rgba(255, 255, 255, 0.8);
+          border-radius: 8px;
+          padding: 4px;
+          box-sizing: content-box;
         }
 
         .header-link {
@@ -570,13 +563,19 @@ export default function Home() {
 
         /* Hero Section */
         .hero-section {
-          min-height: 100vh;
+          height: calc(100vh - 80px);
           display: flex;
           flex-direction: column;
-          padding: 120px 400px 40px;
-          padding-top: calc(120px + 72px);
+          padding: 80px 40px;
           box-sizing: border-box;
           justify-content: space-between;
+          background-image: url('/sky.png');
+          background-size: 120% auto;
+          background-position: center;
+          background-repeat: no-repeat;
+          border-radius: 24px;
+          margin: 40px 40px 40px 40px;
+          position: relative;
         }
 
         .hero-container {
@@ -596,7 +595,7 @@ export default function Home() {
           justify-content: center;
           width: 100%;
           padding-top: 0;
-          margin-top: -80px;
+          margin-top: 0;
         }
 
         .hero-title {
@@ -618,6 +617,12 @@ export default function Home() {
         .hero-line-post {
           font-family: var(--font-eb-garamond), 'EB Garamond', serif;
           font-size: clamp(36px, 6vw, 72px);
+        }
+
+        .hero-line-trust {
+          font-style: italic;
+          font-weight: 700;
+          display: inline;
         }
 
         .hero-line-next {
@@ -1107,12 +1112,16 @@ export default function Home() {
         /* Responsive Design */
         @media (max-width: 767px) {
           .agency-header {
-            padding: 24px 24px !important;
+            padding: 0 0 12px 0 !important;
+            margin-top: -15px !important;
           }
 
           .hero-section {
-            padding: 120px 24px 40px;
-            padding-top: calc(120px + 72px);
+            height: calc(100vh - 40px);
+            padding: 60px 20px;
+            margin: 20px 16px 20px 16px;
+            border-radius: 16px;
+            background-size: 130% auto;
           }
 
           .projects-section {
@@ -1236,11 +1245,16 @@ export default function Home() {
 
         @media (min-width: 768px) and (max-width: 1399px) {
           .agency-header {
-            padding: 24px 200px !important;
+            padding: 0 0 14px 0 !important;
+            margin-top: -18px !important;
           }
 
           .hero-section {
-            padding: 120px 200px 40px !important;
+            height: calc(100vh - 60px) !important;
+            padding: 70px 40px !important;
+            margin: 30px 40px 30px 40px !important;
+            border-radius: 20px !important;
+            background-size: 125% auto !important;
           }
 
           .projects-section {
@@ -1262,11 +1276,16 @@ export default function Home() {
 
         @media (min-width: 1400px) {
           .agency-header {
-            padding: 24px 400px !important;
+            padding: 0 0 16px 0 !important;
+            margin-top: -20px !important;
           }
 
           .hero-section {
-            padding: 120px 400px 40px !important;
+            height: calc(100vh - 80px) !important;
+            padding: 80px 40px !important;
+            margin: 40px 40px 40px 40px !important;
+            border-radius: 24px !important;
+            background-size: 120% auto !important;
           }
 
           .projects-section {
