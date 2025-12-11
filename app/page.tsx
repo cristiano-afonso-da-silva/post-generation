@@ -299,8 +299,8 @@ export default function Home() {
           
           <div className="hero-footer-wrapper">
             <div className="hero-footer-item hero-footer-center">
-              <span>Scroll down</span>
-              <ArrowDown size={20} />
+              <span style={{ color: 'rgb(255,255,255,0.8)' }}>Scroll down</span>
+              <ArrowDown size={20} style={{ color: 'rgb(255,255,255,0.8)' }} />
             </div>
           </div>
         </div>
@@ -634,11 +634,12 @@ export default function Home() {
         .hero-line-post {
           font-family: var(--font-eb-garamond), 'EB Garamond', serif;
           font-size: clamp(48px, 8vw, 72px);
+          color: #fff;
         }
 
         .hero-line-trust {
           font-style: normal;
-          font-weight: 700;
+          font-weight: normal;
           display: inline;
         }
 
@@ -1060,7 +1061,7 @@ export default function Home() {
         .contact-subtitle {
           font-size: 18px;
           color: #333;
-          margin: 0 0 48px 0;
+          margin: 0 0 24px 0;
           line-height: 1.6;
         }
 
@@ -1332,7 +1333,7 @@ export default function Home() {
 
         @media (min-width: 1400px) {
           .agency-header {
-            padding: 24px 80px 12px 0 !important;
+            padding: 24px 80px 12px 80px !important;
             margin: 0 !important;
           }
 

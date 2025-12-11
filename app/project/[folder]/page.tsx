@@ -382,7 +382,7 @@ export default function ProjectDetailPage({ params }: { params: { folder: string
         }
 
         .project-detail-left {
-          width: 35%;
+          width: 50%;
           padding: 80px;
           display: flex;
           flex-direction: column;
@@ -396,8 +396,8 @@ export default function ProjectDetailPage({ params }: { params: { folder: string
         }
 
         .project-detail-right {
-          width: 65%;
-          margin-left: 35%;
+          width: 50%;
+          margin-left: 50%;
           padding: 80px 80px 80px 0;
           display: flex;
           flex-direction: column;
@@ -630,10 +630,73 @@ export default function ProjectDetailPage({ params }: { params: { folder: string
           }
         }
 
-        @media (min-width: 1400px) {
+        @media (min-width: 1400px) and (max-width: 1599px) {
           .agency-header {
             padding: 24px 80px !important;
             margin: 0 !important;
+          }
+
+          .project-detail-left {
+            padding: 80px 100px;
+          }
+
+          .project-detail-right {
+            padding: 80px 100px 80px 0;
+          }
+        }
+
+        @media (min-width: 1600px) and (max-width: 1799px) {
+          .agency-header {
+            padding: 24px 100px !important;
+            margin: 0 !important;
+          }
+
+          .project-detail-left {
+            padding: 80px 120px;
+          }
+
+          .project-detail-right {
+            padding: 80px 120px 80px 0;
+          }
+        }
+
+        @media (min-width: 1800px) {
+          .agency-header {
+            padding: 24px 120px !important;
+            margin: 0 !important;
+          }
+
+          .project-detail-left {
+            padding: 80px 140px;
+          }
+
+          .project-detail-right {
+            padding: 80px 140px 80px 0;
+          }
+
+          .project-detail-images-stack {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 40px;
+          }
+
+          .project-detail-image-wrapper {
+            width: 100%;
+          }
+        }
+
+        @media (min-width: 2000px) {
+          .agency-header {
+            padding: 24px 160px !important;
+            margin: 0 !important;
+          }
+
+          .project-detail-left {
+            padding: 80px 180px;
+          }
+
+          .project-detail-right {
+            padding: 80px 180px 80px 0;
           }
         }
       `}</style>
