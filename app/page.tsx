@@ -45,10 +45,6 @@ export default function Home() {
     setIsMounted(true)
   }, [])
 
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setIsSubmitting(true)
@@ -279,16 +275,17 @@ export default function Home() {
         {/* Header */}
         <header className="agency-header">
           <div className="header-brand">
-            <Image
-              src="/logo_copy.svg"
-              alt="Post My Note logo"
-              width={36}
-              height={36}
-              priority
-              className="header-logo"
-              onClick={scrollToTop}
-              style={{ cursor: 'pointer' }}
-            />
+            <Link href="/">
+              <Image
+                src="/logo_copy.svg"
+                alt="Post My Note logo"
+                width={36}
+                height={36}
+                priority
+                className="header-logo"
+                style={{ cursor: 'pointer' }}
+              />
+            </Link>
           </div>
           <a href="#contact" className="header-button">Contact</a>
         </header>
@@ -303,7 +300,7 @@ export default function Home() {
           <div className="hero-footer-wrapper">
             <div className="hero-footer-item hero-footer-center">
               <span>Scroll down</span>
-              <ArrowDown size={16} />
+              <ArrowDown size={20} />
             </div>
           </div>
         </div>
@@ -311,6 +308,9 @@ export default function Home() {
 
       {/* Projects Section */}
       <section className="projects-section">
+        <div className="projects-block">
+          <h2 className="projects-heading">Our work</h2>
+        </div>
         <div className="projects-container">
           {projects.map((project, index) => {
             const images = projectImages[project.folder] || []
@@ -319,6 +319,16 @@ export default function Home() {
             
             return (
               <Link key={index} href={`/project/${project.folder}`} className="project-item">
+                <div className="project-header">
+                  <img
+                    src={`/sections/${project.folder}/logo.svg`}
+                    alt={`${project.name} icon`}
+                    width={project.folder === 'vistadourada' ? 48 : 32}
+                    height={project.folder === 'vistadourada' ? 48 : 32}
+                    className={`project-icon ${project.folder === 'vistadourada' ? 'project-icon-large' : ''}`}
+                  />
+                  <h2 className="project-title">{project.name}</h2>
+                </div>
                 <div className="project-images-wrapper">
                   {images.length > 0 ? (
                     <div className="project-image-container">
@@ -337,16 +347,6 @@ export default function Home() {
                       No images available
                     </div>
                   )}
-                </div>
-                <div className="project-header">
-                  <img
-                    src={`/sections/${project.folder}/logo.svg`}
-                    alt={`${project.name} icon`}
-                    width={project.folder === 'vistadourada' ? 48 : 32}
-                    height={project.folder === 'vistadourada' ? 48 : 32}
-                    className={`project-icon ${project.folder === 'vistadourada' ? 'project-icon-large' : ''}`}
-                  />
-                  <h2 className="project-title">{project.name}</h2>
                 </div>
                 {project.stats && project.folder !== 'vistadourada' && (
                   <div className="project-stats">
@@ -471,7 +471,7 @@ export default function Home() {
               disabled={isSubmitting}
               className="form-button"
             >
-              {isSubmitting ? 'Sending...' : 'Contact us'}
+              {isSubmitting ? 'Sending...' : 'Contact'}
             </button>
 
             {status && (
@@ -480,12 +480,15 @@ export default function Home() {
               </div>
             )}
           </form>
-          
-          <div className="contact-footer">
-            <div>© 2025 Post My Note. All rights reserved.</div>
-          </div>
         </div>
       </section>
+
+      {/* Footer */}
+      <footer className="agency-footer">
+        <div className="footer-content">
+          <div>© 2025 Post My Note. All rights reserved.</div>
+        </div>
+      </footer>
 
       <style jsx>{`
         .agency-onboarding-page {
@@ -503,15 +506,20 @@ export default function Home() {
 
         /* Header */
         .agency-header {
-          padding: 0 0 16px 0;
-          margin-top: -20px;
+          padding: 24px 24px;
+          margin: 0;
           display: flex;
           justify-content: space-between;
           align-items: center;
-          position: relative;
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
           z-index: 10;
           color: #000;
-          background: transparent;
+          background: rgba(255, 255, 255, 0.1);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
           width: 100%;
           box-sizing: border-box;
         }
@@ -519,7 +527,15 @@ export default function Home() {
         .header-brand {
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 0;
+          padding: 0;
+          margin: 0;
+        }
+
+        .header-brand a {
+          padding: 0;
+          margin: 0;
+          display: block;
         }
 
         .header-logo {
@@ -527,9 +543,9 @@ export default function Home() {
           height: 36px;
           object-fit: contain;
           display: block;
-          background: rgba(255, 255, 255, 0.8);
-          border-radius: 8px;
-          padding: 4px;
+          background: transparent;
+          border-radius: 0;
+          padding: 0;
           box-sizing: content-box;
         }
 
@@ -563,18 +579,19 @@ export default function Home() {
 
         /* Hero Section */
         .hero-section {
-          height: calc(100vh - 80px);
+          height: 100vh;
+          min-height: 100vh;
           display: flex;
           flex-direction: column;
-          padding: 80px 40px;
+          padding: 120px 40px 80px;
           box-sizing: border-box;
           justify-content: space-between;
           background-image: url('/sky.png');
-          background-size: 120% auto;
+          background-size: cover;
           background-position: center;
           background-repeat: no-repeat;
-          border-radius: 24px;
-          margin: 40px 40px 40px 40px;
+          border-radius: 0;
+          margin: 0;
           position: relative;
         }
 
@@ -599,7 +616,7 @@ export default function Home() {
         }
 
         .hero-title {
-          font-size: clamp(40px, 8vw, 90px);
+          font-size: clamp(52px, 10vw, 90px);
           line-height: 1.1;
           font-weight: 400;
           letter-spacing: -0.02em;
@@ -616,11 +633,11 @@ export default function Home() {
 
         .hero-line-post {
           font-family: var(--font-eb-garamond), 'EB Garamond', serif;
-          font-size: clamp(36px, 6vw, 72px);
+          font-size: clamp(48px, 8vw, 72px);
         }
 
         .hero-line-trust {
-          font-style: italic;
+          font-style: normal;
           font-weight: 700;
           display: inline;
         }
@@ -673,7 +690,7 @@ export default function Home() {
           display: flex;
           align-items: center;
           gap: 8px;
-          font-size: 14px;
+          font-size: 18px;
           font-weight: 500;
         }
 
@@ -688,6 +705,21 @@ export default function Home() {
           width: 100%;
           max-width: 100vw;
           overflow-x: hidden;
+        }
+
+        .projects-block {
+          width: 100%;
+          max-width: 1400px;
+          margin: 0 auto;
+          padding: 0;
+          text-align: center;
+          margin-bottom: 60px;
+        }
+
+        .projects-heading {
+          font-size: 32px;
+          font-weight: 600;
+          margin-bottom: 0;
         }
 
         .projects-container {
@@ -730,7 +762,7 @@ export default function Home() {
           align-items: center;
           width: 100%;
           gap: 16px;
-          order: 2;
+          order: 1;
         }
 
         .project-title {
@@ -971,7 +1003,7 @@ export default function Home() {
           align-items: center;
           margin: 0;
           padding: 20px 0;
-          order: 1;
+          order: 2;
         }
 
         .project-image-container {
@@ -1020,7 +1052,7 @@ export default function Home() {
         }
 
         .contact-title {
-          font-size: clamp(32px, 5vw, 64px);
+          font-size: 32px;
           margin: 0 0 24px 0;
           font-weight: 600;
         }
@@ -1100,28 +1132,43 @@ export default function Home() {
           color: #ef4444;
         }
 
-        .contact-footer {
-          margin-top: 120px;
-          display: flex;
-          flex-direction: column;
-          gap: 24px;
-          color: #333;
+        /* Footer */
+        .agency-footer {
+          padding: 48px 24px;
+          background: #fff;
+          border-top: 1px solid #f0f0f0;
+        }
+
+        .footer-content {
+          max-width: 1400px;
+          margin: 0 auto;
+          text-align: center;
+          color: #666;
           font-size: 14px;
         }
 
         /* Responsive Design */
         @media (max-width: 767px) {
           .agency-header {
-            padding: 0 0 12px 0 !important;
-            margin-top: -15px !important;
+            padding: 24px 24px !important;
+            margin: 0 !important;
           }
 
           .hero-section {
-            height: calc(100vh - 40px);
-            padding: 60px 20px;
-            margin: 20px 16px 20px 16px;
-            border-radius: 16px;
-            background-size: 130% auto;
+            height: 100vh;
+            min-height: 100vh;
+            padding: 100px 20px 60px;
+            margin: 0;
+            border-radius: 0;
+            background-size: cover;
+          }
+
+          .hero-title {
+            font-size: clamp(56px, 12vw, 90px) !important;
+          }
+
+          .hero-line-post {
+            font-size: clamp(52px, 10vw, 72px) !important;
           }
 
           .projects-section {
@@ -1192,6 +1239,10 @@ export default function Home() {
             padding: 120px 24px;
           }
 
+          .agency-footer {
+            padding: 48px 24px;
+          }
+
           .project-image {
             max-width: 100%;
             max-height: 120px;
@@ -1245,16 +1296,17 @@ export default function Home() {
 
         @media (min-width: 768px) and (max-width: 1399px) {
           .agency-header {
-            padding: 0 0 14px 0 !important;
-            margin-top: -18px !important;
+            padding: 24px 60px !important;
+            margin: 0 !important;
           }
 
           .hero-section {
-            height: calc(100vh - 60px) !important;
-            padding: 70px 40px !important;
-            margin: 30px 40px 30px 40px !important;
-            border-radius: 20px !important;
-            background-size: 125% auto !important;
+            height: 100vh !important;
+            min-height: 100vh !important;
+            padding: 110px 40px 70px !important;
+            margin: 0 !important;
+            border-radius: 0 !important;
+            background-size: cover !important;
           }
 
           .projects-section {
@@ -1272,20 +1324,25 @@ export default function Home() {
           .contact-section {
             padding: 120px 200px !important;
           }
+
+          .agency-footer {
+            padding: 48px 200px !important;
+          }
         }
 
         @media (min-width: 1400px) {
           .agency-header {
-            padding: 0 0 16px 0 !important;
-            margin-top: -20px !important;
+            padding: 24px 80px 12px 0 !important;
+            margin: 0 !important;
           }
 
           .hero-section {
-            height: calc(100vh - 80px) !important;
-            padding: 80px 40px !important;
-            margin: 40px 40px 40px 40px !important;
-            border-radius: 24px !important;
-            background-size: 120% auto !important;
+            height: 100vh !important;
+            min-height: 100vh !important;
+            padding: 120px 40px 80px !important;
+            margin: 0 !important;
+            border-radius: 0 !important;
+            background-size: cover !important;
           }
 
           .projects-section {
@@ -1302,6 +1359,10 @@ export default function Home() {
 
           .contact-section {
             padding: 120px 400px !important;
+          }
+
+          .agency-footer {
+            padding: 48px 400px !important;
           }
         }
       `}</style>

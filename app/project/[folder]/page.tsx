@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowLeft, Linkedin, Instagram } from 'lucide-react'
+import { Linkedin, Instagram } from 'lucide-react'
 import { EB_Garamond } from 'next/font/google'
 
 const ebGaramond = EB_Garamond({
@@ -173,10 +173,21 @@ export default function ProjectDetailPage({ params }: { params: { folder: string
 
   return (
     <div className={`project-detail-page ${ebGaramond.variable}`}>
-      <header className="project-detail-header">
-        <Link href="/" className="back-button">
-          <ArrowLeft size={20} />
-        </Link>
+      <header className="agency-header">
+        <div className="header-brand">
+          <Link href="/">
+            <Image
+              src="/logo_copy.svg"
+              alt="Post My Note logo"
+              width={36}
+              height={36}
+              priority
+              className="header-logo"
+              style={{ cursor: 'pointer' }}
+            />
+          </Link>
+        </div>
+        <a href="/#contact" className="header-button">Contact</a>
       </header>
 
       <div className="project-detail-container">
@@ -302,42 +313,61 @@ export default function ProjectDetailPage({ params }: { params: { folder: string
           box-sizing: border-box;
         }
 
-        .project-detail-header {
+        .agency-header {
+          padding: 24px 24px;
+          margin: 0;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
           position: fixed;
           top: 0;
           left: 0;
           right: 0;
-          z-index: 50;
-          padding: 24px 400px;
-          background: rgba(255, 255, 255, 0.98);
+          z-index: 10;
+          color: #000;
+          background: rgba(255, 255, 255, 0.1);
           backdrop-filter: blur(10px);
-          border-bottom: 1px solid #f0f0f0;
+          -webkit-backdrop-filter: blur(10px);
+          width: 100%;
+          box-sizing: border-box;
+        }
+
+        .header-brand {
           display: flex;
           align-items: center;
+          gap: 12px;
         }
 
-        .back-button {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          color: #000;
-          text-decoration: none;
-          padding: 10px;
-          border-radius: 8px;
+        .header-logo {
+          width: auto;
+          height: 36px;
+          object-fit: contain;
+          display: block;
           background: transparent;
-          border: 1px solid #e5e5e5;
+          border-radius: 0;
+          padding: 0;
+          box-sizing: content-box;
+        }
+
+        .header-button {
+          font-size: 14px;
+          font-weight: 600;
+          text-decoration: none;
+          background: #000000 !important;
+          color: #ffffff !important;
+          padding: 10px 24px;
+          border-radius: 999px;
           transition: all 0.2s ease;
-          width: 40px;
-          height: 40px;
+          border: 1px solid #000000 !important;
+          cursor: pointer;
+          display: inline-block;
+          mix-blend-mode: normal !important;
+          isolation: isolate;
         }
 
-        .back-button:hover {
-          background: #f8f8f8;
-          border-color: #d0d0d0;
-        }
-
-        .back-button:active {
-          background: #f0f0f0;
+        .header-button:hover {
+          background: #333333 !important;
+          border-color: #333333 !important;
         }
 
         .project-detail-container {
@@ -408,8 +438,9 @@ export default function ProjectDetailPage({ params }: { params: { folder: string
         .project-detail-header-content {
           display: flex;
           flex-direction: column;
-          align-items: flex-start;
+          align-items: center;
           gap: 20px;
+          text-align: center;
         }
 
         .project-detail-icon {
@@ -438,7 +469,7 @@ export default function ProjectDetailPage({ params }: { params: { folder: string
         }
 
         .project-detail-description-text {
-          font-size: 18px;
+          font-size: 24px;
           line-height: 1.7;
           color: #333;
           margin: 0;
@@ -447,6 +478,7 @@ export default function ProjectDetailPage({ params }: { params: { folder: string
         .project-detail-social {
           display: flex;
           align-items: center;
+          justify-content: center;
           gap: 12px;
           margin-top: 20px;
         }
@@ -480,8 +512,9 @@ export default function ProjectDetailPage({ params }: { params: { folder: string
             overflow: visible;
           }
 
-          .project-detail-header {
+          .agency-header {
             padding: 24px 24px !important;
+            margin: 0 !important;
           }
 
           .project-detail-container {
@@ -517,7 +550,9 @@ export default function ProjectDetailPage({ params }: { params: { folder: string
           .project-detail-header-content {
             flex-direction: row;
             align-items: center;
+            justify-content: center;
             gap: 12px;
+            text-align: center;
           }
 
           .project-detail-title {
@@ -526,7 +561,7 @@ export default function ProjectDetailPage({ params }: { params: { folder: string
           }
 
           .project-detail-description-text {
-            font-size: 16px;
+            font-size: 20px;
           }
         }
 
@@ -537,8 +572,9 @@ export default function ProjectDetailPage({ params }: { params: { folder: string
             overflow: visible;
           }
 
-          .project-detail-header {
-            padding: 24px 200px;
+          .agency-header {
+            padding: 24px 60px !important;
+            margin: 0 !important;
           }
 
           .project-detail-container {
@@ -573,18 +609,19 @@ export default function ProjectDetailPage({ params }: { params: { folder: string
         }
 
         @media (min-width: 1024px) and (max-width: 1399px) {
-          .project-detail-header {
-            padding: 24px 200px;
+          .agency-header {
+            padding: 24px 60px !important;
+            margin: 0 !important;
           }
 
           .project-detail-left {
-            width: 40%;
+            width: 50%;
             padding: 80px 60px;
           }
 
           .project-detail-right {
-            width: 60%;
-            margin-left: 40%;
+            width: 50%;
+            margin-left: 50%;
             padding: 80px 60px 80px 0;
           }
 
@@ -594,8 +631,9 @@ export default function ProjectDetailPage({ params }: { params: { folder: string
         }
 
         @media (min-width: 1400px) {
-          .project-detail-header {
-            padding: 24px 400px;
+          .agency-header {
+            padding: 24px 80px !important;
+            margin: 0 !important;
           }
         }
       `}</style>
