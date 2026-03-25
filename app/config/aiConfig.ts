@@ -1,17 +1,28 @@
 // ════════════════════════════════════════════════════════════════════════════
-// AI PROVIDER CONFIGURATION (GEMINI-ONLY)
+// AI PROVIDER (OpenAI / Gemini) + MODEL IDS
 // ════════════════════════════════════════════════════════════════════════════
-// Centralized configuration for AI model provider
 
-export type AIProvider = 'gemini';
+export type AIProvider = 'openai' | 'gemini'
 
-export const GEMINI_MODEL = 'gemini-2.0-flash';
+function normalizeProvider(v: string | undefined): AIProvider {
+  const x = v?.trim().toLowerCase()
+  if (x === 'gemini' || x === 'google') return 'gemini'
+  return 'openai'
+}
 
-export const getActiveModel = (): string => {
-  return GEMINI_MODEL;
-};
+/** `openai` (ChatGPT API) or `gemini`. Defaults to `openai`. */
+export const getAIProvider = (): AIProvider => normalizeProvider(process.env.AI_PROVIDER)
 
-export const getActiveProvider = (): AIProvider => {
-  return 'gemini';
-};
+/** OpenAI chat model, e.g. gpt-4o-mini, gpt-4o — set via OPENAI_CHAT_MODEL or OPENAI_MODEL */
+export const getOpenAIChatModel = (): string =>
+  process.env.OPENAI_CHAT_MODEL?.trim() ||
+  process.env.OPENAI_MODEL?.trim() ||
+  'gpt-4o-mini'
 
+/** Gemini model id when AI_PROVIDER=gemini */
+export const getGeminiModelName = (): string =>
+  process.env.GEMINI_MODEL?.trim() || 'gemini-2.0-flash'
+
+/** For logging / API meta */
+export const getActiveChatModel = (): string =>
+  getAIProvider() === 'openai' ? getOpenAIChatModel() : getGeminiModelName()

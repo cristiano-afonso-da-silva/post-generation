@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
+import { SchemaType } from '@google/generative-ai';
 import {
   IDEAS_PROMPT,
   ONBOARDING_IDEA_PROMPT,
@@ -10,22 +10,14 @@ import {
   type UserVoice,
   type TemplateLayout
 } from '../../config/prompts';
-import { GEMINI_MODEL } from '../../config/aiConfig';
+import { getAIProvider, getActiveChatModel, getOpenAIChatModel } from '../../config/aiConfig';
+import { generateJsonFromPrompt, assertCarouselAiConfigured } from '../../lib/aiJsonClient';
 import { getCarouselTemplate, extractTemplateLayout } from '../../config/carouselTemplates';
 import { getUserCreditsServerSQL } from '../../lib/supabase-mcp';
 // ════════════════════════════════════════════════════════════════════════════
 // API Configuration
 // ════════════════════════════════════════════════════════════════════════════
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
-
-if (!GEMINI_API_KEY) {
-  console.error('❌ Missing GEMINI_API_KEY in environment variables');
-  console.error('   Please add GEMINI_API_KEY to your .env.local file');
-} else {
-  console.log('✅ GEMINI_API_KEY loaded successfully');
-  console.log(`   Key preview: ${GEMINI_API_KEY.substring(0, 10)}...`);
-}
 
 if (!PEXELS_API_KEY) {
   console.error('❌ Missing PEXELS_API_KEY in environment variables');
@@ -35,25 +27,25 @@ if (!PEXELS_API_KEY) {
   console.log(`   Key preview: ${PEXELS_API_KEY.substring(0, 10)}...`);
 }
 
-// Create Gemini client only if API key is available (will be validated at request time)
-const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
-
-// Model for regular generation (ideas and note)
-// Note: We'll add responseSchema per request, not globally
-// Model will be created per request after validating API key
-const getModel = () => {
-  if (!genAI) {
-    throw new Error('Gemini client not initialized. GEMINI_API_KEY is missing.');
+{
+  const provider = getAIProvider();
+  if (provider === 'openai') {
+    const k = process.env.OPENAI_API_KEY || process.env.OPEN_AI_API_KEY;
+    if (!k) {
+      console.error('❌ Missing OPENAI_API_KEY (or OPEN_AI_API_KEY) in environment variables');
+    } else {
+      console.log(`✅ OpenAI configured — model: ${getOpenAIChatModel()}`);
+    }
+  } else {
+    const k = process.env.GEMINI_API_KEY;
+    if (!k) {
+      console.error('❌ Missing GEMINI_API_KEY (AI_PROVIDER=gemini)');
+    } else {
+      console.log('✅ GEMINI_API_KEY loaded successfully');
+      console.log(`   Key preview: ${k.substring(0, 10)}...`);
+    }
   }
-  return genAI.getGenerativeModel({
-  model: GEMINI_MODEL,
-  generationConfig: {
-    temperature: 0.85,
-    topP: 0.95,
-    topK: 40,
-  }
-});
-};
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // Utility Functions
@@ -63,48 +55,6 @@ const wordCount = (text: string): number => {
   if (!text) return 0;
   return text.trim().split(/\s+/).filter(Boolean).length;
 };
-
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-async function callGeminiWithRetry(
-  targetModel: ReturnType<GoogleGenerativeAI['getGenerativeModel']>,
-  request: Parameters<typeof targetModel.generateContent>[0],
-  options?: Parameters<typeof targetModel.generateContent>[1],
-  attempt = 0,
-  maxRetries = 3
-) {
-  try {
-    return await targetModel.generateContent(request, options);
-  } catch (error: any) {
-    const message = error?.message || '';
-    const isQuotaError =
-      error?.status === 429 ||
-      message.includes('429') ||
-      message.toLowerCase().includes('quota') ||
-      message.toLowerCase().includes('too many requests');
-
-    if (isQuotaError && attempt < maxRetries) {
-      let delayMs = 4000;
-      const retryMatch = message.match(/"retryDelay":"(\d+)s"/);
-      if (retryMatch && retryMatch[1]) {
-        const seconds = parseInt(retryMatch[1], 10);
-        if (!Number.isNaN(seconds)) {
-          delayMs = Math.max(1000, seconds * 1000);
-        }
-      }
-
-      console.warn(
-        `⚠️  Gemini quota hit (attempt ${attempt + 1}/${maxRetries}). Retrying in ${Math.round(
-          delayMs / 1000
-        )}s...`
-      );
-      await sleep(delayMs);
-      return callGeminiWithRetry(targetModel, request, options, attempt + 1, maxRetries);
-    }
-
-    throw error;
-  }
-}
 
 const safeJsonParse = (text: string) => {
   // Preprocess: Clean up the response
@@ -561,7 +511,7 @@ const formatToMarkdown = (note: any, underlineWords: any = {}) => {
   lines.push('═'.repeat(80));
   
   lines.push('');
-  lines.push('🎨 GEMINI EMPHASIS EXTRACTION');
+  lines.push('🎨 AI EMPHASIS EXTRACTION');
   lines.push('═'.repeat(80));
   lines.push('');
   
@@ -915,31 +865,17 @@ async function generateIdeasWithGemini(
       console.log(`🎯 Using default user voice for ideas`)
     }
     
-    const model = getModel();
-    const result = await callGeminiWithRetry(model, {
-      contents: [{
-        role: 'user',
-        parts: [{ 
-          text: IDEAS_PROMPT(
-            accountDescription,
-            finalUserVoice,
-            templateLayout
-          ) 
-        }]
-      }],
-      generationConfig: {
-        temperature: 0.9,
-        maxOutputTokens: 800,
-        responseMimeType: 'application/json',
-        responseSchema: IDEAS_SCHEMA
-      }
+    const responseText = await generateJsonFromPrompt({
+      userPrompt: IDEAS_PROMPT(accountDescription, finalUserVoice, templateLayout),
+      temperature: 0.9,
+      maxOutputTokens: 800,
+      geminiResponseSchema: getAIProvider() === 'gemini' ? (IDEAS_SCHEMA as any) : undefined,
     });
-    
-    const responseText = result.response.text();
+
     const data = safeJsonParse(responseText);
     
     if (!data.ideas || !Array.isArray(data.ideas) || data.ideas.length === 0) {
-      throw new Error('Invalid ideas format from Gemini');
+      throw new Error('Invalid ideas format from AI');
     }
     
     const formatted = formatIdeasToText(data.ideas);
@@ -954,11 +890,11 @@ async function generateIdeasWithGemini(
       meta: {
         count: data.ideas.length,
         generationTime: `${Date.now() - startTime}ms`,
-        model: GEMINI_MODEL,
+        model: getActiveChatModel(),
       }
     };
   } catch (error: any) {
-    console.error('Error generating ideas with Gemini:', error);
+    console.error('Error generating ideas:', error);
     return {
       success: false,
       error: error.message || 'Failed to generate ideas',
@@ -982,25 +918,17 @@ async function generateOnboardingIdeaWithGemini(
   const startTime = Date.now();
   
   try {
-    const model = getModel();
-    const result = await callGeminiWithRetry(model, {
-      contents: [{
-        role: 'user',
-        parts: [{ text: ONBOARDING_IDEA_PROMPT(projectDescription, topics, vibe) }]
-      }],
-      generationConfig: {
-        temperature: 0.9,
-        maxOutputTokens: 200,
-        responseMimeType: 'application/json',
-        responseSchema: ONBOARDING_IDEA_SCHEMA
-      }
+    const responseText = await generateJsonFromPrompt({
+      userPrompt: ONBOARDING_IDEA_PROMPT(projectDescription, topics, vibe),
+      temperature: 0.9,
+      maxOutputTokens: 200,
+      geminiResponseSchema: getAIProvider() === 'gemini' ? (ONBOARDING_IDEA_SCHEMA as any) : undefined,
     });
-    
-    const responseText = result.response.text();
+
     const data = safeJsonParse(responseText);
     
     if (!data.idea || typeof data.idea !== 'string' || data.idea.trim().length === 0) {
-      throw new Error('Invalid idea format from Gemini');
+      throw new Error('Invalid idea format from AI');
     }
     
     return {
@@ -1011,11 +939,11 @@ async function generateOnboardingIdeaWithGemini(
       },
       meta: {
         generationTime: `${Date.now() - startTime}ms`,
-        model: GEMINI_MODEL,
+        model: getActiveChatModel(),
       }
     };
   } catch (error: any) {
-    console.error('Error generating onboarding idea with Gemini:', error);
+    console.error('Error generating onboarding idea:', error);
     return {
       success: false,
       error: error.message || 'Failed to generate onboarding idea',
@@ -1143,18 +1071,6 @@ async function generateRecommendedIdeas(
 // buildAIImagePrompt is now imported from app/config/prompts.ts
 
 async function extractUnderlineWordsWithGemini(carousels: any[]): Promise<Record<number, any>> {
-  if (!genAI) {
-    throw new Error('Gemini client not initialized. GEMINI_API_KEY is missing.');
-  }
-  const underlineModel = genAI.getGenerativeModel({
-    model: GEMINI_MODEL,
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: UNDERLINE_SCHEMA,
-      temperature: 0.4,
-    },
-  });
-
   const results: Record<number, any> = {};
 
   for (let i = 0; i < carousels.length; i++) {
@@ -1166,10 +1082,14 @@ async function extractUnderlineWordsWithGemini(carousels: any[]): Promise<Record
     if (!prompt) continue;
     
     try {
-      const result = await callGeminiWithRetry(underlineModel, prompt);
-      const responseText = result.response.text();
+      const responseText = await generateJsonFromPrompt({
+        userPrompt: prompt,
+        temperature: 0.4,
+        maxOutputTokens: 1024,
+        geminiResponseSchema: getAIProvider() === 'gemini' ? (UNDERLINE_SCHEMA as any) : undefined,
+      });
       
-      console.log(`\n🎨 Carousel ${i + 1} (${carousel.kind}) - Raw Gemini Response:`);
+      console.log(`\n🎨 Carousel ${i + 1} (${carousel.kind}) - Raw AI Response:`);
       console.log(responseText);
       
       const parsed = safeJsonParse(responseText);
@@ -1409,39 +1329,19 @@ async function generateNoteWithGemini(
       console.log(`🎯 Using default user voice`)
     }
     
-    const model = getModel();
-    const result = await callGeminiWithRetry(model, {
-      contents: [{
-        role: 'user',
-        parts: [{ 
-          text: NOTE_PROMPT(
-            ideaTitle, 
-            accountDescription, 
-            finalUserVoice,  // User voice (TOP PRIORITY)
-            templateLayout   // Template layout (length/structure only)
-          ) 
-        }]
-      }],
-      generationConfig: {
-        temperature: 0.8,
-        maxOutputTokens: 2000,
-        responseMimeType: 'application/json',
-        responseSchema: NOTE_SCHEMA
-      }
+    const responseText = await generateJsonFromPrompt({
+      userPrompt: NOTE_PROMPT(
+        ideaTitle,
+        accountDescription,
+        finalUserVoice,
+        templateLayout
+      ),
+      temperature: 0.8,
+      maxOutputTokens: 2000,
+      geminiResponseSchema: getAIProvider() === 'gemini' ? (NOTE_SCHEMA as any) : undefined,
     });
     
-    const responseText = result.response.text();
-    
-    // Check if response was truncated
-    const candidates = result.response.candidates;
-    if (candidates && candidates.length > 0) {
-      const finishReason = candidates[0].finishReason;
-      if (finishReason && finishReason !== 'STOP') {
-        console.warn(`⚠️  Response finish reason: ${finishReason} (might indicate truncation)`);
-      }
-    }
-    
-    console.log('📝 Raw Gemini Response Length:', responseText.length);
+    console.log('📝 Raw AI response length:', responseText.length);
     
     // Check for potential truncation indicators
     if (responseText.length > 0 && !responseText.trim().endsWith('}')) {
@@ -1468,7 +1368,7 @@ async function generateNoteWithGemini(
         console.error(responseText.substring(start, end));
       }
       
-      throw new Error(`Failed to parse Gemini response: ${parseError.message}`);
+      throw new Error(`Failed to parse AI response: ${parseError.message}`);
     }
     
     if (!data.slides || !Array.isArray(data.slides) || data.slides.length < 5) {
@@ -1508,11 +1408,11 @@ async function generateNoteWithGemini(
       },
       meta: {
         generationTime: `${Date.now() - startTime}ms`,
-        model: GEMINI_MODEL,
+        model: getActiveChatModel(),
       }
     };
   } catch (error: any) {
-    console.error('Error generating note with Gemini:', error);
+    console.error('Error generating note:', error);
     return {
       success: false,
       error: error.message || 'Failed to generate note',
@@ -1628,13 +1528,10 @@ async function generateNote(ideaTitle: string, accountDescription: string, inclu
 
 export async function POST(request: NextRequest) {
   try {
-    // Validate GEMINI_API_KEY at request time
-    if (!GEMINI_API_KEY || GEMINI_API_KEY.trim().length === 0) {
-      console.error('❌ GEMINI_API_KEY is missing or empty');
-      return NextResponse.json(
-        { success: false, error: 'GEMINI_API_KEY is not configured. Please set GEMINI_API_KEY in your environment variables.' },
-        { status: 500 }
-      );
+    const aiCfg = assertCarouselAiConfigured();
+    if (!aiCfg.ok) {
+      console.error('❌ Carousel AI not configured:', aiCfg.error);
+      return NextResponse.json({ success: false, error: aiCfg.error }, { status: 500 });
     }
 
     const body = await request.json();

@@ -1,19 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai'
-import { GEMINI_MODEL } from '../../config/aiConfig'
+import { SchemaType } from '@google/generative-ai'
+import { getAIProvider, getActiveChatModel } from '../../config/aiConfig'
+import { generateJsonFromPrompt } from '../../lib/aiJsonClient'
 import { getEmphasisPrompt } from '../../config/prompts'
-
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY
-const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null
-
-const getModel = () => {
-  if (!genAI) {
-    throw new Error('Gemini client not initialized. GEMINI_API_KEY is missing.')
-  }
-  return genAI.getGenerativeModel({
-    model: GEMINI_MODEL,
-  })
-}
 
 const UNDERLINE_SCHEMA = {
   type: SchemaType.OBJECT,
@@ -132,28 +121,13 @@ export async function POST(request: NextRequest) {
     
     console.log(`[GENERATE-CONTENT] Generating carousel content from website text (${websiteText.length} chars)`)
     
-    if (!GEMINI_API_KEY) {
-      return NextResponse.json(
-        { error: 'GEMINI_API_KEY is not configured' },
-        { status: 500 }
-      )
-    }
-    
-    const model = getModel()
-    const result = await model.generateContent({
-      contents: [{
-        role: 'user',
-        parts: [{ text: generateContentPrompt(websiteText) }]
-      }],
-      generationConfig: {
-        temperature: 0.8,
-        maxOutputTokens: 2000,
-        responseMimeType: 'application/json',
-        responseSchema: CONTENT_SCHEMA
-      }
+    const responseText = await generateJsonFromPrompt({
+      userPrompt: generateContentPrompt(websiteText),
+      temperature: 0.8,
+      maxOutputTokens: 2000,
+      geminiResponseSchema: getAIProvider() === 'gemini' ? (CONTENT_SCHEMA as any) : undefined,
     })
     
-    const responseText = result.response.text()
     let data
     try {
       data = JSON.parse(responseText)
@@ -166,11 +140,10 @@ export async function POST(request: NextRequest) {
       throw new Error('Invalid response format: expected 3 slides')
     }
     
-    console.log(`[GENERATE-CONTENT] Successfully generated 3 slides`)
+    console.log(`[GENERATE-CONTENT] Successfully generated 3 slides (${getActiveChatModel()})`)
     
     // Extract underline/highlight words for each slide
     const underlineWords: Record<number, { underline: string; highlight: string; imageSearch: string }> = {}
-    const underlineModel = getModel()
     
     for (let i = 0; i < data.slides.length; i++) {
       const slide = data.slides[i]
@@ -182,20 +155,14 @@ export async function POST(request: NextRequest) {
       }
       
       try {
-        const result = await underlineModel.generateContent({
-          contents: [{
-            role: 'user',
-            parts: [{ text: prompt }]
-          }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            responseSchema: UNDERLINE_SCHEMA,
-            temperature: 0.4,
-          }
+        const emphasisText = await generateJsonFromPrompt({
+          userPrompt: prompt,
+          temperature: 0.4,
+          maxOutputTokens: 800,
+          geminiResponseSchema: getAIProvider() === 'gemini' ? (UNDERLINE_SCHEMA as any) : undefined,
         })
         
-        const responseText = result.response.text()
-        const parsed = safeJsonParse(responseText)
+        const parsed = safeJsonParse(emphasisText)
         
         underlineWords[i] = {
           underline: parsed.underline || '',
@@ -224,4 +191,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

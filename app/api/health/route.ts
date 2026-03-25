@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getActiveModel, getActiveProvider } from '../../config/aiConfig';
+import { getAIProvider, getActiveChatModel } from '../../config/aiConfig';
 
 export async function GET() {
   return NextResponse.json({
     status: 'healthy',
-    provider: getActiveProvider(),
-    model: getActiveModel(),
+    provider: getAIProvider(),
+    model: getActiveChatModel(),
     timestamp: new Date().toISOString()
   });
 }
-
