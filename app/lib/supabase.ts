@@ -1,13 +1,17 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseUrlRaw = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+const supabaseAnonKeyRaw = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
 
-if (!supabaseUrl?.trim() || !supabaseAnonKey?.trim()) {
+if (!supabaseUrlRaw || !supabaseAnonKeyRaw) {
   throw new Error(
     'Missing Supabase configuration: add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local in the project root, then restart `npm run dev`. Copy values from Supabase → Project Settings → API.'
   )
 }
+
+// Explicit `string` so nested functions (e.g. createServerClient) see `string`, not `string | undefined`
+const supabaseUrl: string = supabaseUrlRaw
+const supabaseAnonKey: string = supabaseAnonKeyRaw
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
