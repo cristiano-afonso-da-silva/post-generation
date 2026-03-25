@@ -252,7 +252,7 @@ export default function LandingPage() {
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
         <Link
-          href={user ? "/" : "/signup"}
+          href={user ? "/dashboard?view=create" : "/signup"}
               className="cta-button"
               style={{
                 display: 'inline-flex',
@@ -762,7 +762,7 @@ export default function LandingPage() {
             Ready to create smarter?
           </h2>
           <Link
-            href={user ? "/" : "/signup"}
+            href={user ? "/dashboard?view=create" : "/signup"}
             className="cta-button"
             style={{
               display: 'inline-flex',
